@@ -32,22 +32,20 @@ public class WriteFileTool implements Tool {
     public ToolDefinition getDefinition() {
         return ToolDefinition.builder()
                 .name("write_file")
-                .description("写入内容到指定文件。如果文件不存在则创建，存在则覆盖。路径相对于工作空间目录。")
+                .description("写入内容到指定文件。不存在则创建，存在则覆盖。")
                 .parameters(Map.of(
                         "type", "object",
                         "properties", Map.of(
-                                "path", Map.of(
-                                        "type", "string",
-                                        "description", "文件路径（相对于工作空间）"
-                                ),
-                                "content", Map.of(
-                                        "type", "string",
-                                        "description", "要写入的内容"
-                                )
+                                "path", Map.of("type", "string", "description", "文件路径"),
+                                "content", Map.of("type", "string", "description", "要写入的内容")
                         ),
                         "required", List.of("path", "content")
                 ))
-                .hitl(false)  // 默认不需要确认
+                .hitl(false)
+                .tags(List.of("file", "write", "fs"))
+                .riskLevel("medium")
+                .parameterSummary("path (required): 文件路径 | content (required): 写入内容")
+                .example("write_file({ path: 'output.txt', content: 'Hello World' })")
                 .build();
     }
 

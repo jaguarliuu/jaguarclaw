@@ -190,4 +190,88 @@ public class ToolRegistry implements SmartInitializingSingleton {
     public int size() {
         return registry.size();
     }
+
+    // ==================== 渐进式加载方法 ====================
+
+    /**
+     * 转换为 OpenAI 格式（渐进式加载）
+     * 
+     * @param l1ToolIds 需要升级到 L1 的工具 ID（其他工具用 L0）
+     * @return 工具列表
+     */
+    public List<Map<String, Object>> toOpenAiToolsProgressive(Set<String> l1ToolIds) {
+        return registry.values().stream()
+                .map(tool -> {
+                    ToolDefinition def = tool.getDefinition();
+                    if (l1ToolIds != null && l1ToolIds.contains(tool.getName())) {
+                        return def.toOpenAiFormatL1();
+                    }
+                    return def.toOpenAiFormatL0();
+                })
+                .toList();
+    }
+
+    /**
+     * 转换为 OpenAI 格式（渐进式加载 + 过滤）
+     * 
+     * @param allowedTools 允许的工具名称集合
+     * @param excludedMcpServers 要排除的 MCP 服务器
+     * @param l1ToolIds 需要升级到 L1 的工具 ID
+     * @return 工具列表
+     */
+    public List<Map<String, Object>> toOpenAiToolsProgressive(
+            Set<String> allowedTools,
+            Set<String> excludedMcpServers,
+            Set<String> l1ToolIds
+    ) {
+        return registry.values().stream()
+                .filter(tool -> {
+                    // 白名单过滤
+                    if (allowedTools != null && !allowedTools.isEmpty()) {
+                        if (!allowedTools.contains(tool.getName())) {
+                            return false;
+                        }
+                    }
+                    // MCP 服务器排除
+                    if (excludedMcpServers != null && !excludedMcpServers.isEmpty()) {
+                        String serverName = tool.getMcpServerName();
+                        if (serverName != null && excludedMcpServers.contains(serverName)) {
+                            return false;
+                        }
+                    }
+                    return true;
+                })
+                .map(tool -> {
+                    ToolDefinition def = tool.getDefinition();
+                    if (l1ToolIds != null && l1ToolIds.contains(tool.getName())) {
+                        return def.toOpenAiFormatL1();
+                    }
+                    return def.toOpenAiFormatL0();
+                })
+                .toList();
+    }
+
+    /**
+     * 估算当前工具的 L0 总 token 数
+     */
+    public int estimateL0Tokens() {
+        return registry.values().stream()
+                .mapToInt(tool -> tool.getDefinition().estimateL0Tokens())
+                .sum();
+    }
+
+    /**
+     * 估算给定 L1 工具集合的总 token 数
+     */
+    public int estimateProgressiveTokens(Set<String> l1ToolIds) {
+        return registry.values().stream()
+                .mapToInt(tool -> {
+                    ToolDefinition def = tool.getDefinition();
+                    if (l1ToolIds != null && l1ToolIds.contains(tool.getName())) {
+                        return def.estimateL1Tokens();
+                    }
+                    return def.estimateL0Tokens();
+                })
+                .sum();
+    }
 }

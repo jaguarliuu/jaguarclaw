@@ -56,21 +56,22 @@ public class ShellTool implements Tool {
 
     @Override
     public ToolDefinition getDefinition() {
-        String osHint = IS_WINDOWS ? "当前为 Windows 环境，请使用 Windows 命令。" : "当前为 Linux/Mac 环境。";
+        String osHint = IS_WINDOWS ? "当前为 Windows 环境" : "当前为 Linux/Mac 环境";
         return ToolDefinition.builder()
                 .name("shell")
-                .description("执行 shell 命令并返回输出。工作目录为 workspace。超时 " + TIMEOUT_SECONDS + " 秒。" + osHint)
+                .description("执行 shell 命令。" + osHint)
                 .parameters(Map.of(
                         "type", "object",
                         "properties", Map.of(
-                                "command", Map.of(
-                                        "type", "string",
-                                        "description", "要执行的命令"
-                                )
+                                "command", Map.of("type", "string", "description", "要执行的命令")
                         ),
                         "required", List.of("command")
                 ))
-                .hitl(false)  // 默认不需要确认，危险命令由 DangerousCommandDetector 检测
+                .hitl(false)
+                .tags(List.of("shell", "exec", "system"))
+                .riskLevel("high")
+                .parameterSummary("command (required): Shell 命令")
+                .example("shell({ command: 'npm test' })")
                 .build();
     }
 
