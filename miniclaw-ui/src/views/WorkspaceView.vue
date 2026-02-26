@@ -227,12 +227,6 @@ async function handleInstallAction() {
     </SessionSidebar>
 
     <main class="main-area">
-      <header class="main-header">
-        <span class="session-title">
-          {{ currentSession?.name || 'MiniClaw' }}
-        </span>
-      </header>
-
       <MessageList
         :messages="messages"
         :stream-blocks="streamBlocks"
@@ -302,24 +296,8 @@ async function handleInstallAction() {
   display: flex;
   flex-direction: column;
   min-width: 0;
-  background: var(--color-gray-50);
-  transition: all var(--duration-normal) var(--ease-out);
-}
-
-.main-header {
-  padding: 20px 48px;
-  border-bottom: var(--border-light);
   background: var(--color-white);
-  display: flex;
-  align-items: center;
-}
-
-.session-title {
-  font-family: var(--font-mono);
-  font-size: 13px;
-  font-weight: 500;
-  letter-spacing: -0.01em;
-  color: var(--color-gray-600);
+  transition: all var(--duration-normal) var(--ease-out);
 }
 
 /* Panel slide transition */
