@@ -1,5 +1,8 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
+import { useI18n } from '@/i18n'
+
+const { t } = useI18n()
 
 interface SearchProvider {
   type: string
@@ -42,8 +45,8 @@ watch(() => props.providers, (newVal) => {
     <div class="modal-content">
       <div class="modal-header">
         <div>
-          <h3 class="modal-title">Web Search Providers</h3>
-          <p class="modal-subtitle">Configure search engines for the web_search tool</p>
+          <h3 class="modal-title">{{ t('sections.searchProviders.title') }}</h3>
+          <p class="modal-subtitle">{{ t('sections.searchProviders.subtitle') }}</p>
         </div>
         <button class="btn-close" @click="emit('close')">✕</button>
       </div>
@@ -52,10 +55,10 @@ watch(() => props.providers, (newVal) => {
         <div class="provider-card provider-default">
           <div class="provider-header">
             <div class="provider-info">
-              <span class="provider-name">DuckDuckGo (Default)</span>
-              <span class="provider-hint">Free, no API key needed</span>
+              <span class="provider-name">{{ t('sections.searchProviders.duckduckgoName') }}</span>
+              <span class="provider-hint">{{ t('sections.searchProviders.duckduckgoDesc') }}</span>
             </div>
-            <span class="always-on-badge">Always On</span>
+            <span class="always-on-badge">{{ t('sections.searchProviders.alwaysOn') }}</span>
           </div>
         </div>
 
@@ -63,8 +66,8 @@ watch(() => props.providers, (newVal) => {
           <div class="provider-header">
             <div class="provider-info">
               <span class="provider-name">{{ provider.displayName }}</span>
-              <span class="provider-hint" v-if="provider.keyRequired">Requires API key</span>
-              <span class="provider-hint" v-else>API key optional</span>
+              <span class="provider-hint" v-if="provider.keyRequired">{{ t('sections.searchProviders.requiresApiKey') }}</span>
+              <span class="provider-hint" v-else>{{ t('sections.searchProviders.apiKeyOptional') }}</span>
             </div>
             <label class="toggle-switch">
               <input type="checkbox" v-model="provider.enabled" />
@@ -73,7 +76,7 @@ watch(() => props.providers, (newVal) => {
           </div>
           <div v-if="provider.keyRequired || provider.type === 'github'" class="provider-body">
             <div class="api-key-header">
-              <label class="form-label">API KEY</label>
+              <label class="form-label">{{ t('sections.searchProviders.apiKeyLabel') }}</label>
               <a
                 v-if="provider.apiKeyUrl"
                 :href="provider.apiKeyUrl"
@@ -81,7 +84,7 @@ watch(() => props.providers, (newVal) => {
                 rel="noopener noreferrer"
                 class="get-key-link"
               >
-                Get API Key →
+                {{ t('sections.searchProviders.getApiKeyLink') }}
               </a>
             </div>
             <div class="input-with-toggle">
@@ -89,7 +92,7 @@ watch(() => props.providers, (newVal) => {
                 v-model="provider.apiKey"
                 :type="apiKeyVisible[provider.type] ? 'text' : 'password'"
                 class="form-input"
-                :placeholder="providers.find(p => p.type === provider.type)?.apiKey || 'Enter API key'"
+                :placeholder="providers.find(p => p.type === provider.type)?.apiKey || t('sections.searchProviders.apiKeyPlaceholder')"
                 autocomplete="off"
                 spellcheck="false"
               />
@@ -98,17 +101,17 @@ watch(() => props.providers, (newVal) => {
                 class="visibility-toggle"
                 @click="apiKeyVisible[provider.type] = !apiKeyVisible[provider.type]"
               >
-                {{ apiKeyVisible[provider.type] ? 'Hide' : 'Show' }}
+                {{ apiKeyVisible[provider.type] ? t('sections.searchProviders.hideApiKey') : t('sections.searchProviders.showApiKey') }}
               </button>
             </div>
-            <span class="form-hint">Leave empty to keep current key</span>
+            <span class="form-hint">{{ t('sections.searchProviders.leaveEmptyHint') }}</span>
           </div>
         </div>
       </div>
 
       <div class="modal-footer">
-        <button class="btn-secondary" @click="emit('close')">Cancel</button>
-        <button class="btn-primary" @click="handleSave">Save Changes</button>
+        <button class="btn-secondary" @click="emit('close')">{{ t('common.cancel') }}</button>
+        <button class="btn-primary" @click="handleSave">{{ t('sections.searchProviders.saveBtn') }}</button>
       </div>
     </div>
   </div>

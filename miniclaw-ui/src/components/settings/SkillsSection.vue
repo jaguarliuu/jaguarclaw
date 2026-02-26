@@ -2,6 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import type { Skill, SkillDetail } from '@/types'
 import { useSkills } from '@/composables/useSkills'
+import { useI18n } from '@/i18n'
 import SkillRow from './SkillRow.vue'
 import SkillDetailPanel from './SkillDetail.vue'
 import SlidePanel from '@/components/common/SlidePanel.vue'
@@ -11,6 +12,8 @@ const {
   uploading, uploadError,
   loadSkills, selectSkill, clearSelection, uploadSkill, clearUploadError
 } = useSkills()
+
+const { t } = useI18n()
 
 const fileInput = ref<HTMLInputElement | null>(null)
 
@@ -51,10 +54,10 @@ onMounted(() => {
 <template>
   <div class="skills-section">
     <header class="section-header">
-      <h2 class="section-title">Skills</h2>
-      <span class="section-count">{{ skills.length }} total</span>
+      <h2 class="section-title">{{ t('settings.nav.skills') }}</h2>
+      <span class="section-count">{{ t('sections.skills.totalCount', { n: skills.length }) }}</span>
       <button class="upload-btn" @click="fileInput?.click()" :disabled="uploading">
-        {{ uploading ? 'Uploading...' : '+ Upload' }}
+        {{ uploading ? t('sections.skills.uploadingBtn') : t('sections.skills.uploadBtn') }}
       </button>
       <input ref="fileInput" type="file" accept=".md,.zip" hidden @change="handleFileChange" />
     </header>
@@ -65,13 +68,13 @@ onMounted(() => {
     </div>
 
     <div v-if="loading" class="loading-state">
-      <span>Loading skills...</span>
+      <span>{{ t('sections.skills.loading') }}</span>
     </div>
 
     <div v-else class="skills-list">
       <!-- Available -->
       <div v-if="availableSkills.length" class="skill-group">
-        <h3 class="group-title">Available ({{ availableSkills.length }})</h3>
+        <h3 class="group-title">{{ t('sections.skills.availableGroup', { n: availableSkills.length }) }}</h3>
         <div class="group-list">
           <SkillRow
             v-for="skill in availableSkills"
@@ -85,7 +88,7 @@ onMounted(() => {
 
       <!-- Unavailable -->
       <div v-if="unavailableSkills.length" class="skill-group">
-        <h3 class="group-title">Unavailable ({{ unavailableSkills.length }})</h3>
+        <h3 class="group-title">{{ t('sections.skills.unavailableGroup', { n: unavailableSkills.length }) }}</h3>
         <div class="group-list">
           <SkillRow
             v-for="skill in unavailableSkills"
@@ -99,7 +102,7 @@ onMounted(() => {
 
       <!-- Empty state -->
       <div v-if="!skills.length" class="empty-state">
-        <span>No skills configured</span>
+        <span>{{ t('sections.skills.empty') }}</span>
       </div>
     </div>
 

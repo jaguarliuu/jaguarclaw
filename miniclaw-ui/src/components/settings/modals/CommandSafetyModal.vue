@@ -1,5 +1,8 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
+import { useI18n } from '@/i18n'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   alwaysConfirmTools: string[]
@@ -72,61 +75,61 @@ watch(() => [props.alwaysConfirmTools, props.dangerousKeywords], () => {
     <div class="modal-content">
       <div class="modal-header">
         <div>
-          <h3 class="modal-title">Command Safety</h3>
-          <p class="modal-subtitle">Configure which tools and commands require human confirmation</p>
+          <h3 class="modal-title">{{ t('sections.commandSafety.title') }}</h3>
+          <p class="modal-subtitle">{{ t('sections.commandSafety.subtitle') }}</p>
         </div>
         <button class="btn-close" @click="emit('close')">✕</button>
       </div>
 
       <div class="modal-body">
         <div class="domain-group">
-          <label class="form-label">ALWAYS CONFIRM TOOLS</label>
-          <p class="field-desc">These tools will always require human confirmation before execution.</p>
+          <label class="form-label">{{ t('sections.commandSafety.alwaysConfirmLabel') }}</label>
+          <p class="field-desc">{{ t('sections.commandSafety.alwaysConfirmDesc') }}</p>
           <div class="pill-list" v-if="editAlwaysConfirmTools.length > 0">
-            <span v-for="t in editAlwaysConfirmTools" :key="t" class="pill pill-warn">
-              {{ t }}
-              <button class="pill-remove" @click="removeConfirmTool(t)">&times;</button>
+            <span v-for="tool in editAlwaysConfirmTools" :key="tool" class="pill pill-warn">
+              {{ tool }}
+              <button class="pill-remove" @click="removeConfirmTool(tool)">&times;</button>
             </span>
           </div>
-          <div v-else class="empty-hint">No tools configured — using default rules only</div>
+          <div v-else class="empty-hint">{{ t('sections.commandSafety.alwaysConfirmEmpty') }}</div>
           <div class="domain-add-row">
             <input
               v-model="newConfirmTool"
               class="form-input domain-input"
-              placeholder="shell"
+              :placeholder="t('sections.commandSafety.toolPlaceholder')"
               spellcheck="false"
               @keydown="handleConfirmToolKeydown"
             />
-            <button class="add-btn" @click="addConfirmTool" :disabled="!newConfirmTool.trim()">+ Add</button>
+            <button class="add-btn" @click="addConfirmTool" :disabled="!newConfirmTool.trim()">{{ t('sections.commandSafety.addToolBtn') }}</button>
           </div>
         </div>
 
         <div class="domain-group">
-          <label class="form-label">DANGEROUS KEYWORDS</label>
-          <p class="field-desc">Commands containing any of these keywords will require confirmation (case-insensitive).</p>
+          <label class="form-label">{{ t('sections.commandSafety.dangerKeywordsLabel') }}</label>
+          <p class="field-desc">{{ t('sections.commandSafety.dangerKeywordsDesc') }}</p>
           <div class="pill-list" v-if="editDangerousKeywords.length > 0">
-            <span v-for="k in editDangerousKeywords" :key="k" class="pill pill-warn">
-              {{ k }}
-              <button class="pill-remove" @click="removeDangerousKeyword(k)">&times;</button>
+            <span v-for="kw in editDangerousKeywords" :key="kw" class="pill pill-warn">
+              {{ kw }}
+              <button class="pill-remove" @click="removeDangerousKeyword(kw)">&times;</button>
             </span>
           </div>
-          <div v-else class="empty-hint">No custom keywords — using built-in patterns only</div>
+          <div v-else class="empty-hint">{{ t('sections.commandSafety.dangerKeywordsEmpty') }}</div>
           <div class="domain-add-row">
             <input
               v-model="newDangerousKeyword"
               class="form-input domain-input"
-              placeholder="docker rm"
+              :placeholder="t('sections.commandSafety.keywordPlaceholder')"
               spellcheck="false"
               @keydown="handleDangerousKeywordKeydown"
             />
-            <button class="add-btn" @click="addDangerousKeyword" :disabled="!newDangerousKeyword.trim()">+ Add</button>
+            <button class="add-btn" @click="addDangerousKeyword" :disabled="!newDangerousKeyword.trim()">{{ t('sections.commandSafety.addKeywordBtn') }}</button>
           </div>
         </div>
       </div>
 
       <div class="modal-footer">
-        <button class="btn-secondary" @click="emit('close')">Cancel</button>
-        <button class="btn-primary" @click="handleSave">Save Changes</button>
+        <button class="btn-secondary" @click="emit('close')">{{ t('common.cancel') }}</button>
+        <button class="btn-primary" @click="handleSave">{{ t('sections.commandSafety.saveBtn') }}</button>
       </div>
     </div>
   </div>

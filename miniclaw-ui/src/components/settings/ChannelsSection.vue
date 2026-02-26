@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useChannels } from '@/composables/useChannels'
+import { useI18n } from '@/i18n'
 import type { ChannelType, ChannelInfo } from '@/types'
 
 const { channels, loading, error, loadChannels, createChannel, removeChannel, testChannel } = useChannels()
+const { t } = useI18n()
 
 // Form state
 const showForm = ref(false)
@@ -64,26 +66,26 @@ function closeForm() {
 
 async function handleSubmit() {
   if (!formName.value.trim()) {
-    formError.value = 'Name is required'
+    formError.value = t('sections.channels.errors.nameRequired')
     return
   }
 
   if (formType.value === 'email') {
     if (!emailHost.value.trim()) {
-      formError.value = 'SMTP Host is required'
+      formError.value = t('sections.channels.errors.smtpHostRequired')
       return
     }
     if (!emailUsername.value.trim()) {
-      formError.value = 'Username is required'
+      formError.value = t('sections.channels.errors.usernameRequired')
       return
     }
     if (!emailFrom.value.trim()) {
-      formError.value = 'From address is required'
+      formError.value = t('sections.channels.errors.fromRequired')
       return
     }
   } else {
     if (!webhookUrl.value.trim()) {
-      formError.value = 'Webhook URL is required'
+      formError.value = t('sections.channels.errors.urlRequired')
       return
     }
   }
@@ -109,7 +111,7 @@ async function handleSubmit() {
       try {
         headers = JSON.parse(webhookHeaders.value)
       } catch {
-        formError.value = 'Invalid JSON in headers'
+      formError.value = t('sections.channels.errors.invalidJson')
         submitting.value = false
         return
       }
@@ -127,7 +129,7 @@ async function handleSubmit() {
     }
     closeForm()
   } catch (e) {
-    formError.value = e instanceof Error ? e.message : 'Failed to create channel'
+    formError.value = e instanceof Error ? e.message : t('sections.channels.errors.failedToCreate')
   } finally {
     submitting.value = false
   }
@@ -187,39 +189,39 @@ onMounted(() => {
     <header class="section-header">
       <div class="header-top">
         <div>
-          <h2 class="section-title">/channels</h2>
-          <p class="section-subtitle">Email & Webhook notification channels</p>
+          <h2 class="section-title">{{ t('settings.nav.channels') }}</h2>
+          <p class="section-subtitle">{{ t('sections.channels.subtitle') }}</p>
         </div>
-        <button class="add-btn" @click="openForm">+ Add Channel</button>
+        <button class="add-btn" @click="openForm">{{ t('sections.channels.addBtn') }}</button>
       </div>
     </header>
 
     <!-- Loading -->
     <div v-if="loading && channels.length === 0" class="loading-state">
-      Loading channels...
+      {{ t('sections.channels.loading') }}
     </div>
 
     <!-- Error -->
     <div v-if="error && channels.length === 0" class="error-state">
       <p>{{ error }}</p>
-      <button class="retry-btn" @click="loadChannels">Retry</button>
+      <button class="retry-btn" @click="loadChannels">{{ t('common.retry') }}</button>
     </div>
 
     <!-- Add Form -->
     <div v-if="showForm" class="form-panel">
-      <h3 class="form-title">Create Channel</h3>
+      <h3 class="form-title">{{ t('sections.channels.formTitle') }}</h3>
 
       <div class="form-grid">
         <div class="form-group">
-          <label class="form-label">Name *</label>
-          <input v-model="formName" class="form-input" placeholder="e.g. work-email" />
+          <label class="form-label">{{ t('sections.channels.fields.nameLabel') }}</label>
+          <input v-model="formName" class="form-input" :placeholder="t('sections.channels.fields.namePlaceholder')" />
         </div>
 
         <div class="form-group">
-          <label class="form-label">Type *</label>
+          <label class="form-label">{{ t('sections.channels.fields.typeLabel') }}</label>
           <select v-model="formType" class="form-input">
-            <option value="email">Email (SMTP)</option>
-            <option value="webhook">Webhook</option>
+            <option value="email">{{ t('sections.channels.fields.typeOptions.email') }}</option>
+            <option value="webhook">{{ t('sections.channels.fields.typeOptions.webhook') }}</option>
           </select>
         </div>
       </div>
@@ -228,41 +230,41 @@ onMounted(() => {
       <template v-if="formType === 'email'">
         <div class="form-grid">
           <div class="form-group">
-            <label class="form-label">SMTP Host *</label>
-            <input v-model="emailHost" class="form-input" placeholder="smtp.gmail.com" />
+            <label class="form-label">{{ t('sections.channels.fields.smtpHostLabel') }}</label>
+            <input v-model="emailHost" class="form-input" :placeholder="t('sections.channels.fields.smtpHostPlaceholder')" />
           </div>
           <div class="form-group">
-            <label class="form-label">Port</label>
-            <input v-model.number="emailPort" type="number" class="form-input" placeholder="587" />
+            <label class="form-label">{{ t('sections.channels.fields.portLabel') }}</label>
+            <input v-model.number="emailPort" type="number" class="form-input" :placeholder="t('sections.channels.fields.portPlaceholder')" />
           </div>
           <div class="form-group">
-            <label class="form-label">Username *</label>
-            <input v-model="emailUsername" class="form-input" placeholder="user@gmail.com" />
+            <label class="form-label">{{ t('sections.channels.fields.usernameLabel') }}</label>
+            <input v-model="emailUsername" class="form-input" :placeholder="t('sections.channels.fields.usernamePlaceholder')" />
           </div>
           <div class="form-group">
-            <label class="form-label">From *</label>
-            <input v-model="emailFrom" class="form-input" placeholder="user@gmail.com" />
+            <label class="form-label">{{ t('sections.channels.fields.fromLabel') }}</label>
+            <input v-model="emailFrom" class="form-input" :placeholder="t('sections.channels.fields.fromPlaceholder')" />
           </div>
         </div>
 
         <div class="form-grid">
           <div class="form-group">
-            <label class="form-label">TLS</label>
+            <label class="form-label">{{ t('sections.channels.fields.tlsLabel') }}</label>
             <select v-model="emailTls" class="form-input">
-              <option :value="true">Enabled</option>
-              <option :value="false">Disabled</option>
+              <option :value="true">{{ t('sections.channels.fields.tlsOptions.enabled') }}</option>
+              <option :value="false">{{ t('sections.channels.fields.tlsOptions.disabled') }}</option>
             </select>
           </div>
         </div>
 
         <div class="form-group credential-group">
           <div class="credential-label-row">
-            <label class="form-label">SMTP Password</label>
+            <label class="form-label">{{ t('sections.channels.fields.passwordLabel') }}</label>
             <button
               type="button"
               class="visibility-toggle"
               @click="passwordVisible = !passwordVisible"
-              :title="passwordVisible ? 'Hide password' : 'Show password'"
+              :title="passwordVisible ? t('sections.channels.fields.hidePassword') : t('sections.channels.fields.showPassword')"
             >
               <svg v-if="passwordVisible" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
@@ -280,7 +282,7 @@ onMounted(() => {
             v-model="emailPassword"
             :type="passwordVisible ? 'text' : 'password'"
             class="form-input"
-            placeholder="Enter SMTP password or app password..."
+            :placeholder="t('sections.channels.fields.passwordPlaceholder')"
             autocomplete="off"
           />
         </div>
@@ -290,37 +292,37 @@ onMounted(() => {
       <template v-if="formType === 'webhook'">
         <div class="form-grid">
           <div class="form-group" style="grid-column: 1 / -1">
-            <label class="form-label">URL *</label>
-            <input v-model="webhookUrl" class="form-input" placeholder="https://hooks.slack.com/services/..." />
+            <label class="form-label">{{ t('sections.channels.fields.urlLabel') }}</label>
+            <input v-model="webhookUrl" class="form-input" :placeholder="t('sections.channels.fields.urlPlaceholder')" />
           </div>
           <div class="form-group">
-            <label class="form-label">Method</label>
+            <label class="form-label">{{ t('sections.channels.fields.methodLabel') }}</label>
             <select v-model="webhookMethod" class="form-input">
-              <option value="POST">POST</option>
-              <option value="PUT">PUT</option>
+              <option value="POST">{{ t('sections.channels.fields.methodOptions.post') }}</option>
+              <option value="PUT">{{ t('sections.channels.fields.methodOptions.put') }}</option>
             </select>
           </div>
         </div>
 
         <div class="form-group credential-group">
-          <label class="form-label">Headers (JSON)</label>
+          <label class="form-label">{{ t('sections.channels.fields.headersLabel') }}</label>
           <textarea
             v-model="webhookHeaders"
             class="form-textarea"
             rows="2"
-            placeholder='{"Content-Type": "application/json"}'
+            :placeholder="t('sections.channels.fields.headersPlaceholder')"
             spellcheck="false"
           />
         </div>
 
         <div class="form-group credential-group">
           <div class="credential-label-row">
-            <label class="form-label">Signing Secret (optional)</label>
+            <label class="form-label">{{ t('sections.channels.fields.signingSecretLabel') }}</label>
             <button
               type="button"
               class="visibility-toggle"
               @click="secretVisible = !secretVisible"
-              :title="secretVisible ? 'Hide secret' : 'Show secret'"
+              :title="secretVisible ? t('sections.channels.fields.hideSecret') : t('sections.channels.fields.showSecret')"
             >
               <svg v-if="secretVisible" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
@@ -338,7 +340,7 @@ onMounted(() => {
             v-model="webhookSecret"
             :type="secretVisible ? 'text' : 'password'"
             class="form-input"
-            placeholder="Enter signing secret..."
+            :placeholder="t('sections.channels.fields.signingSecretPlaceholder')"
             autocomplete="off"
           />
         </div>
@@ -347,9 +349,9 @@ onMounted(() => {
       <div v-if="formError" class="form-error">{{ formError }}</div>
 
       <div class="form-actions">
-        <button class="cancel-btn" @click="closeForm">Cancel</button>
+        <button class="cancel-btn" @click="closeForm">{{ t('common.cancel') }}</button>
         <button class="submit-btn" :disabled="submitting" @click="handleSubmit">
-          {{ submitting ? 'Creating...' : 'Create' }}
+          {{ submitting ? t('sections.channels.creatingBtn') : t('sections.channels.createBtn') }}
         </button>
       </div>
     </div>
@@ -364,8 +366,8 @@ onMounted(() => {
               {{ channel.type }}
             </span>
             <span class="status-dot" :class="getStatusClass(channel)" :title="
-              channel.lastTestSuccess === null ? 'Not tested' :
-              channel.lastTestSuccess ? 'Connected' : 'Connection failed'
+              channel.lastTestSuccess === null ? t('sections.channels.notTested') :
+              channel.lastTestSuccess ? t('sections.channels.connected') : t('sections.channels.failed')
             " />
           </div>
           <div class="channel-actions">
@@ -374,18 +376,18 @@ onMounted(() => {
               :disabled="testingChannels.has(channel.id)"
               @click="handleTest(channel.id)"
             >
-              {{ testingChannels.has(channel.id) ? 'Testing...' : 'Test' }}
+              {{ testingChannels.has(channel.id) ? t('sections.channels.testingBtn') : t('common.test') }}
             </button>
             <button
               v-if="confirmDeleteId !== channel.id"
               class="delete-btn"
               @click="confirmDeleteId = channel.id"
             >
-              Delete
+              {{ t('common.delete') }}
             </button>
             <template v-else>
-              <button class="confirm-delete-btn" @click="handleDelete(channel.id)">Confirm</button>
-              <button class="cancel-delete-btn" @click="confirmDeleteId = null">Cancel</button>
+              <button class="confirm-delete-btn" @click="handleDelete(channel.id)">{{ t('common.confirm') }}</button>
+              <button class="cancel-delete-btn" @click="confirmDeleteId = null">{{ t('common.cancel') }}</button>
             </template>
           </div>
         </div>
@@ -397,8 +399,8 @@ onMounted(() => {
 
     <!-- Empty State -->
     <div v-if="!loading && !showForm && channels.length === 0 && !error" class="empty-state">
-      <p>No channels configured yet.</p>
-      <p class="empty-hint">Add Email or Webhook channels to enable notifications and Agent integrations.</p>
+      <p>{{ t('sections.channels.empty') }}</p>
+      <p class="empty-hint">{{ t('sections.channels.emptyHint') }}</p>
     </div>
 
     <!-- Global Error -->

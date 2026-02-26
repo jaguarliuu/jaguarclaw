@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { onMounted, ref, computed } from 'vue'
 import { useAuditLog } from '@/composables/useAuditLog'
+import { useI18n } from '@/i18n'
 
 const { logs, loading, error, page, totalElements, totalPages, loadLogs } = useAuditLog()
+const { t } = useI18n()
 
 // Filter state
 const filterNodeAlias = ref('')
@@ -80,8 +82,8 @@ onMounted(() => {
 <template>
   <div class="audit-section">
     <header class="section-header">
-      <h2 class="section-title">/audit</h2>
-      <p class="section-subtitle">Command execution audit trail</p>
+      <h2 class="section-title">{{ t('settings.nav.audit') }}</h2>
+      <p class="section-subtitle">{{ t('sections.audit.subtitle') }}</p>
     </header>
 
     <!-- Filters -->
@@ -90,39 +92,39 @@ onMounted(() => {
         v-model="filterNodeAlias"
         class="filter-input"
         type="text"
-        placeholder="Node alias"
+        :placeholder="t('sections.audit.filters.nodePlaceholder')"
         @keyup.enter="applyFilters"
       />
       <select v-model="filterEventType" class="filter-select" @change="applyFilters">
-        <option value="">All events</option>
+        <option value="">{{ t('sections.audit.filters.allEvents') }}</option>
         <option v-for="opt in eventTypeOptions.slice(1)" :key="opt" :value="opt">{{ opt }}</option>
       </select>
       <select v-model="filterSafetyLevel" class="filter-select" @change="applyFilters">
-        <option value="">All levels</option>
+        <option value="">{{ t('sections.audit.filters.allLevels') }}</option>
         <option v-for="opt in safetyLevelOptions.slice(1)" :key="opt" :value="opt">{{ opt }}</option>
       </select>
       <select v-model="filterResultStatus" class="filter-select" @change="applyFilters">
-        <option value="">All status</option>
+        <option value="">{{ t('sections.audit.filters.allStatus') }}</option>
         <option v-for="opt in resultStatusOptions.slice(1)" :key="opt" :value="opt">{{ opt }}</option>
       </select>
-      <button class="filter-btn" @click="applyFilters">Search</button>
-      <button class="filter-btn refresh-btn" @click="refresh">Refresh</button>
+      <button class="filter-btn" @click="applyFilters">{{ t('sections.audit.searchBtn') }}</button>
+      <button class="filter-btn refresh-btn" @click="refresh">{{ t('common.refresh') }}</button>
     </div>
 
     <!-- Loading -->
     <div v-if="loading && logs.length === 0" class="loading-state">
-      Loading audit logs...
+      {{ t('sections.audit.loading') }}
     </div>
 
     <!-- Error -->
     <div v-else-if="error && logs.length === 0" class="error-state">
       <p>{{ error }}</p>
-      <button class="retry-btn" @click="refresh">Retry</button>
+      <button class="retry-btn" @click="refresh">{{ t('common.retry') }}</button>
     </div>
 
     <!-- Empty -->
     <div v-else-if="!loading && logs.length === 0" class="empty-state">
-      No audit logs found.
+      {{ t('sections.audit.empty') }}
     </div>
 
     <!-- Table -->
@@ -130,14 +132,14 @@ onMounted(() => {
       <table class="audit-table">
         <thead>
           <tr>
-            <th>Time</th>
-            <th>Event</th>
-            <th>Node</th>
-            <th>Command</th>
-            <th>Safety</th>
-            <th>HITL</th>
-            <th>Result</th>
-            <th>Duration</th>
+            <th>{{ t('sections.audit.table.time') }}</th>
+            <th>{{ t('sections.audit.table.event') }}</th>
+            <th>{{ t('sections.audit.table.node') }}</th>
+            <th>{{ t('sections.audit.table.command') }}</th>
+            <th>{{ t('sections.audit.table.safety') }}</th>
+            <th>{{ t('sections.audit.table.hitl') }}</th>
+            <th>{{ t('sections.audit.table.result') }}</th>
+            <th>{{ t('sections.audit.table.duration') }}</th>
           </tr>
         </thead>
         <tbody>
@@ -183,31 +185,31 @@ onMounted(() => {
               <td colspan="8">
                 <div class="expanded-content">
                   <div v-if="log.command" class="detail-row">
-                    <span class="detail-label">Command:</span>
+                    <span class="detail-label">{{ t('sections.audit.expanded.command') }}</span>
                     <code class="detail-value">{{ log.command }}</code>
                   </div>
                   <div v-if="log.resultSummary" class="detail-row">
-                    <span class="detail-label">Output:</span>
+                    <span class="detail-label">{{ t('sections.audit.expanded.output') }}</span>
                     <pre class="detail-pre">{{ log.resultSummary }}</pre>
                   </div>
                   <div class="detail-row">
-                    <span class="detail-label">Tool:</span>
+                    <span class="detail-label">{{ t('sections.audit.expanded.tool') }}</span>
                     <span class="detail-value">{{ log.toolName || '-' }}</span>
                   </div>
                   <div class="detail-row">
-                    <span class="detail-label">Policy:</span>
+                    <span class="detail-label">{{ t('sections.audit.expanded.policy') }}</span>
                     <span class="detail-value">{{ log.safetyPolicy || '-' }}</span>
                   </div>
                   <div v-if="log.runId" class="detail-row">
-                    <span class="detail-label">Run ID:</span>
+                    <span class="detail-label">{{ t('sections.audit.expanded.runId') }}</span>
                     <span class="detail-value mono">{{ log.runId }}</span>
                   </div>
                   <div v-if="log.sessionId" class="detail-row">
-                    <span class="detail-label">Session ID:</span>
+                    <span class="detail-label">{{ t('sections.audit.expanded.sessionId') }}</span>
                     <span class="detail-value mono">{{ log.sessionId }}</span>
                   </div>
                   <div v-if="log.connectorType" class="detail-row">
-                    <span class="detail-label">Connector:</span>
+                    <span class="detail-label">{{ t('sections.audit.expanded.connector') }}</span>
                     <span class="detail-value">{{ log.connectorType }}</span>
                   </div>
                 </div>
@@ -219,11 +221,11 @@ onMounted(() => {
 
       <!-- Pagination -->
       <div class="pagination">
-        <button class="page-btn" :disabled="!hasPrev" @click="prevPage">Previous</button>
+        <button class="page-btn" :disabled="!hasPrev" @click="prevPage">{{ t('sections.audit.prevBtn') }}</button>
         <span class="page-info">
-          Page {{ page + 1 }} of {{ totalPages }} ({{ totalElements }} total)
+          {{ t('sections.audit.pageInfo', { page: page + 1, total: totalPages, count: totalElements }) }}
         </span>
-        <button class="page-btn" :disabled="!hasNext" @click="nextPage">Next</button>
+        <button class="page-btn" :disabled="!hasNext" @click="nextPage">{{ t('sections.audit.nextBtn') }}</button>
       </div>
 
       <!-- Error banner -->

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import { useDataSource } from '@/composables/useDataSource'
+import { useI18n } from '@/i18n'
 import Select, { type SelectOption } from '@/components/common/Select.vue'
 import FileBrowser from '@/components/common/FileBrowser.vue'
 import type {
@@ -24,6 +25,8 @@ const {
   disableDataSource
 } = useDataSource()
 
+const { t } = useI18n()
+
 // Form state
 const showForm = ref(false)
 const editingId = ref<string | null>(null)  // null = create mode, string = edit mode
@@ -43,12 +46,12 @@ const passwordVisible = ref(false)
 const formProperties = ref<Array<{ key: string; value: string }>>([])
 
 // Common property hints per database type
-const propertyHints: Record<string, string> = {
-  MYSQL: 'e.g. characterEncoding=utf8mb4, useSSL=true, serverTimezone=Asia/Shanghai',
-  POSTGRESQL: 'e.g. sslmode=require, prepareThreshold=0, ApplicationName=miniclaw',
-  ORACLE: 'e.g. oracle.net.CONNECT_TIMEOUT=10000, oracle.jdbc.ReadTimeout=60000',
-  GAUSS: 'e.g. sslmode=require, prepareThreshold=0'
-}
+const propertyHints = computed<Record<string, string>>(() => ({
+  MYSQL: t('sections.datasources.propHints.mysql'),
+  POSTGRESQL: t('sections.datasources.propHints.postgresql'),
+  ORACLE: t('sections.datasources.propHints.oracle'),
+  GAUSS: t('sections.datasources.propHints.gaussdb'),
+}))
 
 // File fields
 const formFilePath = ref('')
@@ -72,14 +75,14 @@ const confirmDeleteId = ref<string | null>(null)
 const showFileBrowser = ref(false)
 
 // Select options
-const dataSourceTypeOptions: SelectOption<DataSourceType>[] = [
-  { label: 'MySQL', value: 'MYSQL' },
-  { label: 'PostgreSQL', value: 'POSTGRESQL' },
-  { label: 'Oracle', value: 'ORACLE' },
-  { label: 'GaussDB', value: 'GAUSS' },
-  { label: 'CSV File', value: 'CSV' },
-  { label: 'Excel (XLSX)', value: 'XLSX' }
-]
+const dataSourceTypeOptions = computed<SelectOption<DataSourceType>[]>(() => [
+  { label: t('sections.datasources.fields.typeOptions.mysql'), value: 'MYSQL' },
+  { label: t('sections.datasources.fields.typeOptions.postgresql'), value: 'POSTGRESQL' },
+  { label: t('sections.datasources.fields.typeOptions.oracle'), value: 'ORACLE' },
+  { label: t('sections.datasources.fields.typeOptions.gaussdb'), value: 'GAUSS' },
+  { label: t('sections.datasources.fields.typeOptions.csv'), value: 'CSV' },
+  { label: t('sections.datasources.fields.typeOptions.excel'), value: 'XLSX' }
+])
 
 const isJdbcType = computed(() =>
   ['MYSQL', 'POSTGRESQL', 'ORACLE', 'GAUSS'].includes(formType.value)
@@ -215,7 +218,7 @@ function handleFileSelected(path: string) {
 
 async function handleSubmit() {
   if (!formName.value.trim()) {
-    formError.value = 'Name is required'
+    formError.value = t('sections.datasources.errors.nameRequired')
     return
   }
 
@@ -224,11 +227,11 @@ async function handleSubmit() {
   if (isJdbcType.value) {
     // In edit mode, password is optional (empty = keep existing)
     if (!editingId.value && (!formHost.value || !formDatabase.value || !formUsername.value || !formPassword.value)) {
-      formError.value = 'Please fill in all required JDBC fields'
+      formError.value = t('sections.datasources.errors.requiredJdbc')
       return
     }
     if (editingId.value && (!formHost.value || !formDatabase.value || !formUsername.value)) {
-      formError.value = 'Please fill in Host, Database, and Username'
+      formError.value = t('sections.datasources.errors.requiredBasic')
       return
     }
     const jdbc: any = {
@@ -250,7 +253,7 @@ async function handleSubmit() {
     connectionConfig = jdbc
   } else {
     if (!formFilePath.value) {
-      formError.value = 'File path is required'
+      formError.value = t('sections.datasources.errors.filePathRequired')
       return
     }
     connectionConfig = {
@@ -290,7 +293,7 @@ async function handleSubmit() {
     }
     closeForm()
   } catch (e) {
-    formError.value = e instanceof Error ? e.message : (editingId.value ? 'Failed to update data source' : 'Failed to create data source')
+    formError.value = e instanceof Error ? e.message : (editingId.value ? t('sections.datasources.errors.failedToUpdate') : t('sections.datasources.errors.failedToCreate'))
   } finally {
     submitting.value = false
   }
@@ -361,36 +364,36 @@ onMounted(() => {
     <header class="section-header">
       <div class="header-top">
         <div>
-          <h2 class="section-title">/datasources</h2>
-          <p class="section-subtitle">Database and file data source management</p>
+          <h2 class="section-title">{{ t('settings.nav.dataSources') }}</h2>
+          <p class="section-subtitle">{{ t('sections.datasources.subtitle') }}</p>
         </div>
-        <button class="add-btn" @click="openForm">+ Add Data Source</button>
+        <button class="add-btn" @click="openForm">{{ t('sections.datasources.addBtn') }}</button>
       </div>
     </header>
 
     <!-- Loading -->
     <div v-if="loading && dataSources.length === 0" class="loading-state">
-      Loading data sources...
+      {{ t('sections.datasources.loading') }}
     </div>
 
     <!-- Error -->
     <div v-if="error && dataSources.length === 0" class="error-state">
       <p>{{ error }}</p>
-      <button class="retry-btn" @click="loadDataSources">Retry</button>
+      <button class="retry-btn" @click="loadDataSources">{{ t('common.retry') }}</button>
     </div>
 
     <!-- Add/Edit Form -->
     <div v-if="showForm" class="form-panel">
-      <h3 class="form-title">{{ editingId ? 'Edit Data Source' : 'Create Data Source' }}</h3>
+      <h3 class="form-title">{{ editingId ? t('sections.datasources.editTitle') : t('sections.datasources.createTitle') }}</h3>
 
       <div class="form-grid">
         <div class="form-group">
-          <label class="form-label">Name *</label>
-          <input v-model="formName" class="form-input" placeholder="e.g. Production MySQL" />
+          <label class="form-label">{{ t('sections.datasources.fields.nameLabel') }}</label>
+          <input v-model="formName" class="form-input" :placeholder="t('sections.datasources.fields.namePlaceholder')" />
         </div>
 
         <div class="form-group">
-          <label class="form-label">Type *</label>
+          <label class="form-label">{{ t('sections.datasources.fields.typeLabel') }}</label>
           <Select
             v-model="formType"
             :options="dataSourceTypeOptions"
@@ -402,67 +405,67 @@ onMounted(() => {
         <!-- JDBC Fields -->
         <template v-if="isJdbcType">
           <div class="form-group">
-            <label class="form-label">Host *</label>
-            <input v-model="formHost" class="form-input" placeholder="e.g. localhost" />
+            <label class="form-label">{{ t('sections.datasources.fields.hostLabel') }}</label>
+            <input v-model="formHost" class="form-input" :placeholder="t('sections.datasources.fields.hostPlaceholder')" />
           </div>
 
           <div class="form-group">
-            <label class="form-label">Port *</label>
+            <label class="form-label">{{ t('sections.datasources.fields.portLabel') }}</label>
             <input v-model.number="formPort" type="number" class="form-input" />
           </div>
 
           <div class="form-group">
-            <label class="form-label">Database *</label>
-            <input v-model="formDatabase" class="form-input" placeholder="Database name" />
+            <label class="form-label">{{ t('sections.datasources.fields.databaseLabel') }}</label>
+            <input v-model="formDatabase" class="form-input" :placeholder="t('sections.datasources.fields.databasePlaceholder')" />
           </div>
 
           <div class="form-group" v-if="hasSchema">
-            <label class="form-label">Schema</label>
-            <input v-model="formSchema" class="form-input" placeholder="e.g. public (default if empty)" />
+            <label class="form-label">{{ t('sections.datasources.fields.schemaLabel') }}</label>
+            <input v-model="formSchema" class="form-input" :placeholder="t('sections.datasources.fields.schemaPlaceholder')" />
           </div>
 
           <div class="form-group">
-            <label class="form-label">Username *</label>
-            <input v-model="formUsername" class="form-input" placeholder="Database user" />
+            <label class="form-label">{{ t('sections.datasources.fields.usernameLabel') }}</label>
+            <input v-model="formUsername" class="form-input" :placeholder="t('sections.datasources.fields.usernamePlaceholder')" />
           </div>
 
           <div class="form-group credential-group">
             <div class="credential-label-row">
-              <label class="form-label">Password {{ editingId ? '' : '*' }}</label>
+              <label class="form-label">{{ t('sections.datasources.fields.passwordLabel') }}{{ editingId ? '' : ' *' }}</label>
               <button
                 type="button"
                 class="visibility-toggle"
                 @click="passwordVisible = !passwordVisible"
               >
-                {{ passwordVisible ? 'Hide' : 'Show' }}
+                {{ passwordVisible ? t('sections.datasources.fields.hidePassword') : t('sections.datasources.fields.showPassword') }}
               </button>
             </div>
             <input
               v-model="formPassword"
               :type="passwordVisible ? 'text' : 'password'"
               class="form-input"
-              :placeholder="editingId ? 'Leave empty to keep current password' : 'Database password'"
+              :placeholder="editingId ? t('sections.datasources.fields.passwordEditPlaceholder') : t('sections.datasources.fields.passwordAddPlaceholder')"
             />
           </div>
 
           <!-- Connection Properties -->
           <div class="form-group properties-group">
             <div class="properties-header">
-              <label class="form-label">Connection Properties</label>
-              <button type="button" class="add-prop-btn" @click="addProperty">+ Add</button>
+              <label class="form-label">{{ t('sections.datasources.fields.connectionPropsLabel') }}</label>
+              <button type="button" class="add-prop-btn" @click="addProperty">{{ t('sections.datasources.fields.addPropBtn') }}</button>
             </div>
             <p class="form-hint" v-if="propertyHints[formType]">{{ propertyHints[formType] }}</p>
             <div v-for="(prop, index) in formProperties" :key="index" class="property-row">
               <input
                 v-model="prop.key"
                 class="form-input prop-key-input"
-                placeholder="Key"
+                :placeholder="t('sections.datasources.fields.propKeyPlaceholder')"
               />
               <span class="prop-separator">=</span>
               <input
                 v-model="prop.value"
                 class="form-input prop-value-input"
-                placeholder="Value"
+                :placeholder="t('sections.datasources.fields.propValuePlaceholder')"
               />
               <button type="button" class="remove-prop-btn" @click="removeProperty(index)">x</button>
             </div>
@@ -472,51 +475,51 @@ onMounted(() => {
         <!-- File Fields -->
         <template v-if="isFileType">
           <div class="form-group file-path-group">
-            <label class="form-label">File Path *</label>
+            <label class="form-label">{{ t('sections.datasources.fields.filePathLabel') }}</label>
             <div class="file-path-row">
-              <input v-model="formFilePath" class="form-input file-path-input" placeholder="Click Browse to select..." readonly />
-              <button type="button" class="browse-btn" @click="showFileBrowser = true">Browse</button>
+              <input v-model="formFilePath" class="form-input file-path-input" :placeholder="t('sections.datasources.fields.filePathPlaceholder')" readonly />
+              <button type="button" class="browse-btn" @click="showFileBrowser = true">{{ t('sections.datasources.fields.browseBtn') }}</button>
             </div>
           </div>
 
           <div class="form-group" v-if="formType === 'CSV'">
-            <label class="form-label">Encoding</label>
-            <input v-model="formEncoding" class="form-input" placeholder="UTF-8" />
+            <label class="form-label">{{ t('sections.datasources.fields.encodingLabel') }}</label>
+            <input v-model="formEncoding" class="form-input" :placeholder="t('sections.datasources.fields.encodingPlaceholder')" />
           </div>
 
           <div class="form-group" v-if="formType === 'CSV'">
-            <label class="form-label">Delimiter</label>
-            <input v-model="formDelimiter" class="form-input" placeholder="," maxlength="1" />
+            <label class="form-label">{{ t('sections.datasources.fields.delimiterLabel') }}</label>
+            <input v-model="formDelimiter" class="form-input" :placeholder="t('sections.datasources.fields.delimiterPlaceholder')" maxlength="1" />
           </div>
 
           <div class="form-group checkbox-group">
             <label class="checkbox-label">
               <input type="checkbox" v-model="formHasHeader" />
-              <span>File has header row</span>
+              <span>{{ t('sections.datasources.fields.headerRowLabel') }}</span>
             </label>
           </div>
         </template>
 
         <!-- Security Config -->
         <div class="form-group">
-          <label class="form-label">Max Connections</label>
+          <label class="form-label">{{ t('sections.datasources.fields.maxConnectionsLabel') }}</label>
           <input v-model.number="formMaxConnections" type="number" class="form-input" />
         </div>
 
         <div class="form-group">
-          <label class="form-label">Query Timeout (s)</label>
+          <label class="form-label">{{ t('sections.datasources.fields.queryTimeoutLabel') }}</label>
           <input v-model.number="formQueryTimeout" type="number" class="form-input" />
         </div>
 
         <div class="form-group">
-          <label class="form-label">Max Result Rows</label>
+          <label class="form-label">{{ t('sections.datasources.fields.maxRowsLabel') }}</label>
           <input v-model.number="formMaxResultRows" type="number" class="form-input" />
         </div>
 
         <div class="form-group checkbox-group">
           <label class="checkbox-label">
             <input type="checkbox" v-model="formReadOnly" />
-            <span>Read-only (recommended)</span>
+            <span>{{ t('sections.datasources.fields.readOnlyLabel') }}</span>
           </label>
         </div>
       </div>
@@ -524,9 +527,9 @@ onMounted(() => {
       <div v-if="formError" class="form-error">{{ formError }}</div>
 
       <div class="form-actions">
-        <button class="cancel-btn" @click="closeForm" :disabled="submitting">Cancel</button>
+        <button class="cancel-btn" @click="closeForm" :disabled="submitting">{{ t('common.cancel') }}</button>
         <button class="submit-btn" @click="handleSubmit" :disabled="submitting">
-          {{ submitting ? (editingId ? 'Saving...' : 'Creating...') : (editingId ? 'Save Changes' : 'Create Data Source') }}
+          {{ submitting ? (editingId ? t('sections.datasources.savingBtn') : t('sections.datasources.creatingBtn')) : (editingId ? t('sections.datasources.saveBtn') : t('sections.datasources.createBtn')) }}
         </button>
       </div>
     </div>
@@ -544,31 +547,31 @@ onMounted(() => {
             <button
               class="action-btn edit-btn"
               @click="openEditForm(ds)"
-              title="Edit"
+              :title="t('common.edit')"
             >
-              Edit
+              {{ t('common.edit') }}
             </button>
             <button
               class="action-btn test-btn"
               @click="handleTest(ds.id)"
               :disabled="testingDataSources.has(ds.id)"
-              title="Test connection"
+              :title="t('common.test')"
             >
-              {{ testingDataSources.has(ds.id) ? 'Testing...' : 'Test' }}
+              {{ testingDataSources.has(ds.id) ? t('sections.datasources.testingBtn') : t('common.test') }}
             </button>
             <button
               class="action-btn toggle-btn"
               @click="handleToggleStatus(ds)"
-              :title="ds.status === 'DISABLED' ? 'Enable' : 'Disable'"
+              :title="ds.status === 'DISABLED' ? t('common.enable') : t('common.disable')"
             >
-              {{ ds.status === 'DISABLED' ? 'Enable' : 'Disable' }}
+              {{ ds.status === 'DISABLED' ? t('sections.datasources.enableBtn') : t('sections.datasources.disableBtn') }}
             </button>
             <button
               class="action-btn delete-btn"
               @click="confirmDeleteId = ds.id"
-              title="Delete"
+              :title="t('common.delete')"
             >
-              Delete
+              {{ t('common.delete') }}
             </button>
           </div>
         </div>
@@ -576,11 +579,11 @@ onMounted(() => {
         <div class="card-content">
           <div class="datasource-info">
             <div class="info-item" v-if="ds.connectionConfig.type === 'jdbc'">
-              <span class="info-label">Host:</span>
+              <span class="info-label">{{ t('sections.datasources.cardLabels.host') }}</span>
               <span class="info-value">{{ (ds.connectionConfig as any).host }}:{{ (ds.connectionConfig as any).port }}</span>
             </div>
             <div class="info-item" v-if="ds.connectionConfig.type === 'jdbc'">
-              <span class="info-label">Database:</span>
+              <span class="info-label">{{ t('sections.datasources.cardLabels.database') }}</span>
               <span class="info-value">
                 {{ (ds.connectionConfig as any).database }}
                 <template v-if="(ds.connectionConfig as any).properties?.currentSchema">
@@ -589,15 +592,15 @@ onMounted(() => {
               </span>
             </div>
             <div class="info-item" v-if="ds.connectionConfig.type === 'file'">
-              <span class="info-label">File Path:</span>
+              <span class="info-label">{{ t('sections.datasources.cardLabels.filePath') }}</span>
               <span class="info-value">{{ (ds.connectionConfig as any).filePath }}</span>
             </div>
             <div class="info-item" v-if="ds.lastTestedAt">
-              <span class="info-label">Last Tested:</span>
+              <span class="info-label">{{ t('sections.datasources.cardLabels.lastTested') }}</span>
               <span class="info-value">{{ new Date(ds.lastTestedAt).toLocaleString() }}</span>
             </div>
             <div class="info-item error-info" v-if="ds.lastError">
-              <span class="info-label">Last Error:</span>
+              <span class="info-label">{{ t('sections.datasources.cardLabels.lastError') }}</span>
               <span class="info-value error-text">{{ ds.lastError }}</span>
             </div>
           </div>
@@ -605,17 +608,17 @@ onMounted(() => {
 
         <!-- Delete Confirmation -->
         <div v-if="confirmDeleteId === ds.id" class="delete-confirm">
-          <p class="confirm-message">Are you sure you want to delete "<strong>{{ ds.name }}</strong>"?</p>
+          <p class="confirm-message">{{ t('sections.datasources.confirmDeleteTitle', { name: ds.name }) }}</p>
           <div class="confirm-actions">
-            <button class="cancel-btn" @click="confirmDeleteId = null">Cancel</button>
-            <button class="delete-confirm-btn" @click="handleDelete(ds.id)">Delete</button>
+            <button class="cancel-btn" @click="confirmDeleteId = null">{{ t('common.cancel') }}</button>
+            <button class="delete-confirm-btn" @click="handleDelete(ds.id)">{{ t('common.delete') }}</button>
           </div>
         </div>
       </div>
 
       <div v-if="dataSources.length === 0 && !loading" class="empty-state">
-        <p>No data sources configured yet.</p>
-        <button class="add-btn-secondary" @click="openForm">Create your first data source</button>
+        <p>{{ t('sections.datasources.empty') }}</p>
+        <button class="add-btn-secondary" @click="openForm">{{ t('sections.datasources.createFirstBtn') }}</button>
       </div>
     </div>
 
@@ -623,7 +626,7 @@ onMounted(() => {
     <FileBrowser
       :visible="showFileBrowser"
       mode="file"
-      title="Select File"
+      :title="t('sections.datasources.fields.browseBtn')"
       @select="handleFileSelected"
       @cancel="showFileBrowser = false"
     />

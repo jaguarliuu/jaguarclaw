@@ -1,4 +1,8 @@
 <script setup lang="ts">
+import { useI18n } from '@/i18n'
+
+const { t } = useI18n()
+
 defineProps<{
   title: string
   message?: string
@@ -11,7 +15,7 @@ defineProps<{
       <h2 class="section-title">{{ title }}</h2>
     </header>
     <div class="placeholder-content">
-      <span class="placeholder-text">{{ message || 'Coming soon' }}</span>
+      <span class="placeholder-text">{{ message || t('sections.placeholder.comingSoon') }}</span>
     </div>
   </div>
 </template>

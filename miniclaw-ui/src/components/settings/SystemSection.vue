@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import { useSystemInfo, type EnvironmentCheck } from '@/composables/useSystemInfo'
+import { useI18n } from '@/i18n'
 import { useRouter } from 'vue-router'
 import ConfigCard from '@/components/common/ConfigCard.vue'
 
 const router = useRouter()
 const { systemInfo, environments, loading, refresh } = useSystemInfo()
+const { t } = useI18n()
 
 const isRefreshing = ref(false)
 
@@ -295,42 +297,42 @@ onMounted(() => {
   <div class="system-section">
     <header class="section-header">
       <div>
-        <h2 class="section-title">System</h2>
-        <p class="section-subtitle">System information and environment management</p>
+        <h2 class="section-title">{{ t('settings.nav.system') }}</h2>
+        <p class="section-subtitle">{{ t('sections.system.subtitle') }}</p>
       </div>
       <button class="refresh-btn" @click="handleRefresh" :disabled="isRefreshing">
         <span class="refresh-icon" :class="{ spinning: isRefreshing }">↻</span>
-        Refresh
+        {{ t('common.refresh') }}
       </button>
     </header>
 
-    <div v-if="loading && !systemInfo" class="loading-state">Loading system information...</div>
+    <div v-if="loading && !systemInfo" class="loading-state">{{ t('sections.system.loading') }}</div>
 
     <template v-if="systemInfo">
       <!-- System Info Card -->
       <div class="info-card">
         <div class="info-header">
-          <h3 class="info-title">System Information</h3>
+          <h3 class="info-title">{{ t('sections.system.infoTitle') }}</h3>
         </div>
         <div class="info-grid">
           <div class="info-item">
-            <span class="info-label">Operating System</span>
+            <span class="info-label">{{ t('sections.system.labels.os') }}</span>
             <span class="info-value">{{ systemInfo.os }} {{ systemInfo.osVersion }}</span>
           </div>
           <div class="info-item">
-            <span class="info-label">Architecture</span>
+            <span class="info-label">{{ t('sections.system.labels.arch') }}</span>
             <span class="info-value">{{ systemInfo.architecture }}</span>
           </div>
           <div class="info-item">
-            <span class="info-label">Java Version</span>
+            <span class="info-label">{{ t('sections.system.labels.java') }}</span>
             <span class="info-value">{{ systemInfo.javaVersion }} ({{ systemInfo.javaVendor }})</span>
           </div>
           <div class="info-item">
-            <span class="info-label">CPU Cores</span>
+            <span class="info-label">{{ t('sections.system.labels.cpu') }}</span>
             <span class="info-value">{{ systemInfo.availableProcessors }}</span>
           </div>
           <div class="info-item">
-            <span class="info-label">Memory Usage</span>
+            <span class="info-label">{{ t('sections.system.labels.memory') }}</span>
             <span class="info-value">
               {{ formatMemory(systemInfo.totalMemory - systemInfo.freeMemory) }} /
               {{ formatMemory(systemInfo.totalMemory) }}
@@ -338,7 +340,7 @@ onMounted(() => {
             </span>
           </div>
           <div class="info-item">
-            <span class="info-label">User</span>
+            <span class="info-label">{{ t('sections.system.labels.user') }}</span>
             <span class="info-value">{{ systemInfo.userName }}</span>
           </div>
         </div>
@@ -346,8 +348,8 @@ onMounted(() => {
 
       <!-- Environment Status -->
       <div class="section-divider">
-        <h3 class="divider-title">Development Environment</h3>
-        <p class="divider-subtitle">Manage Python, Node.js, and Git installations</p>
+        <h3 class="divider-title">{{ t('sections.system.devEnvTitle') }}</h3>
+        <p class="divider-subtitle">{{ t('sections.system.devEnvSubtitle') }}</p>
       </div>
 
       <div class="env-grid">
@@ -357,19 +359,19 @@ onMounted(() => {
               <div class="env-details">
                 <h4 class="env-name">{{ env.name }}</h4>
                 <p v-if="env.installed" class="env-version">{{ env.version }}</p>
-                <p v-else class="env-not-installed">Not installed</p>
+                <p v-else class="env-not-installed">{{ t('sections.system.notInstalled') }}</p>
               </div>
             </div>
             <span
               class="env-badge"
               :class="`badge-${getStatusVariant(env.installed)}`"
             >
-              {{ env.installed ? 'Installed' : 'Not Found' }}
+              {{ env.installed ? t('sections.system.installed') : t('sections.system.notFound') }}
             </span>
           </div>
 
           <div v-if="env.installed && env.path" class="env-path">
-            <span class="path-label">Path:</span>
+            <span class="path-label">{{ t('sections.system.pathLabel') }}</span>
             <span class="path-value">{{ env.path }}</span>
           </div>
 
@@ -379,14 +381,14 @@ onMounted(() => {
               class="btn-install"
               @click="handleInstall(env)"
             >
-              Install {{ env.name }}
+              {{ t('sections.system.installBtn', { name: env.name }) }}
             </button>
             <button
               v-else
               class="btn-uninstall"
               @click="handleUninstall(env)"
             >
-              Uninstall
+              {{ t('sections.system.uninstallBtn') }}
             </button>
           </div>
         </div>

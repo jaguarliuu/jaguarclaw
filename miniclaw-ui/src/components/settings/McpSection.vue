@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useMcpServers } from '@/composables/useMcpServers'
+import { useI18n } from '@/i18n'
 import McpServerModal from './McpServerModal.vue'
 
+const { t } = useI18n()
 const { servers, loading, loadServers, deleteServer } = useMcpServers()
 
 const showModal = ref(false)
@@ -36,7 +38,7 @@ function handleSuccess() {
 }
 
 async function handleDelete(server: any) {
-  if (!confirm(`Are you sure you want to delete '${server.name}'?\nAll tools from this server will be removed.`)) {
+  if (!confirm(t('sections.mcp.confirmDelete', { name: server.name }))) {
     return
   }
 
@@ -57,27 +59,27 @@ function getTransportBadgeClass(type: string) {
   <div class="mcp-section">
     <div class="section-header">
       <div>
-        <h2 class="section-title">MCP Servers</h2>
+        <h2 class="section-title">{{ t('settings.nav.mcp') }}</h2>
         <p class="section-description">
-          Manage Model Context Protocol servers to extend MiniClaw's capabilities
+          {{ t('sections.mcp.subtitle') }}
         </p>
       </div>
       <button class="btn-primary" @click="openCreateModal">
-        + Add MCP Server
+        {{ t('sections.mcp.addBtn') }}
       </button>
     </div>
 
     <div v-if="loading" class="loading-state">
       <div class="spinner"></div>
-      <p>Loading MCP servers...</p>
+      <p>{{ t('sections.mcp.loading') }}</p>
     </div>
 
     <div v-else-if="servers.length === 0" class="empty-state">
       <div class="empty-icon">🔌</div>
-      <h3>No MCP servers configured</h3>
-      <p>Add an MCP server to extend MiniClaw with custom tools and capabilities</p>
+      <h3>{{ t('sections.mcp.empty') }}</h3>
+      <p>{{ t('sections.mcp.emptyHint') }}</p>
       <button class="btn-primary" @click="openCreateModal">
-        + Add Your First Server
+        {{ t('sections.mcp.addFirstBtn') }}
       </button>
     </div>
 
@@ -85,11 +87,11 @@ function getTransportBadgeClass(type: string) {
       <table class="servers-table">
         <thead>
           <tr>
-            <th>Name</th>
-            <th>Type</th>
-            <th>Status</th>
-            <th>Tools</th>
-            <th>Actions</th>
+            <th>{{ t('sections.mcp.table.name') }}</th>
+            <th>{{ t('sections.mcp.table.type') }}</th>
+            <th>{{ t('sections.mcp.table.status') }}</th>
+            <th>{{ t('sections.mcp.table.tools') }}</th>
+            <th>{{ t('sections.mcp.table.actions') }}</th>
           </tr>
         </thead>
         <tbody>
@@ -107,19 +109,19 @@ function getTransportBadgeClass(type: string) {
             </td>
             <td>
               <span class="status" :class="getStatusClass(server)">
-                {{ server.enabled ? 'Connected' : 'Disconnected' }}
+                {{ server.enabled ? t('sections.mcp.connected') : t('sections.mcp.disconnected') }}
               </span>
             </td>
             <td class="tools-count">
-              {{ server.toolCount || 0 }} tools
+              {{ t('sections.mcp.toolCount', { n: server.toolCount || 0 }) }}
             </td>
             <td>
               <div class="actions">
-                <button class="btn-icon" @click="openEditModal(server)" title="Edit">
-                  Edit
+                <button class="btn-icon" @click="openEditModal(server)" :title="t('common.edit')">
+                  {{ t('common.edit') }}
                 </button>
-                <button class="btn-icon btn-danger" @click="handleDelete(server)" title="Delete">
-                  Delete
+                <button class="btn-icon btn-danger" @click="handleDelete(server)" :title="t('common.delete')">
+                  {{ t('common.delete') }}
                 </button>
               </div>
             </td>

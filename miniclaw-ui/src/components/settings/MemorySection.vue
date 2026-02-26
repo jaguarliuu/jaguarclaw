@@ -1,17 +1,19 @@
 <script setup lang="ts">
 import { onMounted, computed } from 'vue'
 import { useMemory } from '@/composables/useMemory'
+import { useI18n } from '@/i18n'
 
 const { status, loading, rebuilding, error, loadStatus, rebuildIndex } = useMemory()
+const { t } = useI18n()
 
 const vectorStatus = computed(() => {
-  if (!status.value) return 'Unknown'
-  return status.value.vectorSearchEnabled ? 'Enabled' : 'Disabled (FTS only)'
+  if (!status.value) return t('sections.memory.unknown')
+  return status.value.vectorSearchEnabled ? t('sections.memory.enabled') : t('sections.memory.disabled')
 })
 
 const embeddingInfo = computed(() => {
-  if (!status.value) return 'N/A'
-  if (status.value.embeddingProvider === 'none') return 'None'
+  if (!status.value) return t('sections.memory.unknown')
+  if (status.value.embeddingProvider === 'none') return t('sections.memory.noProvider')
   return `${status.value.embeddingProvider} / ${status.value.embeddingModel}`
 })
 
@@ -31,17 +33,17 @@ onMounted(() => {
 <template>
   <div class="memory-section">
     <header class="section-header">
-      <h2 class="section-title">/memory</h2>
-      <p class="section-subtitle">Global, cross-session memory system</p>
+      <h2 class="section-title">{{ t('settings.nav.memory') }}</h2>
+      <p class="section-subtitle">{{ t('sections.memory.subtitle') }}</p>
     </header>
 
     <div v-if="loading && !status" class="loading-state">
-      Loading memory status...
+      {{ t('sections.memory.loading') }}
     </div>
 
     <div v-else-if="error && !status" class="error-state">
       <p>{{ error }}</p>
-      <button class="retry-btn" @click="loadStatus">Retry</button>
+      <button class="retry-btn" @click="loadStatus">{{ t('common.retry') }}</button>
     </div>
 
     <div v-else-if="status" class="status-panel">
@@ -54,22 +56,22 @@ onMounted(() => {
       <!-- Status Grid -->
       <div class="status-grid">
         <div class="status-card">
-          <div class="card-label">Total Chunks</div>
+          <div class="card-label">{{ t('sections.memory.totalChunks') }}</div>
           <div class="card-value">{{ status.totalChunks }}</div>
         </div>
 
         <div class="status-card">
-          <div class="card-label">With Embedding</div>
+          <div class="card-label">{{ t('sections.memory.withEmbedding') }}</div>
           <div class="card-value">{{ status.chunksWithEmbedding }}</div>
         </div>
 
         <div class="status-card">
-          <div class="card-label">Memory Files</div>
+          <div class="card-label">{{ t('sections.memory.memoryFiles') }}</div>
           <div class="card-value">{{ status.memoryFileCount }}</div>
         </div>
 
         <div class="status-card">
-          <div class="card-label">Vector Search</div>
+          <div class="card-label">{{ t('sections.memory.vectorSearch') }}</div>
           <div class="card-value" :class="{ enabled: status.vectorSearchEnabled }">
             {{ vectorStatus }}
           </div>
@@ -78,7 +80,7 @@ onMounted(() => {
 
       <!-- Embedding Provider -->
       <div class="info-row">
-        <span class="info-label">Embedding Provider:</span>
+        <span class="info-label">{{ t('sections.memory.embeddingProvider') }}</span>
         <span class="info-value">{{ embeddingInfo }}</span>
       </div>
 
@@ -89,10 +91,10 @@ onMounted(() => {
           :disabled="rebuilding"
           @click="handleRebuild"
         >
-          {{ rebuilding ? 'Rebuilding...' : 'Rebuild Index' }}
+          {{ rebuilding ? t('sections.memory.rebuildingBtn') : t('sections.memory.rebuildBtn') }}
         </button>
         <span class="action-hint">
-          Rebuild index from Markdown source files
+          {{ t('sections.memory.rebuildHint') }}
         </span>
       </div>
 

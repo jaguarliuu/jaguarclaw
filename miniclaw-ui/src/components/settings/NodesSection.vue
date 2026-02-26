@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useNodeConsole } from '@/composables/useNodeConsole'
+import { useI18n } from '@/i18n'
 import type { ConnectorType, AuthType, SafetyPolicy, NodeInfo } from '@/types'
 
 const { nodes, loading, error, loadNodes, registerNode, removeNode, testNode } = useNodeConsole()
+const { t } = useI18n()
 
 // Form state
 const showForm = ref(false)
@@ -54,11 +56,11 @@ function closeForm() {
 
 async function handleSubmit() {
   if (!formAlias.value.trim()) {
-    formError.value = 'Alias is required'
+    formError.value = t('sections.nodes.errors.aliasRequired')
     return
   }
   if (!formCredential.value.trim()) {
-    formError.value = 'Credential is required'
+    formError.value = t('sections.nodes.errors.credentialRequired')
     return
   }
 
@@ -79,7 +81,7 @@ async function handleSubmit() {
     })
     closeForm()
   } catch (e) {
-    formError.value = e instanceof Error ? e.message : 'Failed to register node'
+    formError.value = e instanceof Error ? e.message : t('sections.nodes.errors.failedToRegister')
   } finally {
     submitting.value = false
   }
@@ -123,26 +125,26 @@ function getStatusClass(node: NodeInfo): string {
 function getAuthTypeOptions(type: ConnectorType): { value: AuthType; label: string }[] {
   switch (type) {
     case 'ssh': return [
-      { value: 'password', label: 'Password' },
-      { value: 'key', label: 'SSH Key' }
+      { value: 'password', label: t('sections.nodes.fields.authOptions.password') },
+      { value: 'key', label: t('sections.nodes.fields.authOptions.sshKey') }
     ]
     case 'k8s': return [
-      { value: 'kubeconfig', label: 'Kubeconfig' },
-      { value: 'token', label: 'Token' }
+      { value: 'kubeconfig', label: t('sections.nodes.fields.authOptions.kubeconfig') },
+      { value: 'token', label: t('sections.nodes.fields.authOptions.token') }
     ]
     case 'db': return [
-      { value: 'password', label: 'Password' },
-      { value: 'token', label: 'Token' }
+      { value: 'password', label: t('sections.nodes.fields.authOptions.password') },
+      { value: 'token', label: t('sections.nodes.fields.authOptions.token') }
     ]
   }
 }
 
 function getCredentialPlaceholder(): string {
   switch (formAuthType.value) {
-    case 'password': return 'Enter password...'
-    case 'key': return 'Paste SSH private key...'
-    case 'kubeconfig': return 'Paste kubeconfig YAML...'
-    case 'token': return 'Enter token...'
+    case 'password': return t('sections.nodes.fields.credentialPlaceholders.password')
+    case 'key': return t('sections.nodes.fields.credentialPlaceholders.sshKey')
+    case 'kubeconfig': return t('sections.nodes.fields.credentialPlaceholders.kubeconfig')
+    case 'token': return t('sections.nodes.fields.credentialPlaceholders.token')
   }
 }
 
@@ -156,65 +158,65 @@ onMounted(() => {
     <header class="section-header">
       <div class="header-top">
         <div>
-          <h2 class="section-title">/nodes</h2>
-          <p class="section-subtitle">Remote machine management for AIOps</p>
+          <h2 class="section-title">{{ t('settings.nav.nodes') }}</h2>
+          <p class="section-subtitle">{{ t('sections.nodes.subtitle') }}</p>
         </div>
-        <button class="add-btn" @click="openForm">+ Add Node</button>
+        <button class="add-btn" @click="openForm">{{ t('sections.nodes.addBtn') }}</button>
       </div>
     </header>
 
     <!-- Loading -->
     <div v-if="loading && nodes.length === 0" class="loading-state">
-      Loading nodes...
+      {{ t('sections.nodes.loading') }}
     </div>
 
     <!-- Error -->
     <div v-if="error && nodes.length === 0" class="error-state">
       <p>{{ error }}</p>
-      <button class="retry-btn" @click="loadNodes">Retry</button>
+      <button class="retry-btn" @click="loadNodes">{{ t('common.retry') }}</button>
     </div>
 
     <!-- Add Form -->
     <div v-if="showForm" class="form-panel">
-      <h3 class="form-title">Register Node</h3>
+      <h3 class="form-title">{{ t('sections.nodes.formTitle') }}</h3>
 
       <div class="form-grid">
         <div class="form-group">
-          <label class="form-label">Alias *</label>
-          <input v-model="formAlias" class="form-input" placeholder="e.g. prod-web-1" />
+          <label class="form-label">{{ t('sections.nodes.fields.aliasLabel') }}</label>
+          <input v-model="formAlias" class="form-input" :placeholder="t('sections.nodes.fields.aliasPlaceholder')" />
         </div>
 
         <div class="form-group">
-          <label class="form-label">Display Name</label>
-          <input v-model="formDisplayName" class="form-input" placeholder="e.g. Production Web Server 1" />
+          <label class="form-label">{{ t('sections.nodes.fields.displayNameLabel') }}</label>
+          <input v-model="formDisplayName" class="form-input" :placeholder="t('sections.nodes.fields.displayNamePlaceholder')" />
         </div>
 
         <div class="form-group">
-          <label class="form-label">Type *</label>
+          <label class="form-label">{{ t('sections.nodes.fields.typeLabel') }}</label>
           <select v-model="formConnectorType" class="form-input">
-            <option value="ssh">SSH</option>
-            <option value="k8s">Kubernetes</option>
-            <option value="db">Database</option>
+            <option value="ssh">{{ t('sections.nodes.fields.typeOptions.ssh') }}</option>
+            <option value="k8s">{{ t('sections.nodes.fields.typeOptions.k8s') }}</option>
+            <option value="db">{{ t('sections.nodes.fields.typeOptions.db') }}</option>
           </select>
         </div>
 
         <div class="form-group" v-if="formConnectorType !== 'k8s'">
-          <label class="form-label">Host</label>
-          <input v-model="formHost" class="form-input" placeholder="e.g. 192.168.1.100" />
+          <label class="form-label">{{ t('sections.nodes.fields.hostLabel') }}</label>
+          <input v-model="formHost" class="form-input" :placeholder="t('sections.nodes.fields.hostPlaceholder')" />
         </div>
 
         <div class="form-group" v-if="formConnectorType === 'ssh'">
-          <label class="form-label">Port</label>
-          <input v-model.number="formPort" type="number" class="form-input" placeholder="22" />
+          <label class="form-label">{{ t('sections.nodes.fields.portLabel') }}</label>
+          <input v-model.number="formPort" type="number" class="form-input" :placeholder="t('sections.nodes.fields.portPlaceholder')" />
         </div>
 
         <div class="form-group" v-if="formConnectorType === 'ssh'">
-          <label class="form-label">Username</label>
-          <input v-model="formUsername" class="form-input" placeholder="root" />
+          <label class="form-label">{{ t('sections.nodes.fields.usernameLabel') }}</label>
+          <input v-model="formUsername" class="form-input" :placeholder="t('sections.nodes.fields.usernamePlaceholder')" />
         </div>
 
         <div class="form-group">
-          <label class="form-label">Auth Type</label>
+          <label class="form-label">{{ t('sections.nodes.fields.authTypeLabel') }}</label>
           <select v-model="formAuthType" class="form-input">
             <option v-for="opt in getAuthTypeOptions(formConnectorType)" :key="opt.value" :value="opt.value">
               {{ opt.label }}
@@ -223,28 +225,28 @@ onMounted(() => {
         </div>
 
         <div class="form-group">
-          <label class="form-label">Tags</label>
-          <input v-model="formTags" class="form-input" placeholder="prod,web,us-east" />
+          <label class="form-label">{{ t('sections.nodes.fields.tagsLabel') }}</label>
+          <input v-model="formTags" class="form-input" :placeholder="t('sections.nodes.fields.tagsPlaceholder')" />
         </div>
 
         <div class="form-group">
-          <label class="form-label">Safety Policy</label>
+          <label class="form-label">{{ t('sections.nodes.fields.safetyLabel') }}</label>
           <select v-model="formSafetyPolicy" class="form-input">
-            <option value="strict">Strict (all commands need confirm)</option>
-            <option value="standard">Standard (read-only auto, side-effects confirm)</option>
-            <option value="relaxed">Relaxed (only destructive blocked)</option>
+            <option value="strict">{{ t('sections.nodes.fields.safetyOptions.strict') }}</option>
+            <option value="standard">{{ t('sections.nodes.fields.safetyOptions.standard') }}</option>
+            <option value="relaxed">{{ t('sections.nodes.fields.safetyOptions.relaxed') }}</option>
           </select>
         </div>
       </div>
 
       <div class="form-group credential-group">
         <div class="credential-label-row">
-          <label class="form-label">Credential *</label>
+          <label class="form-label">{{ t('sections.nodes.fields.credentialLabel') }}</label>
           <button
             type="button"
             class="visibility-toggle"
             @click="credentialVisible = !credentialVisible"
-            :title="credentialVisible ? 'Hide credential' : 'Show credential'"
+            :title="credentialVisible ? t('sections.nodes.hideCredential') : t('sections.nodes.showCredential')"
           >
             <svg v-if="credentialVisible" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
@@ -283,9 +285,9 @@ onMounted(() => {
       <div v-if="formError" class="form-error">{{ formError }}</div>
 
       <div class="form-actions">
-        <button class="cancel-btn" @click="closeForm">Cancel</button>
+        <button class="cancel-btn" @click="closeForm">{{ t('common.cancel') }}</button>
         <button class="submit-btn" :disabled="submitting" @click="handleSubmit">
-          {{ submitting ? 'Registering...' : 'Register' }}
+          {{ submitting ? t('sections.nodes.registeringBtn') : t('sections.nodes.registerBtn') }}
         </button>
       </div>
     </div>
@@ -300,8 +302,8 @@ onMounted(() => {
               {{ node.connectorType }}
             </span>
             <span class="status-dot" :class="getStatusClass(node)" :title="
-              node.lastTestSuccess === null ? 'Not tested' :
-              node.lastTestSuccess ? 'Connected' : 'Connection failed'
+              node.lastTestSuccess === null ? t('sections.nodes.notTested') :
+              node.lastTestSuccess ? t('sections.nodes.connected') : t('sections.nodes.failed')
             " />
           </div>
           <div class="node-actions">
@@ -310,18 +312,18 @@ onMounted(() => {
               :disabled="testingNodes.has(node.id)"
               @click="handleTest(node.id)"
             >
-              {{ testingNodes.has(node.id) ? 'Testing...' : 'Test' }}
+              {{ testingNodes.has(node.id) ? t('sections.nodes.testingBtn') : t('common.test') }}
             </button>
             <button
               v-if="confirmDeleteId !== node.id"
               class="delete-btn"
               @click="confirmDeleteId = node.id"
             >
-              Delete
+              {{ t('common.delete') }}
             </button>
             <template v-else>
-              <button class="confirm-delete-btn" @click="handleDelete(node.id)">Confirm</button>
-              <button class="cancel-delete-btn" @click="confirmDeleteId = null">Cancel</button>
+              <button class="confirm-delete-btn" @click="handleDelete(node.id)">{{ t('common.confirm') }}</button>
+              <button class="cancel-delete-btn" @click="confirmDeleteId = null">{{ t('common.cancel') }}</button>
             </template>
           </div>
         </div>
@@ -332,15 +334,15 @@ onMounted(() => {
           <span v-if="node.tags" class="node-tags">
             <span v-for="tag in node.tags.split(',')" :key="tag" class="tag">{{ tag.trim() }}</span>
           </span>
-          <span class="node-policy">policy: {{ node.safetyPolicy }}</span>
+          <span class="node-policy">{{ t('sections.nodes.policyLabel', { name: node.safetyPolicy }) }}</span>
         </div>
       </div>
     </div>
 
     <!-- Empty State -->
     <div v-if="!loading && !showForm && nodes.length === 0 && !error" class="empty-state">
-      <p>No nodes registered yet.</p>
-      <p class="empty-hint">Add SSH, Kubernetes, or Database nodes to enable remote operations.</p>
+      <p>{{ t('sections.nodes.empty') }}</p>
+      <p class="empty-hint">{{ t('sections.nodes.emptyHint') }}</p>
     </div>
 
     <!-- Global Error -->

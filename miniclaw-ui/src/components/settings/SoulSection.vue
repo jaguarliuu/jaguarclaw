@@ -1,6 +1,9 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useSoulConfig, type SoulConfig } from '@/composables/useSoulConfig'
+import { useI18n } from '@/i18n'
+
+const { t } = useI18n()
 
 const { config, loading, error, fetchConfig, saveConfig } = useSoulConfig()
 
@@ -24,17 +27,17 @@ const saving = ref(false)
 const saveSuccess = ref(false)
 const saveError = ref<string | null>(null)
 
-const responseStyleOptions = [
-  { value: 'formal', label: 'Formal' },
-  { value: 'balanced', label: 'Balanced' },
-  { value: 'casual', label: 'Casual' }
-]
+const responseStyleOptions = computed(() => [
+  { value: 'formal', label: t('sections.soul.tone.formal') },
+  { value: 'balanced', label: t('sections.soul.tone.balanced') },
+  { value: 'casual', label: t('sections.soul.tone.casual') }
+])
 
-const detailLevelOptions = [
-  { value: 'concise', label: 'Concise' },
-  { value: 'balanced', label: 'Balanced' },
-  { value: 'detailed', label: 'Detailed' }
-]
+const detailLevelOptions = computed(() => [
+  { value: 'concise', label: t('sections.soul.detail.concise') },
+  { value: 'balanced', label: t('sections.soul.detail.balanced') },
+  { value: 'detailed', label: t('sections.soul.detail.detailed') }
+])
 
 function syncFormFromConfig() {
   if (!config.value) return
@@ -110,51 +113,51 @@ onMounted(async () => {
   <div class="soul-section">
     <header class="section-header">
       <div>
-        <h2 class="section-title">Soul</h2>
-        <p class="section-subtitle">Configure your agent's personality and response style</p>
+        <h2 class="section-title">{{ t('settings.nav.persona') }}</h2>
+        <p class="section-subtitle">{{ t('sections.soul.subtitle') }}</p>
       </div>
     </header>
 
-    <div v-if="loading && !config" class="loading-state">Loading configuration...</div>
+    <div v-if="loading && !config" class="loading-state">{{ t('sections.soul.loading') }}</div>
 
     <div v-if="error && !config" class="error-state">
       <p>{{ error }}</p>
-      <button class="retry-btn" @click="fetchConfig">Retry</button>
+      <button class="retry-btn" @click="fetchConfig">{{ t('common.retry') }}</button>
     </div>
 
     <template v-if="config">
       <div class="config-blocks">
         <!-- Identity -->
         <div class="config-block">
-          <h3 class="block-title">Identity</h3>
-          <p class="block-desc">Define who your agent is</p>
+          <h3 class="block-title">{{ t('sections.soul.blocks.identity') }}</h3>
+          <p class="block-desc">{{ t('sections.soul.blocks.identityDesc') }}</p>
 
           <div class="form-group">
-            <label class="form-label">Agent Name</label>
+            <label class="form-label">{{ t('sections.soul.fields.agentNameLabel') }}</label>
             <input
               v-model="editConfig.agentName"
               class="form-input"
-              placeholder="e.g., MiniClaw"
+              :placeholder="t('sections.soul.fields.agentNamePlaceholder')"
             />
-            <p class="form-help">The name your agent will identify as</p>
+            <p class="form-help">{{ t('sections.soul.fields.agentNameHelp') }}</p>
           </div>
 
           <div class="form-group">
-            <label class="form-label">Personality</label>
+            <label class="form-label">{{ t('sections.soul.fields.personalityLabel') }}</label>
             <textarea
               v-model="editConfig.personality"
               class="form-textarea"
               rows="4"
-              placeholder="Describe your agent's personality in detail..."
+              :placeholder="t('sections.soul.fields.personalityPlaceholder')"
             />
-            <p class="form-help">A comprehensive description of your agent's character and approach</p>
+            <p class="form-help">{{ t('sections.soul.fields.personalityHelp') }}</p>
           </div>
         </div>
 
         <!-- Traits -->
         <div class="config-block">
-          <h3 class="block-title">Key Traits</h3>
-          <p class="block-desc">Defining characteristics of your agent</p>
+          <h3 class="block-title">{{ t('sections.soul.blocks.traits') }}</h3>
+          <p class="block-desc">{{ t('sections.soul.blocks.traitsDesc') }}</p>
 
           <div class="pill-list" v-if="editConfig.traits.length > 0">
             <span v-for="trait in editConfig.traits" :key="trait" class="pill pill-trait">
@@ -162,26 +165,26 @@ onMounted(async () => {
               <button class="pill-remove" @click="removeTrait(trait)">&times;</button>
             </span>
           </div>
-          <div v-else class="empty-hint">No traits added</div>
+          <div v-else class="empty-hint">{{ t('sections.soul.traits.empty') }}</div>
 
           <div class="add-row">
             <input
               v-model="newTrait"
               class="form-input"
-              placeholder="e.g., Professional, Friendly, Humorous"
+              :placeholder="t('sections.soul.traits.placeholder')"
               @keydown.enter.prevent="addTrait"
             />
-            <button class="add-btn" @click="addTrait" :disabled="!newTrait.trim()">+ Add</button>
+            <button class="add-btn" @click="addTrait" :disabled="!newTrait.trim()">{{ t('sections.soul.traits.addBtn') }}</button>
           </div>
         </div>
 
         <!-- Response Style -->
         <div class="config-block">
-          <h3 class="block-title">Response Style</h3>
-          <p class="block-desc">How your agent communicates</p>
+          <h3 class="block-title">{{ t('sections.soul.blocks.responseStyle') }}</h3>
+          <p class="block-desc">{{ t('sections.soul.blocks.responseStyleDesc') }}</p>
 
           <div class="form-group">
-            <label class="form-label">Tone</label>
+            <label class="form-label">{{ t('sections.soul.tone.label') }}</label>
             <div class="radio-group">
               <label
                 v-for="option in responseStyleOptions"
@@ -199,7 +202,7 @@ onMounted(async () => {
           </div>
 
           <div class="form-group">
-            <label class="form-label">Detail Level</label>
+            <label class="form-label">{{ t('sections.soul.detail.label') }}</label>
             <div class="radio-group">
               <label
                 v-for="option in detailLevelOptions"
@@ -219,8 +222,8 @@ onMounted(async () => {
 
         <!-- Expertise -->
         <div class="config-block">
-          <h3 class="block-title">Areas of Expertise</h3>
-          <p class="block-desc">Domains where your agent excels</p>
+          <h3 class="block-title">{{ t('sections.soul.blocks.expertise') }}</h3>
+          <p class="block-desc">{{ t('sections.soul.blocks.expertiseDesc') }}</p>
 
           <div class="pill-list" v-if="editConfig.expertise.length > 0">
             <span v-for="area in editConfig.expertise" :key="area" class="pill pill-expertise">
@@ -228,23 +231,23 @@ onMounted(async () => {
               <button class="pill-remove" @click="removeExpertise(area)">&times;</button>
             </span>
           </div>
-          <div v-else class="empty-hint">No expertise areas added</div>
+          <div v-else class="empty-hint">{{ t('sections.soul.expertise.empty') }}</div>
 
           <div class="add-row">
             <input
               v-model="newExpertise"
               class="form-input"
-              placeholder="e.g., Programming, AI, System Architecture"
+              :placeholder="t('sections.soul.expertise.placeholder')"
               @keydown.enter.prevent="addExpertise"
             />
-            <button class="add-btn" @click="addExpertise" :disabled="!newExpertise.trim()">+ Add</button>
+            <button class="add-btn" @click="addExpertise" :disabled="!newExpertise.trim()">{{ t('sections.soul.expertise.addBtn') }}</button>
           </div>
         </div>
 
         <!-- Forbidden Topics -->
         <div class="config-block">
-          <h3 class="block-title">Forbidden Topics</h3>
-          <p class="block-desc">Topics your agent should avoid</p>
+          <h3 class="block-title">{{ t('sections.soul.blocks.forbidden') }}</h3>
+          <p class="block-desc">{{ t('sections.soul.blocks.forbiddenDesc') }}</p>
 
           <div class="pill-list" v-if="editConfig.forbiddenTopics.length > 0">
             <span v-for="topic in editConfig.forbiddenTopics" :key="topic" class="pill pill-forbidden">
@@ -252,35 +255,35 @@ onMounted(async () => {
               <button class="pill-remove" @click="removeForbiddenTopic(topic)">&times;</button>
             </span>
           </div>
-          <div v-else class="empty-hint">No forbidden topics</div>
+          <div v-else class="empty-hint">{{ t('sections.soul.forbidden.empty') }}</div>
 
           <div class="add-row">
             <input
               v-model="newForbiddenTopic"
               class="form-input"
-              placeholder="Topics to avoid discussing"
+              :placeholder="t('sections.soul.forbidden.placeholder')"
               @keydown.enter.prevent="addForbiddenTopic"
             />
-            <button class="add-btn" @click="addForbiddenTopic" :disabled="!newForbiddenTopic.trim()">+ Add</button>
+            <button class="add-btn" @click="addForbiddenTopic" :disabled="!newForbiddenTopic.trim()">{{ t('sections.soul.forbidden.addBtn') }}</button>
           </div>
         </div>
 
         <!-- Custom Prompt -->
         <div class="config-block">
-          <h3 class="block-title">Custom Prompt</h3>
-          <p class="block-desc">Additional instructions for your agent</p>
+          <h3 class="block-title">{{ t('sections.soul.blocks.customPrompt') }}</h3>
+          <p class="block-desc">{{ t('sections.soul.blocks.customPromptDesc') }}</p>
 
           <textarea
             v-model="editConfig.customPrompt"
             class="form-textarea"
             rows="6"
-            placeholder="Add any custom instructions or guidelines..."
+            :placeholder="t('sections.soul.customPrompt.placeholder')"
           />
         </div>
       </div>
 
       <!-- Save Success -->
-      <div v-if="saveSuccess" class="save-success">Soul configuration saved successfully</div>
+      <div v-if="saveSuccess" class="save-success">{{ t('sections.soul.savedSuccess') }}</div>
 
       <!-- Save Error -->
       <div v-if="saveError" class="save-error">{{ saveError }}</div>
@@ -292,7 +295,7 @@ onMounted(async () => {
           :disabled="saving"
           @click="handleSave"
         >
-          {{ saving ? 'Saving...' : 'Save Configuration' }}
+          {{ saving ? t('sections.soul.savingBtn') : t('sections.soul.saveBtn') }}
         </button>
       </div>
     </template>

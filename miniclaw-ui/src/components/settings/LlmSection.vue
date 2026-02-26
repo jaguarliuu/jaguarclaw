@@ -3,6 +3,9 @@ import { ref, computed, onMounted } from 'vue'
 import { useLlmConfig } from '@/composables/useLlmConfig'
 import { providerPresets } from '@/data/providerPresets'
 import type { LlmProviderConfig, LlmProviderInput } from '@/types'
+import { useI18n } from '@/i18n'
+
+const { t } = useI18n()
 
 const {
   multiConfig,
@@ -108,7 +111,7 @@ async function handleTest() {
       model: form.models[0] ?? ''
     })
   } catch {
-    testResult.value = { success: false, message: 'Request failed' }
+    testResult.value = { success: false, message: t('sections.llm.errors.requestFailed') }
   } finally {
     testing.value = false
   }
@@ -122,7 +125,7 @@ async function handleAdd() {
   try {
     await addProvider({
       id: form.id || undefined,
-      name: form.name.trim() || 'Provider',
+      name: form.name.trim() || t('sections.llm.errors.defaultProviderName'),
       endpoint: form.endpoint.trim(),
       apiKey: form.apiKey.trim(),
       models: form.models
@@ -130,7 +133,7 @@ async function handleAdd() {
     showAddForm.value = false
     addForm.value = { id: '', name: '', endpoint: '', apiKey: '', models: [] }
   } catch (e) {
-    addError.value = e instanceof Error ? e.message : 'Failed to add'
+    addError.value = e instanceof Error ? e.message : t('sections.llm.errors.failedToAdd')
   } finally {
     adding.value = false
   }
@@ -170,7 +173,7 @@ async function handleUpdate() {
     await updateProvider(editingProviderId.value, updates)
     editingProviderId.value = null
   } catch (e) {
-    editError.value = e instanceof Error ? e.message : 'Failed to update'
+    editError.value = e instanceof Error ? e.message : t('sections.llm.errors.failedToUpdate')
   } finally {
     editing.value = false
   }
@@ -203,32 +206,32 @@ onMounted(async () => {
   <div class="llm-section">
     <header class="section-header">
       <div>
-        <h2 class="section-title">/llm</h2>
-        <p class="section-subtitle">LLM provider configuration</p>
+        <h2 class="section-title">{{ t('settings.nav.models') }}</h2>
+        <p class="section-subtitle">{{ t('sections.llm.subtitle') }}</p>
       </div>
     </header>
 
     <!-- Loading -->
-    <div v-if="loading && !multiConfig" class="loading-state">Loading configuration...</div>
+    <div v-if="loading && !multiConfig" class="loading-state">{{ t('sections.llm.loading') }}</div>
 
     <!-- Error -->
     <div v-if="error && !multiConfig" class="error-state">
       <p>{{ error }}</p>
-      <button class="retry-btn" @click="getConfig">Retry</button>
+      <button class="retry-btn" @click="getConfig">{{ t('common.retry') }}</button>
     </div>
 
     <!-- Config Status -->
     <div v-if="multiConfig" class="status-bar" :class="multiConfig.configured ? 'status-configured' : 'status-unconfigured'">
       <span class="status-dot">&#9679;</span>
       <span v-if="multiConfig.configured">
-        {{ multiConfig.providers.length }} provider(s) configured
+        {{ t('sections.llm.configuredCount', { n: multiConfig.providers.length }) }}
       </span>
-      <span v-else>LLM not configured</span>
+      <span v-else>{{ t('sections.llm.notConfigured') }}</span>
     </div>
 
     <!-- Default Model Selector -->
     <div v-if="allModelOptions.length > 0" class="default-model">
-      <label class="form-label">DEFAULT MODEL</label>
+      <label class="form-label">{{ t('sections.llm.defaultModel') }}</label>
       <select v-model="defaultModelValue" class="form-select">
         <option v-for="opt in allModelOptions" :key="opt.value" :value="opt.value">
           {{ opt.label }}
@@ -251,13 +254,13 @@ onMounted(async () => {
               <span class="provider-endpoint">{{ truncateEndpoint(provider.endpoint) }}</span>
             </div>
             <div class="provider-meta">
-              <span class="model-count">{{ provider.models?.length ?? 0 }} models</span>
-              <button class="icon-btn" title="Edit" @click="startEdit(provider)">
+              <span class="model-count">{{ t('sections.llm.modelCount', { n: provider.models?.length ?? 0 }) }}</span>
+              <button class="icon-btn" :title="t('sections.llm.editTooltip')" @click="startEdit(provider)">
                 <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M10 2L12 4L5 11H3V9L10 2Z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg>
               </button>
               <button
                 class="icon-btn danger"
-                :title="confirmDeleteId === provider.id ? 'Click again to confirm' : 'Delete'"
+                :title="confirmDeleteId === provider.id ? t('sections.llm.confirmDeleteTooltip') : t('sections.llm.deleteTooltip')"
                 @click="handleDelete(provider.id)"
               >
                 <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3 4H11M5 4V3H9V4M4 4V12H10V4" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg>
@@ -273,19 +276,19 @@ onMounted(async () => {
         <template v-else>
           <div class="edit-form">
             <div class="form-group">
-              <label class="form-label">NAME</label>
-              <input v-model="editForm.name" class="form-input" placeholder="Provider name" spellcheck="false" />
+              <label class="form-label">{{ t('sections.llm.form.nameLabel') }}</label>
+              <input v-model="editForm.name" class="form-input" :placeholder="t('sections.llm.form.namePlaceholder')" spellcheck="false" />
             </div>
             <div class="form-group">
-              <label class="form-label">ENDPOINT</label>
-              <input v-model="editForm.endpoint" class="form-input" placeholder="https://api.example.com" spellcheck="false" />
+              <label class="form-label">{{ t('sections.llm.form.endpointLabel') }}</label>
+              <input v-model="editForm.endpoint" class="form-input" :placeholder="t('sections.llm.form.endpointPlaceholder')" spellcheck="false" />
             </div>
             <div class="form-group">
-              <label class="form-label">API KEY</label>
-              <input v-model="editForm.apiKey" type="password" class="form-input" :placeholder="provider.apiKey || 'Leave empty to keep current'" autocomplete="off" spellcheck="false" />
+              <label class="form-label">{{ t('sections.llm.form.apiKeyLabel') }}</label>
+              <input v-model="editForm.apiKey" type="password" class="form-input" :placeholder="provider.apiKey || t('sections.llm.form.apiKeyEditPlaceholder')" autocomplete="off" spellcheck="false" />
             </div>
             <div class="form-group">
-              <label class="form-label">MODELS</label>
+              <label class="form-label">{{ t('sections.llm.form.modelsLabel') }}</label>
               <div class="model-tags-input">
                 <span v-for="(m, i) in editForm.models" :key="i" class="model-tag editable">
                   {{ m }}
@@ -294,7 +297,7 @@ onMounted(async () => {
                 <input
                   v-model="editModelInput"
                   class="tag-input"
-                  placeholder="Add model..."
+                  :placeholder="t('sections.llm.form.modelsEditPlaceholder')"
                   @keydown.enter.prevent="addModelTag(editForm.models, { value: editModelInput }); editModelInput = ''"
                 />
               </div>
@@ -311,11 +314,11 @@ onMounted(async () => {
 
             <div class="form-actions">
               <button class="test-btn" :disabled="!editForm.endpoint.trim() || !editForm.apiKey.trim() || editForm.models.length === 0 || testing" @click="handleTest">
-                {{ testing ? 'Testing...' : 'Test' }}
+                {{ testing ? t('sections.llm.testingBtn') : t('common.test') }}
               </button>
-              <button class="cancel-btn" @click="cancelEdit">Cancel</button>
+              <button class="cancel-btn" @click="cancelEdit">{{ t('common.cancel') }}</button>
               <button class="save-btn" :disabled="!editForm.endpoint.trim() || editing" @click="handleUpdate">
-                {{ editing ? 'Saving...' : 'Save' }}
+                {{ editing ? t('sections.llm.savingBtn') : t('common.save') }}
               </button>
             </div>
           </div>
@@ -326,7 +329,7 @@ onMounted(async () => {
     <!-- Add Provider -->
     <div class="add-provider">
       <div v-if="!showAddForm" class="presets">
-        <span class="presets-label">添加 Provider：</span>
+        <span class="presets-label">{{ t('sections.llm.addProviderLabel') }}</span>
         <button
           v-for="preset in providerPresets"
           :key="preset.id"
@@ -339,26 +342,26 @@ onMounted(async () => {
 
       <div v-else class="add-form">
         <div class="add-form-header">
-          <span class="add-form-title">Add Provider</span>
+          <span class="add-form-title">{{ t('sections.llm.addTitle') }}</span>
           <button class="icon-btn" @click="showAddForm = false">
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3 3L11 11M11 3L3 11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
           </button>
         </div>
 
         <div class="form-group">
-          <label class="form-label">NAME</label>
-          <input v-model="addForm.name" class="form-input" placeholder="Provider name" spellcheck="false" />
+          <label class="form-label">{{ t('sections.llm.form.nameLabel') }}</label>
+          <input v-model="addForm.name" class="form-input" :placeholder="t('sections.llm.form.namePlaceholder')" spellcheck="false" />
         </div>
         <div class="form-group">
-          <label class="form-label">ENDPOINT</label>
-          <input v-model="addForm.endpoint" class="form-input" placeholder="https://api.example.com" spellcheck="false" />
+          <label class="form-label">{{ t('sections.llm.form.endpointLabel') }}</label>
+          <input v-model="addForm.endpoint" class="form-input" :placeholder="t('sections.llm.form.endpointPlaceholder')" spellcheck="false" />
         </div>
         <div class="form-group">
-          <label class="form-label">API KEY</label>
-          <input v-model="addForm.apiKey" type="password" class="form-input" placeholder="sk-xxxxxxxxxxxxxxx" autocomplete="off" spellcheck="false" />
+          <label class="form-label">{{ t('sections.llm.form.apiKeyLabel') }}</label>
+          <input v-model="addForm.apiKey" type="password" class="form-input" :placeholder="t('sections.llm.form.apiKeyAddPlaceholder')" autocomplete="off" spellcheck="false" />
         </div>
         <div class="form-group">
-          <label class="form-label">MODELS</label>
+          <label class="form-label">{{ t('sections.llm.form.modelsLabel') }}</label>
           <div class="model-tags-input">
             <span v-for="(m, i) in addForm.models" :key="i" class="model-tag editable">
               {{ m }}
@@ -367,7 +370,7 @@ onMounted(async () => {
             <input
               v-model="newModelInput"
               class="tag-input"
-              placeholder="Add model name, press Enter"
+              :placeholder="t('sections.llm.form.modelsAddPlaceholder')"
               @keydown.enter.prevent="addModelTag(addForm.models, { value: newModelInput }); newModelInput = ''"
             />
           </div>
@@ -384,10 +387,10 @@ onMounted(async () => {
 
         <div class="form-actions">
           <button class="test-btn" :disabled="!addForm.endpoint.trim() || !addForm.apiKey.trim() || addForm.models.length === 0 || testing" @click="handleTest">
-            {{ testing ? 'Testing...' : 'Test Connection' }}
+            {{ testing ? t('sections.llm.testingBtn') : t('sections.llm.testConnectionBtn') }}
           </button>
           <button class="save-btn" :disabled="!addForm.endpoint.trim() || !addForm.apiKey.trim() || adding" @click="handleAdd">
-            {{ adding ? 'Adding...' : 'Add Provider' }}
+            {{ adding ? t('sections.llm.addingBtn') : t('sections.llm.addProviderBtn') }}
           </button>
         </div>
       </div>

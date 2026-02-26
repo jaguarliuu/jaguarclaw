@@ -1,8 +1,11 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { useMcpServers, type McpServer } from '@/composables/useMcpServers'
+import { useI18n } from '@/i18n'
 import Select from '@/components/common/Select.vue'
 import type { SelectOption } from '@/components/common/Select.vue'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   mode: 'create' | 'edit'
@@ -16,9 +19,9 @@ const { testConnection, createServer, updateServer } = useMcpServers()
 const activeTab = ref<'basic' | 'connection' | 'advanced'>('basic')
 
 const transportOptions: SelectOption<string>[] = [
-  { label: 'STDIO (Local Process)', value: 'STDIO' },
-  { label: 'SSE (Server-Sent Events)', value: 'SSE' },
-  { label: 'HTTP (REST API)', value: 'HTTP' }
+  { label: t('sections.mcp.modal.transport.stdio'), value: 'STDIO' },
+  { label: t('sections.mcp.modal.transport.sse'), value: 'SSE' },
+  { label: t('sections.mcp.modal.transport.http'), value: 'HTTP' }
 ]
 
 const config = ref<Partial<McpServer>>({
@@ -59,7 +62,7 @@ async function handleTestConnection() {
   try {
     testResult.value = await testConnection(config.value)
   } catch (err) {
-    testResult.value = { success: false, message: 'Connection test failed' }
+    testResult.value = { success: false, message: t('sections.mcp.modal.errors.testFailed') }
   } finally {
     testing.value = false
   }
@@ -112,7 +115,7 @@ watch(config, () => {
   <div class="modal-overlay" @click.self="emit('close')">
     <div class="modal-content">
       <div class="modal-header">
-        <h3>{{ mode === 'create' ? 'Add' : 'Edit' }} MCP Server</h3>
+        <h3>{{ mode === 'create' ? t('sections.mcp.modal.addTitle') : t('sections.mcp.modal.editTitle') }}</h3>
         <button class="btn-close" @click="emit('close')">✕</button>
       </div>
 
@@ -122,21 +125,21 @@ watch(config, () => {
           :class="{ active: activeTab === 'basic' }"
           @click="activeTab = 'basic'"
         >
-          Basic Info
+          {{ t('sections.mcp.modal.tabs.basic') }}
         </button>
         <button
           class="tab"
           :class="{ active: activeTab === 'connection' }"
           @click="activeTab = 'connection'"
         >
-          Connection
+          {{ t('sections.mcp.modal.tabs.connection') }}
         </button>
         <button
           class="tab"
           :class="{ active: activeTab === 'advanced' }"
           @click="activeTab = 'advanced'"
         >
-          Advanced
+          {{ t('sections.mcp.modal.tabs.advanced') }}
         </button>
       </div>
 
@@ -144,34 +147,34 @@ watch(config, () => {
         <!-- Tab 1: Basic Info -->
         <div v-show="activeTab === 'basic'" class="tab-content">
           <div class="form-group">
-            <label class="form-label">Name <span class="required">*</span></label>
+            <label class="form-label">{{ t('sections.mcp.modal.nameLabel') }} <span class="required">*</span></label>
             <input
               v-model="config.name"
               class="form-input"
-              placeholder="my-server"
+              :placeholder="t('sections.mcp.modal.namePlaceholder')"
             />
-            <p class="form-help">Unique identifier for this MCP server</p>
+            <p class="form-help">{{ t('sections.mcp.modal.nameHelp') }}</p>
           </div>
 
           <div class="form-group">
-            <label class="form-label">Transport Type <span class="required">*</span></label>
+            <label class="form-label">{{ t('sections.mcp.modal.transportLabel') }} <span class="required">*</span></label>
             <Select
               v-model="config.transportType!"
               :options="transportOptions"
             />
             <p class="form-help">
-              How to connect to the MCP server
+              {{ t('sections.mcp.modal.transportHelp') }}
             </p>
           </div>
 
           <div class="form-group">
-            <label class="form-label">Tool Prefix</label>
+            <label class="form-label">{{ t('sections.mcp.modal.prefixLabel') }}</label>
             <input
               v-model="config.toolPrefix"
               class="form-input"
-              placeholder="fs_"
+              :placeholder="t('sections.mcp.modal.prefixPlaceholder')"
             />
-            <p class="form-help">Prefix for all tools to avoid naming conflicts (e.g., 'fs_' → 'fs_read_file')</p>
+            <p class="form-help">{{ t('sections.mcp.modal.prefixHelp') }}</p>
           </div>
         </div>
 
@@ -179,63 +182,63 @@ watch(config, () => {
         <div v-show="activeTab === 'connection'" class="tab-content">
           <div v-if="config.transportType === 'STDIO'">
             <div class="form-group">
-              <label class="form-label">Command <span class="required">*</span></label>
+              <label class="form-label">{{ t('sections.mcp.modal.commandLabel') }} <span class="required">*</span></label>
               <input
                 v-model="config.command"
                 class="form-input"
-                placeholder="npx"
+                :placeholder="t('sections.mcp.modal.commandPlaceholder')"
               />
-              <p class="form-help">Executable command (e.g., npx, python, node)</p>
+              <p class="form-help">{{ t('sections.mcp.modal.commandHelp') }}</p>
             </div>
 
             <div class="form-group">
-              <label class="form-label">Arguments</label>
+              <label class="form-label">{{ t('sections.mcp.modal.argsLabel') }}</label>
               <div v-for="(arg, index) in config.args" :key="index" class="array-input">
                 <input
                   v-model="config.args![index]"
                   class="form-input"
-                  placeholder="Argument"
+                  :placeholder="t('sections.mcp.modal.argPlaceholder')"
                 />
                 <button class="btn-remove" @click="removeArg(index)">✕</button>
               </div>
-              <button class="btn-add" @click="addArg">+ Add Argument</button>
-              <p class="form-help">Command-line arguments for the server</p>
+              <button class="btn-add" @click="addArg">{{ t('sections.mcp.modal.addArgBtn') }}</button>
+              <p class="form-help">{{ t('sections.mcp.modal.argsHelp') }}</p>
             </div>
 
             <div class="form-group">
-              <label class="form-label">Working Directory</label>
+              <label class="form-label">{{ t('sections.mcp.modal.workdirLabel') }}</label>
               <input
                 v-model="config.workingDir"
                 class="form-input"
-                placeholder="/path/to/working/dir"
+                :placeholder="t('sections.mcp.modal.workdirPlaceholder')"
               />
             </div>
 
             <div class="form-group">
-              <label class="form-label">Environment Variables</label>
+              <label class="form-label">{{ t('sections.mcp.modal.envLabel') }}</label>
               <div v-for="(env, index) in config.env" :key="index" class="array-input">
                 <input
                   v-model="config.env![index]"
                   class="form-input"
-                  placeholder="KEY=value"
+                  :placeholder="t('sections.mcp.modal.envPlaceholder')"
                 />
                 <button class="btn-remove" @click="removeEnv(index)">✕</button>
               </div>
-              <button class="btn-add" @click="addEnv">+ Add Variable</button>
-              <p class="form-help">Environment variables in KEY=value format</p>
+              <button class="btn-add" @click="addEnv">{{ t('sections.mcp.modal.addEnvBtn') }}</button>
+              <p class="form-help">{{ t('sections.mcp.modal.envHelp') }}</p>
             </div>
           </div>
 
           <div v-else>
             <div class="form-group">
-              <label class="form-label">Server URL <span class="required">*</span></label>
+              <label class="form-label">{{ t('sections.mcp.modal.urlLabel') }} <span class="required">*</span></label>
               <input
                 v-model="config.url"
                 class="form-input"
-                placeholder="http://localhost:3000/sse"
+                :placeholder="t('sections.mcp.modal.sseUrlPlaceholder')"
               />
               <p class="form-help">
-                {{ config.transportType === 'SSE' ? 'SSE endpoint URL' : 'HTTP endpoint URL' }}
+                {{ config.transportType === 'SSE' ? t('sections.mcp.modal.sseUrlHelp') : t('sections.mcp.modal.httpUrlHelp') }}
               </p>
             </div>
           </div>
@@ -244,7 +247,7 @@ watch(config, () => {
         <!-- Tab 3: Advanced -->
         <div v-show="activeTab === 'advanced'" class="tab-content">
           <div class="form-group">
-            <label class="form-label">Request Timeout (seconds)</label>
+            <label class="form-label">{{ t('sections.mcp.modal.timeoutLabel') }}</label>
             <input
               v-model.number="config.requestTimeoutSeconds"
               type="number"
@@ -252,23 +255,23 @@ watch(config, () => {
               max="300"
               class="form-input"
             />
-            <p class="form-help">Maximum time to wait for responses (5-300 seconds)</p>
+            <p class="form-help">{{ t('sections.mcp.modal.timeoutHelp') }}</p>
           </div>
 
           <div class="form-group">
             <label class="form-checkbox">
               <input v-model="config.requiresHitl" type="checkbox" />
-              <span>Require confirmation for all tools</span>
+              <span>{{ t('sections.mcp.modal.confirmAllLabel') }}</span>
             </label>
-            <p class="form-help">If enabled, all tools from this server will require user confirmation</p>
+            <p class="form-help">{{ t('sections.mcp.modal.confirmAllHelp') }}</p>
           </div>
 
           <div class="form-group">
             <label class="form-checkbox">
               <input v-model="config.enabled" type="checkbox" />
-              <span>Enable on save</span>
+              <span>{{ t('sections.mcp.modal.enableOnSaveLabel') }}</span>
             </label>
-            <p class="form-help">If enabled, server will connect immediately</p>
+            <p class="form-help">{{ t('sections.mcp.modal.enableOnSaveHelp') }}</p>
           </div>
         </div>
       </div>
@@ -280,7 +283,7 @@ watch(config, () => {
             :disabled="!canTest || testing"
             @click="handleTestConnection"
           >
-            {{ testing ? 'Testing...' : 'Test Connection' }}
+            {{ testing ? t('sections.mcp.modal.testingBtn') : t('sections.mcp.modal.testBtn') }}
           </button>
 
           <div v-if="testResult" class="test-result" :class="{ success: testResult.success, error: !testResult.success }">
@@ -291,14 +294,14 @@ watch(config, () => {
 
         <div class="footer-right">
           <button class="btn-secondary" @click="emit('close')">
-            Cancel
+            {{ t('common.cancel') }}
           </button>
           <button
             class="btn-primary"
             :disabled="!canSave || saving"
             @click="handleSave"
           >
-            {{ saving ? 'Saving...' : 'Save' }}
+            {{ saving ? t('sections.mcp.modal.savingBtn') : t('sections.mcp.modal.saveBtn') }}
           </button>
         </div>
       </div>

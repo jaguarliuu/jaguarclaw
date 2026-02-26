@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import { useToolConfig } from '@/composables/useToolConfig'
+import { useI18n } from '@/i18n'
 import ConfigCard from '@/components/common/ConfigCard.vue'
 import TrustedDomainsModal from './modals/TrustedDomainsModal.vue'
 import SearchProvidersModal from './modals/SearchProvidersModal.vue'
 import CommandSafetyModal from './modals/CommandSafetyModal.vue'
 
 const { config, loading, error, getConfig, saveConfig } = useToolConfig()
+const { t } = useI18n()
 
 // Modal state
 const activeModal = ref<'domains' | 'providers' | 'safety' | null>(null)
@@ -58,7 +60,7 @@ async function handleSaveDomains(domains: string[]) {
     activeModal.value = null
     setTimeout(() => { saveSuccess.value = false }, 3000)
   } catch (e) {
-    saveError.value = e instanceof Error ? e.message : 'Failed to save'
+    saveError.value = e instanceof Error ? e.message : t('sections.tools.errors.failedToSave')
   } finally {
     saving.value = false
   }
@@ -82,7 +84,7 @@ async function handleSaveProviders(providers: { type: string; apiKey: string; en
     activeModal.value = null
     setTimeout(() => { saveSuccess.value = false }, 3000)
   } catch (e) {
-    saveError.value = e instanceof Error ? e.message : 'Failed to save'
+    saveError.value = e instanceof Error ? e.message : t('sections.tools.errors.failedToSave')
   } finally {
     saving.value = false
   }
@@ -107,7 +109,7 @@ async function handleSaveSafety(data: { alwaysConfirmTools: string[]; dangerousK
     activeModal.value = null
     setTimeout(() => { saveSuccess.value = false }, 3000)
   } catch (e) {
-    saveError.value = e instanceof Error ? e.message : 'Failed to save'
+    saveError.value = e instanceof Error ? e.message : t('sections.tools.errors.failedToSave')
   } finally {
     saving.value = false
   }
@@ -122,22 +124,22 @@ onMounted(async () => {
   <div class="tools-section">
     <header class="section-header">
       <div>
-        <h2 class="section-title">/tools</h2>
-        <p class="section-subtitle">Built-in tool configuration</p>
+        <h2 class="section-title">{{ t('settings.nav.tools') }}</h2>
+        <p class="section-subtitle">{{ t('sections.tools.subtitle') }}</p>
       </div>
     </header>
 
     <!-- Loading -->
-    <div v-if="loading && !config" class="loading-state">Loading configuration...</div>
+    <div v-if="loading && !config" class="loading-state">{{ t('sections.tools.loading') }}</div>
 
     <!-- Error -->
     <div v-if="error && !config" class="error-state">
       <p>{{ error }}</p>
-      <button class="retry-btn" @click="getConfig">Retry</button>
+      <button class="retry-btn" @click="getConfig">{{ t('common.retry') }}</button>
     </div>
 
     <!-- Save Success -->
-    <div v-if="saveSuccess" class="save-success">Configuration saved successfully</div>
+    <div v-if="saveSuccess" class="save-success">{{ t('sections.tools.savedSuccess') }}</div>
 
     <!-- Save Error -->
     <div v-if="saveError" class="save-error">{{ saveError }}</div>
@@ -146,24 +148,24 @@ onMounted(async () => {
     <template v-if="config">
       <div class="cards-grid">
         <ConfigCard
-          title="HTTP Trusted Domains"
-          description="Configure which domains are allowed for http_get requests"
+          :title="t('sections.tools.cards.trustedDomains')"
+          :description="t('sections.tools.cards.trustedDomainsDesc')"
           :summary="domainsSummary"
           @click="activeModal = 'domains'"
         />
 
         <ConfigCard
-          title="Web Search Providers"
-          description="Configure search engines for the web_search tool"
+          :title="t('sections.tools.cards.searchProviders')"
+          :description="t('sections.tools.cards.searchProvidersDesc')"
           :summary="providersSummary"
           @click="activeModal = 'providers'"
         />
 
         <ConfigCard
-          title="Command Safety"
-          description="Configure tools and commands requiring confirmation"
+          :title="t('sections.tools.cards.commandSafety')"
+          :description="t('sections.tools.cards.commandSafetyDesc')"
           :summary="safetySummary"
-          :badge="{ text: 'Security', variant: 'warning' }"
+          :badge="{ text: t('sections.tools.cards.securityBadge'), variant: 'warning' }"
           @click="activeModal = 'safety'"
         />
       </div>

@@ -2,6 +2,9 @@
 import type { SkillDetail } from '@/types'
 import Badge from '@/components/common/Badge.vue'
 import StatusDot from '@/components/common/StatusDot.vue'
+import { useI18n } from '@/i18n'
+
+const { t } = useI18n()
 
 defineProps<{
   skill: SkillDetail | null
@@ -11,36 +14,36 @@ defineProps<{
 
 <template>
   <div v-if="loading" class="loading">
-    <span class="loading-text">Loading...</span>
+    <span class="loading-text">{{ t('sections.skills.detail.loading') }}</span>
   </div>
   <div v-else-if="skill" class="skill-detail">
     <!-- Header -->
     <div class="detail-header">
       <div class="detail-status">
         <StatusDot :status="skill.available ? 'success' : 'neutral'" />
-        <span class="status-text">{{ skill.available ? 'Available' : 'Unavailable' }}</span>
+        <span class="status-text">{{ skill.available ? t('sections.skills.detail.available') : t('sections.skills.detail.unavailable') }}</span>
       </div>
       <div class="detail-badges">
-        <Badge variant="muted">{{ skill.tokenCost }} tokens</Badge>
-        <Badge v-if="skill.priority > 0" variant="outline">Priority {{ skill.priority }}</Badge>
+        <Badge variant="muted">{{ t('sections.skills.detail.tokensBadge', { n: skill.tokenCost }) }}</Badge>
+        <Badge v-if="skill.priority > 0" variant="outline">{{ t('sections.skills.detail.priorityBadge', { n: skill.priority }) }}</Badge>
       </div>
     </div>
 
     <!-- Description -->
     <section class="detail-section">
-      <h3 class="section-title">Description</h3>
+      <h3 class="section-title">{{ t('sections.skills.detail.descriptionTitle') }}</h3>
       <p class="section-content">{{ skill.description }}</p>
     </section>
 
     <!-- Unavailable Reason -->
     <section v-if="!skill.available && skill.unavailableReason" class="detail-section">
-      <h3 class="section-title">Unavailable Reason</h3>
+      <h3 class="section-title">{{ t('sections.skills.detail.unavailableReasonTitle') }}</h3>
       <p class="section-content muted">{{ skill.unavailableReason }}</p>
     </section>
 
     <!-- Allowed Tools -->
     <section v-if="skill.allowedTools?.length" class="detail-section">
-      <h3 class="section-title">Allowed Tools</h3>
+      <h3 class="section-title">{{ t('sections.skills.detail.allowedToolsTitle') }}</h3>
       <div class="tag-list">
         <Badge v-for="tool in skill.allowedTools" :key="tool" variant="muted">
           {{ tool }}
@@ -50,7 +53,7 @@ defineProps<{
 
     <!-- Confirm Before -->
     <section v-if="skill.confirmBefore?.length" class="detail-section">
-      <h3 class="section-title">Confirm Before</h3>
+      <h3 class="section-title">{{ t('sections.skills.detail.confirmBeforeTitle') }}</h3>
       <div class="tag-list">
         <Badge v-for="tool in skill.confirmBefore" :key="tool" variant="outline">
           {{ tool }}
@@ -60,12 +63,12 @@ defineProps<{
 
     <!-- Body / Prompt -->
     <section v-if="skill.body" class="detail-section">
-      <h3 class="section-title">Prompt Body</h3>
+      <h3 class="section-title">{{ t('sections.skills.detail.promptBodyTitle') }}</h3>
       <pre class="code-block">{{ skill.body }}</pre>
     </section>
   </div>
   <div v-else class="empty">
-    <span class="empty-text">Select a skill to view details</span>
+    <span class="empty-text">{{ t('sections.skills.detail.selectHint') }}</span>
   </div>
 </template>
 

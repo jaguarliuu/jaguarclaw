@@ -2,10 +2,12 @@
 import { ref, computed, onMounted } from 'vue'
 import { useSchedules } from '@/composables/useSchedules'
 import { useChannels } from '@/composables/useChannels'
+import { useI18n } from '@/i18n'
 import type { ChannelType, ChannelInfo, ScheduleInfo } from '@/types'
 
 const { schedules, loading, error, loadSchedules, createSchedule, removeSchedule, toggleSchedule, runSchedule } = useSchedules()
 const { channels, loadChannels } = useChannels()
+const { t } = useI18n()
 
 // Form state
 const showForm = ref(false)
@@ -23,13 +25,13 @@ const runningTasks = ref<Set<string>>(new Set())
 const confirmDeleteId = ref<string | null>(null)
 
 // Cron presets
-const cronPresets = [
-  { label: 'Every hour', cron: '0 * * * *' },
-  { label: 'Daily 9:00', cron: '0 9 * * *' },
-  { label: 'Daily 18:00', cron: '0 18 * * *' },
-  { label: 'Mon 9:00', cron: '0 9 * * 1' },
-  { label: '1st of month', cron: '0 9 1 * *' }
-]
+const cronPresets = computed(() => [
+  { label: t('sections.schedules.presets.everyHour'), cron: '0 * * * *' },
+  { label: t('sections.schedules.presets.daily9'), cron: '0 9 * * *' },
+  { label: t('sections.schedules.presets.daily18'), cron: '0 18 * * *' },
+  { label: t('sections.schedules.presets.mon9'), cron: '0 9 * * 1' },
+  { label: t('sections.schedules.presets.firstOfMonth'), cron: '0 9 1 * *' }
+])
 
 // Selected channel info
 const selectedChannel = computed<ChannelInfo | undefined>(() => {
@@ -67,20 +69,19 @@ function applyPreset(cron: string) {
 function getCronDescription(cron: string): string {
   if (!cron) return ''
   const parts = cron.split(/\s+/)
-  if (parts.length !== 5) return 'Invalid cron expression'
+  if (parts.length !== 5) return t('sections.schedules.cronDescriptions.invalid')
 
   const [min, hour, dom, mon, dow] = parts
 
   // Simple descriptions for common patterns
-  if (min === '0' && hour === '*' && dom === '*' && mon === '*' && dow === '*') return 'Every hour at :00'
-  if (min === '0' && hour !== '*' && dom === '*' && mon === '*' && dow === '*') return `Daily at ${hour}:00`
-  if (min !== '*' && hour !== '*' && dom === '*' && mon === '*' && dow === '*') return `Daily at ${hour}:${min!.padStart(2, '0')}`
-  if (min === '0' && hour !== '*' && dom === '*' && mon === '*' && dow !== '*') {
+  if (min === '0' && hour === '*' && dom === '*' && mon === '*' && dow === '*') return t('sections.schedules.cronDescriptions.everyHour')
+  if (min === '0' && hour !== '*' && dom === '*' && mon === '*' && dow === '*') return t('sections.schedules.cronDescriptions.daily', { h: hour })
+  if (min !== '*' && hour !== '*' && dom === '*' && mon === '*' && dow !== '*') {
     const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
     const dayName = days[parseInt(dow!)] || `day ${dow}`
-    return `Every ${dayName} at ${hour}:00`
+    return t('sections.schedules.cronDescriptions.weekly', { day: dayName, h: hour })
   }
-  if (min === '0' && hour !== '*' && dom !== '*' && mon === '*' && dow === '*') return `Monthly on day ${dom} at ${hour}:00`
+  if (min === '0' && hour !== '*' && dom !== '*' && mon === '*' && dow === '*') return t('sections.schedules.cronDescriptions.monthly', { date: dom, h: hour })
   return `${min} ${hour} ${dom} ${mon} ${dow}`
 }
 
@@ -90,8 +91,8 @@ function getChannelName(channelId: string): string {
 }
 
 function getStatusText(task: ScheduleInfo): string {
-  if (task.lastRunSuccess === null) return 'Never run'
-  return task.lastRunSuccess ? 'Success' : 'Failed'
+  if (task.lastRunSuccess === null) return t('sections.schedules.neverRun')
+  return task.lastRunSuccess ? t('sections.schedules.success') : t('sections.schedules.failed')
 }
 
 function getStatusClass(task: ScheduleInfo): string {
@@ -107,23 +108,23 @@ function formatTime(dateStr: string | null): string {
 
 async function handleSubmit() {
   if (!formName.value.trim()) {
-    formError.value = 'Name is required'
+    formError.value = t('sections.schedules.errors.nameRequired')
     return
   }
   if (!formCron.value.trim()) {
-    formError.value = 'Cron expression is required'
+    formError.value = t('sections.schedules.errors.cronRequired')
     return
   }
   if (!formPrompt.value.trim()) {
-    formError.value = 'Prompt is required'
+    formError.value = t('sections.schedules.errors.promptRequired')
     return
   }
   if (!formChannelId.value) {
-    formError.value = 'Channel is required'
+    formError.value = t('sections.schedules.errors.channelRequired')
     return
   }
   if (isEmailChannel.value && !formEmailTo.value.trim()) {
-    formError.value = 'Email To is required for email channels'
+    formError.value = t('sections.schedules.errors.emailToRequired')
     return
   }
 
@@ -142,7 +143,7 @@ async function handleSubmit() {
     })
     closeForm()
   } catch (e) {
-    formError.value = e instanceof Error ? e.message : 'Failed to create schedule'
+    formError.value = e instanceof Error ? e.message : t('sections.schedules.errors.failedToCreate')
   } finally {
     submitting.value = false
   }
@@ -188,36 +189,36 @@ onMounted(() => {
     <header class="section-header">
       <div class="header-top">
         <div>
-          <h2 class="section-title">/tasks</h2>
-          <p class="section-subtitle">Scheduled tasks with cron triggers and channel notifications</p>
+          <h2 class="section-title">{{ t('settings.nav.schedules') }}</h2>
+          <p class="section-subtitle">{{ t('sections.schedules.subtitle') }}</p>
         </div>
-        <button class="add-btn" @click="openForm">+ Add Task</button>
+        <button class="add-btn" @click="openForm">{{ t('sections.schedules.addBtn') }}</button>
       </div>
     </header>
 
     <!-- Loading -->
     <div v-if="loading && schedules.length === 0" class="loading-state">
-      Loading scheduled tasks...
+      {{ t('sections.schedules.loading') }}
     </div>
 
     <!-- Error -->
     <div v-if="error && schedules.length === 0" class="error-state">
       <p>{{ error }}</p>
-      <button class="retry-btn" @click="loadSchedules">Retry</button>
+      <button class="retry-btn" @click="loadSchedules">{{ t('common.retry') }}</button>
     </div>
 
     <!-- Add Form -->
     <div v-if="showForm" class="form-panel">
-      <h3 class="form-title">Create Scheduled Task</h3>
+      <h3 class="form-title">{{ t('sections.schedules.formTitle') }}</h3>
 
       <div class="form-group">
-        <label class="form-label">Name *</label>
-        <input v-model="formName" class="form-input" placeholder="e.g. Daily Server Check" />
+        <label class="form-label">{{ t('sections.schedules.fields.nameLabel') }}</label>
+        <input v-model="formName" class="form-input" :placeholder="t('sections.schedules.fields.namePlaceholder')" />
       </div>
 
       <div class="form-group">
-        <label class="form-label">Cron Expression *</label>
-        <input v-model="formCron" class="form-input" placeholder="0 9 * * *" spellcheck="false" />
+        <label class="form-label">{{ t('sections.schedules.fields.cronLabel') }}</label>
+        <input v-model="formCron" class="form-input" :placeholder="t('sections.schedules.fields.cronPlaceholder')" spellcheck="false" />
         <div class="cron-presets">
           <button
             v-for="preset in cronPresets"
@@ -233,20 +234,20 @@ onMounted(() => {
       </div>
 
       <div class="form-group">
-        <label class="form-label">Prompt *</label>
+        <label class="form-label">{{ t('sections.schedules.fields.promptLabel') }}</label>
         <textarea
           v-model="formPrompt"
           class="form-textarea"
           rows="4"
-          placeholder="Agent 执行的指令，如：巡检所有服务器的CPU、内存、磁盘使用情况，生成巡检报告"
+          :placeholder="t('sections.schedules.fields.promptPlaceholder')"
           spellcheck="false"
         />
       </div>
 
       <div class="form-group">
-        <label class="form-label">Channel *</label>
+        <label class="form-label">{{ t('sections.schedules.fields.channelLabel') }}</label>
         <select v-model="formChannelId" class="form-input">
-          <option value="" disabled>Select a channel...</option>
+          <option value="" disabled>{{ t('sections.schedules.fields.channelPlaceholder') }}</option>
           <option v-for="ch in channels" :key="ch.id" :value="ch.id">
             {{ ch.name }} ({{ ch.type }})
           </option>
@@ -257,12 +258,12 @@ onMounted(() => {
       <template v-if="isEmailChannel">
         <div class="form-grid">
           <div class="form-group">
-            <label class="form-label">To *</label>
-            <input v-model="formEmailTo" class="form-input" placeholder="admin@company.com" />
+            <label class="form-label">{{ t('sections.schedules.fields.toLabel') }}</label>
+            <input v-model="formEmailTo" class="form-input" :placeholder="t('sections.schedules.fields.toPlaceholder')" />
           </div>
           <div class="form-group">
-            <label class="form-label">Cc</label>
-            <input v-model="formEmailCc" class="form-input" placeholder="ops@company.com" />
+            <label class="form-label">{{ t('sections.schedules.fields.ccLabel') }}</label>
+            <input v-model="formEmailCc" class="form-input" :placeholder="t('sections.schedules.fields.ccPlaceholder')" />
           </div>
         </div>
       </template>
@@ -270,9 +271,9 @@ onMounted(() => {
       <div v-if="formError" class="form-error">{{ formError }}</div>
 
       <div class="form-actions">
-        <button class="cancel-btn" @click="closeForm">Cancel</button>
+        <button class="cancel-btn" @click="closeForm">{{ t('common.cancel') }}</button>
         <button class="submit-btn" :disabled="submitting" @click="handleSubmit">
-          {{ submitting ? 'Creating...' : 'Create' }}
+          {{ submitting ? t('sections.schedules.creatingBtn') : t('sections.schedules.createBtn') }}
         </button>
       </div>
     </div>
@@ -294,42 +295,42 @@ onMounted(() => {
               :disabled="runningTasks.has(task.id)"
               @click="handleRun(task.id)"
             >
-              {{ runningTasks.has(task.id) ? 'Running...' : 'Run Now' }}
+              {{ runningTasks.has(task.id) ? t('sections.schedules.runningBtn') : t('sections.schedules.runNowBtn') }}
             </button>
             <button
               class="toggle-btn"
               :class="{ 'toggle-on': task.enabled, 'toggle-off': !task.enabled }"
               @click="handleToggle(task)"
             >
-              {{ task.enabled ? 'Enabled' : 'Disabled' }}
+              {{ task.enabled ? t('sections.schedules.enabledStatus') : t('sections.schedules.disabledStatus') }}
             </button>
             <button
               v-if="confirmDeleteId !== task.id"
               class="delete-btn"
               @click="confirmDeleteId = task.id"
             >
-              Delete
+              {{ t('common.delete') }}
             </button>
             <template v-else>
-              <button class="confirm-delete-btn" @click="handleDelete(task.id)">Confirm</button>
-              <button class="cancel-delete-btn" @click="confirmDeleteId = null">Cancel</button>
+              <button class="confirm-delete-btn" @click="handleDelete(task.id)">{{ t('common.confirm') }}</button>
+              <button class="cancel-delete-btn" @click="confirmDeleteId = null">{{ t('common.cancel') }}</button>
             </template>
           </div>
         </div>
         <div class="task-details">
           <span class="task-detail">
-            <span class="detail-label">cron:</span> {{ task.cronExpr }}
+            <span class="detail-label">{{ t('sections.schedules.detail.cron') }}</span> {{ task.cronExpr }}
             <span class="cron-hint">{{ getCronDescription(task.cronExpr) }}</span>
           </span>
           <span class="task-detail">
-            <span class="detail-label">channel:</span> {{ getChannelName(task.channelId) }}
+            <span class="detail-label">{{ t('sections.schedules.detail.channel') }}</span> {{ getChannelName(task.channelId) }}
           </span>
           <span v-if="task.lastRunAt" class="task-detail">
-            <span class="detail-label">last run:</span> {{ formatTime(task.lastRunAt) }}
+            <span class="detail-label">{{ t('sections.schedules.detail.lastRun') }}</span> {{ formatTime(task.lastRunAt) }}
           </span>
         </div>
         <div class="task-prompt">
-          <span class="detail-label">prompt:</span> {{ task.prompt.length > 120 ? task.prompt.substring(0, 120) + '...' : task.prompt }}
+          <span class="detail-label">{{ t('sections.schedules.detail.prompt') }}</span> {{ task.prompt.length > 120 ? task.prompt.substring(0, 120) + '...' : task.prompt }}
         </div>
         <div v-if="task.lastRunError" class="task-error">
           {{ task.lastRunError }}
@@ -339,8 +340,8 @@ onMounted(() => {
 
     <!-- Empty State -->
     <div v-if="!loading && !showForm && schedules.length === 0 && !error" class="empty-state">
-      <p>No scheduled tasks configured yet.</p>
-      <p class="empty-hint">Create scheduled tasks to automate Agent workflows with cron triggers.</p>
+      <p>{{ t('sections.schedules.empty') }}</p>
+      <p class="empty-hint">{{ t('sections.schedules.emptyHint') }}</p>
     </div>
 
     <!-- Global Error -->

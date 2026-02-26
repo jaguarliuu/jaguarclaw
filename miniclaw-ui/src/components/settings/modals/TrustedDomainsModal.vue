@@ -1,5 +1,8 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
+import { useI18n } from '@/i18n'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   defaultDomains: string[]
@@ -47,16 +50,16 @@ watch(() => props.userDomains, (newVal) => {
     <div class="modal-content">
       <div class="modal-header">
         <div>
-          <h3 class="modal-title">HTTP Trusted Domains</h3>
-          <p class="modal-subtitle">Only these domains are allowed for http_get requests</p>
+          <h3 class="modal-title">{{ t('sections.trustedDomains.title') }}</h3>
+          <p class="modal-subtitle">{{ t('sections.trustedDomains.subtitle') }}</p>
         </div>
         <button class="btn-close" @click="emit('close')">✕</button>
       </div>
 
       <div class="modal-body">
         <div class="domain-group">
-          <label class="form-label">DEFAULT DOMAINS</label>
-          <p class="form-help">These domains are always allowed</p>
+          <label class="form-label">{{ t('sections.trustedDomains.defaultDomainsLabel') }}</label>
+          <p class="form-help">{{ t('sections.trustedDomains.defaultDomainsHelp') }}</p>
           <div class="pill-list">
             <span v-for="d in defaultDomains" :key="d" class="pill pill-default">
               {{ d }}
@@ -65,31 +68,31 @@ watch(() => props.userDomains, (newVal) => {
         </div>
 
         <div class="domain-group">
-          <label class="form-label">YOUR DOMAINS</label>
-          <p class="form-help">Add custom domains to allow</p>
+          <label class="form-label">{{ t('sections.trustedDomains.customDomainsLabel') }}</label>
+          <p class="form-help">{{ t('sections.trustedDomains.customDomainsHelp') }}</p>
           <div class="pill-list" v-if="editUserDomains.length > 0">
             <span v-for="d in editUserDomains" :key="d" class="pill pill-user">
               {{ d }}
               <button class="pill-remove" @click="removeDomain(d)">&times;</button>
             </span>
           </div>
-          <div v-else class="empty-hint">No custom domains added</div>
+          <div v-else class="empty-hint">{{ t('sections.trustedDomains.empty') }}</div>
           <div class="domain-add-row">
             <input
               v-model="newDomain"
               class="form-input domain-input"
-              placeholder="example.com"
+              :placeholder="t('sections.trustedDomains.placeholder')"
               spellcheck="false"
               @keydown="handleDomainKeydown"
             />
-            <button class="add-btn" @click="addDomain" :disabled="!newDomain.trim()">+ Add</button>
+            <button class="add-btn" @click="addDomain" :disabled="!newDomain.trim()">{{ t('sections.trustedDomains.addBtn') }}</button>
           </div>
         </div>
       </div>
 
       <div class="modal-footer">
-        <button class="btn-secondary" @click="emit('close')">Cancel</button>
-        <button class="btn-primary" @click="handleSave">Save Changes</button>
+        <button class="btn-secondary" @click="emit('close')">{{ t('common.cancel') }}</button>
+        <button class="btn-primary" @click="handleSave">{{ t('sections.trustedDomains.saveBtn') }}</button>
       </div>
     </div>
   </div>
