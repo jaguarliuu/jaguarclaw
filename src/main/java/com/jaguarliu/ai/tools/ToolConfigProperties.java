@@ -26,8 +26,7 @@ public class ToolConfigProperties {
     private List<String> defaultDomains = List.of(
             "baidu.com", "google.com", "github.com", "githubusercontent.com",
             "stackoverflow.com", "wikipedia.org", "npmjs.com",
-            "maven.org", "pypi.org", "docs.oracle.com"
-    );
+            "maven.org", "pypi.org", "docs.oracle.com");
 
     /**
      * 用户添加的可信域名（通过设置页编辑）
@@ -52,6 +51,8 @@ public class ToolConfigProperties {
      */
     private List<String> dangerousKeywords = new ArrayList<>();
 
+    private Integer timeout = 60;
+
     /**
      * 搜索结果发现的域名（临时白名单，session 结束时清除）
      * 使用 ConcurrentHashMap.newKeySet() 保证线程安全
@@ -64,7 +65,8 @@ public class ToolConfigProperties {
      * 检查顺序：默认域名 → 用户域名 → 搜索发现域名
      */
     public boolean isDomainTrusted(String host) {
-        if (host == null) return false;
+        if (host == null)
+            return false;
         String h = host.toLowerCase();
         return defaultDomains.stream().anyMatch(d -> h.equals(d) || h.endsWith("." + d))
                 || userDomains.stream().anyMatch(d -> h.equals(d) || h.endsWith("." + d))
