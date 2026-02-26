@@ -57,6 +57,16 @@ public class LlmProperties {
      */
     private Integer timeout = 300;
 
+    /**
+     * 最大重试次数
+     */
+    private Integer maxRetries = 3;
+
+    /**
+     * 最大重试次数
+     */
+    private Integer maxRetries = 3;
+
     @Value("${miniclaw.config-dir:./data}")
     private String configDir;
 

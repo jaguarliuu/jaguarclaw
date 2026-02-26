@@ -152,15 +152,71 @@ public class OpenAiCompatibleLlmClient implements LlmClient {
         ChatCompletionRequest apiRequest = buildApiRequest(request, false);
         WebClient webClient = resolveClient(request);
 
-        String responseBody = webClient.post()
-                .uri("/chat/completions")
-                .bodyValue(apiRequest)
-                .retrieve()
-                .bodyToMono(String.class)
-                .timeout(Duration.ofSeconds(properties.getTimeout()))
-                .block();
+        int maxRetries = properties.getMaxRetries() > 0 ? properties.getMaxRetries() : 3;
+        int retryCount = 0;
+        Exception lastException = null;
 
-        return parseResponse(responseBody);
+        while (retryCount <= maxRetries) {
+            try {
+                String responseBody = webClient.post()
+                        .uri("/chat/completions")
+                        .bodyValue(apiRequest)
+                        .retrieve()
+                        .bodyToMono(String.class)
+                        .timeout(Duration.ofSeconds(properties.getTimeout()))
+                        .block();
+
+                return parseResponse(responseBody);
+            } catch (Exception e) {
+                lastException = e;
+                retryCount++;
+                
+                if (retryCount <= maxRetries && isRetryable(e)) {
+                    long delayMs = calculateBackoff(retryCount);
+                    log.warn("LLM request failed (attempt {}/{}), retrying in {}ms: {}",
+                            retryCount, maxRetries, delayMs, e.getMessage());
+                    try {
+                        Thread.sleep(delayMs);
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        throw new RuntimeException("LLM request interrupted during retry", ie);
+                    }
+                } else {
+                    break;
+                }
+            }
+        }
+
+        log.error("LLM request failed after {} attempts", retryCount);
+        throw new RuntimeException("LLM request failed after " + retryCount + " attempts", lastException);
+    }
+
+    /**
+     * 判断异常是否可重试
+     */
+    private boolean isRetryable(Exception e) {
+        String message = e.getMessage();
+        if (message == null) return false;
+        
+        // 网络错误、超时、5xx 错误可重试
+        return message.contains("timeout") ||
+               message.contains("Connection refused") ||
+               message.contains("503") ||
+               message.contains("502") ||
+               message.contains("429");  // Rate limit
+    }
+
+    /**
+     * 计算退避时间（指数退避 + 抖动）
+     */
+    private long calculateBackoff(int retryCount) {
+        long baseDelay = 1000L;  // 1 秒
+        long maxDelay = 10000L;  // 10 秒
+        long delay = baseDelay * (1L << (retryCount - 1));  // 1, 2, 4, 8...
+        delay = Math.min(delay, maxDelay);
+        // 添加抖动（±20%）
+        double jitter = 0.2 * delay * Math.random();
+        return delay + (long) jitter;
     }
 
     @Override
