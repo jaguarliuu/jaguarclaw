@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import type { Session } from '@/types'
-import ModeSwitcher from '@/components/layout/ModeSwitcher.vue'
 import { useConfirm } from '@/composables/useConfirm'
 
 const { confirm } = useConfirm()
@@ -56,14 +55,8 @@ async function handleDelete(e: Event, sessionId: string) {
     <div class="app-rail">
       <div class="rail-top">
         <div class="rail-logo">M</div>
-        <button class="rail-btn" @click="emit('create')" title="New session">
-          <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-            <path d="M9 4V14M4 9H14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-          </svg>
-        </button>
       </div>
       <div class="rail-bottom">
-        <ModeSwitcher />
         <RouterLink to="/settings/llm" class="rail-btn" title="Settings">
           <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
             <circle cx="9" cy="9" r="2.5" stroke="currentColor" stroke-width="1.4"/>
@@ -78,6 +71,14 @@ async function handleDelete(e: Event, sessionId: string) {
 
     <!-- Session Panel (220px) -->
     <div class="session-panel">
+      <div class="panel-header">
+        <button class="new-session-btn" @click="emit('create')" title="New session">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+            <path d="M7 2V12M2 7H12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+          New chat
+        </button>
+      </div>
       <nav class="session-list">
         <div v-if="sessions.length === 0" class="empty-state">
           No sessions yet
@@ -188,6 +189,33 @@ async function handleDelete(e: Event, sessionId: string) {
   flex-direction: column;
   border-right: var(--border);
   background: var(--color-white);
+}
+
+.panel-header {
+  padding: 10px 8px 4px;
+}
+
+.new-session-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--color-gray-200);
+  border-radius: var(--radius-md);
+  background: var(--color-white);
+  color: var(--color-gray-600);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-in-out);
+}
+
+.new-session-btn:hover {
+  background: var(--color-gray-50);
+  border-color: var(--color-gray-300);
+  color: var(--color-black);
 }
 
 .session-list {

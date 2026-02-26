@@ -559,7 +559,7 @@ onMounted(() => {
 
 <style scoped>
 .input-area {
-  padding: 24px 48px 32px;
+  padding: 10px 48px 14px;
   border-top: var(--border);
   background: var(--color-white);
 }
@@ -604,15 +604,15 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   flex: 1;
-  padding: 14px 16px;
-  gap: 8px;
-  min-height: 48px;
+  padding: 10px 14px;
+  gap: 6px;
+  min-height: 40px;
   transition: min-height 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .input-wrap.expanded .input-main,
 .input-wrap:focus-within .input-main {
-  min-height: 100px;
+  min-height: 64px;
 }
 
 /* Chips container */
@@ -704,7 +704,7 @@ onMounted(() => {
 textarea {
   flex: 1;
   width: 100%;
-  min-height: 28px;
+  min-height: 22px;
   padding: 0;
   border: none;
   background: transparent;
@@ -862,7 +862,7 @@ textarea:disabled {
 
 .input-hint {
   max-width: 720px;
-  margin: 8px auto 0;
+  margin: 5px auto 0;
   font-family: var(--font-mono);
   font-size: 11px;
   color: var(--color-gray-400);
