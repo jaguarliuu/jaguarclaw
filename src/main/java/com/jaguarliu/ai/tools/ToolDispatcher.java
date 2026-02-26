@@ -83,16 +83,25 @@ public class ToolDispatcher {
         // 4. 参数处理（确保 arguments 不为 null）
         Map<String, Object> safeArguments = arguments != null ? arguments : Map.of();
 
-        // 5. 执行工具
+        // 5. 执行工具（带超时）
         log.info("Executing tool: {} with arguments: {}", toolName, safeArguments);
+        
+        int timeoutSeconds = toolConfigProperties.getTimeout() != null 
+                ? toolConfigProperties.getTimeout() 
+                : 60;  // 默认 60 秒超时
 
         return tool.execute(safeArguments)
+                .timeout(java.time.Duration.ofSeconds(timeoutSeconds))
                 .doOnSuccess(result -> {
                     if (result.isSuccess()) {
                         log.info("Tool {} executed successfully", toolName);
                     } else {
                         log.warn("Tool {} returned error: {}", toolName, result.getContent());
                     }
+                })
+                .onErrorResume(java.util.concurrent.TimeoutException.class, e -> {
+                    log.error("Tool {} execution timeout after {}s", toolName, timeoutSeconds);
+                    return Mono.just(ToolResult.error("Tool execution timeout after " + timeoutSeconds + "s"));
                 })
                 .onErrorResume(e -> {
                     log.error("Tool {} execution exception: {}", toolName, e.getMessage(), e);

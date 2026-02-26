@@ -7,6 +7,8 @@ import lombok.Setter;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -124,10 +126,37 @@ public class RunContext {
     private String modelSelection;
 
     /**
+     * Skill 激活计数器（skillName -> count）
+     */
+    @Builder.Default
+    private final Map<String, Integer> skillActivationCounts = new HashMap<>();
+
+    /**
+     * 最大单个 Skill 激活次数
+     */
+    private static final int MAX_SKILL_ACTIVATIONS = 3;
+
+    /**
      * 检查是否已被取消
      */
     public boolean isAborted() {
         return cancellationManager.isCancelled(runId);
+    }
+
+    /**
+     * 记录 Skill 激活并返回当前计数
+     */
+    public int incrementSkillActivation(String skillName) {
+        int count = skillActivationCounts.getOrDefault(skillName, 0) + 1;
+        skillActivationCounts.put(skillName, count);
+        return count;
+    }
+
+    /**
+     * 检查 Skill 是否已达到最大激活次数
+     */
+    public boolean isSkillActivationLimitReached(String skillName) {
+        return skillActivationCounts.getOrDefault(skillName, 0) >= MAX_SKILL_ACTIVATIONS;
     }
 
     /**
