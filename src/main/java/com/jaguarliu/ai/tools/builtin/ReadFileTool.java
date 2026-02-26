@@ -58,27 +58,23 @@ public class ReadFileTool implements Tool {
     public ToolDefinition getDefinition() {
         return ToolDefinition.builder()
                 .name("read_file")
-                .description("读取指定文件的内容。支持文本文件（txt/md/json/yaml 等）和二进制文档（PDF/DOCX/XLSX/PPTX）。" +
-                        "二进制文档会自动提取文本内容。路径可以是相对于工作空间的路径，也可以是绝对路径。")
+                .description("读取指定文件的内容。支持文本文件和二进制文档。")
                 .parameters(Map.of(
                         "type", "object",
                         "properties", Map.of(
-                                "path", Map.of(
-                                        "type", "string",
-                                        "description", "文件路径（相对于工作空间，或绝对路径）"
-                                ),
-                                "offset", Map.of(
-                                        "type", "integer",
-                                        "description", "起始字符偏移量（用于分段读取大文件），默认 0"
-                                ),
-                                "limit", Map.of(
-                                        "type", "integer",
-                                        "description", "最多读取的字符数（用于分段读取大文件），默认读取全部"
-                                )
+                                "path", Map.of("type", "string", "description", "文件路径"),
+                                "offset", Map.of("type", "integer", "description", "起始偏移量"),
+                                "limit", Map.of("type", "integer", "description", "最大字符数")
                         ),
                         "required", List.of("path")
                 ))
                 .hitl(false)
+                // L0 字段
+                .tags(List.of("file", "read", "fs"))
+                .riskLevel("low")
+                // L1 字段
+                .parameterSummary("path (required): 文件路径 | offset: 起始偏移 | limit: 最大字符数")
+                .example("read_file({ path: 'README.md' })")
                 .build();
     }
 
