@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
+import { useI18n } from '@/i18n'
 
 const props = defineProps<{
   visible: boolean
@@ -16,6 +17,7 @@ const emit = defineEmits<{
 }>()
 
 const dialogRef = ref<HTMLDialogElement | null>(null)
+const { t } = useI18n()
 
 watch(() => props.visible, (visible) => {
   if (visible) {
@@ -64,14 +66,14 @@ function handleKeydown(e: KeyboardEvent) {
 
       <footer class="dialog-footer">
         <button class="btn btn-cancel" @click="handleCancel">
-          {{ cancelText || 'Cancel' }}
+          {{ cancelText || t('common.cancel') }}
         </button>
         <button
           class="btn btn-confirm"
           :class="{ danger }"
           @click="handleConfirm"
         >
-          {{ confirmText || 'Confirm' }}
+          {{ confirmText || t('common.confirm') }}
         </button>
       </footer>
     </div>

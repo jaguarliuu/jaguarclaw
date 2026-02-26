@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, nextTick } from 'vue'
 import type { ContextType } from '@/types'
+import { useI18n } from '@/i18n'
 
 interface Props {
   type: ContextType
@@ -14,6 +15,8 @@ const emit = defineEmits<{
   cancel: []
 }>()
 
+const { t } = useI18n()
+
 const inputValue = ref('')
 const inputRef = ref<HTMLInputElement | null>(null)
 const errorMessage = ref('')
@@ -26,24 +29,24 @@ const isElectron = computed(() => {
 // 标题和占位符根据类型变化
 const modalTitle = computed(() => {
   const map: Record<string, string> = {
-    folder: 'Add Folder Path',
-    web: 'Add Web URL',
-    doc: 'Add Document',
-    code: 'Add Code Snippet',
-    rule: 'Add Rule'
+    folder: t('contextModal.titles.folder'),
+    web:    t('contextModal.titles.web'),
+    doc:    t('contextModal.titles.doc'),
+    code:   t('contextModal.titles.code'),
+    rule:   t('contextModal.titles.rule'),
   }
-  return map[props.type] || 'Add Context'
+  return map[props.type] || t('contextModal.titles.default')
 })
 
 const placeholder = computed(() => {
   const map: Record<string, string> = {
-    folder: 'e.g., workspace/src or /absolute/path',
-    web: 'e.g., https://example.com/api',
-    doc: 'Document ID or name',
-    code: 'Paste code here',
-    rule: 'Enter rule content'
+    folder: t('contextModal.placeholders.folder'),
+    web:    t('contextModal.placeholders.web'),
+    doc:    t('contextModal.placeholders.doc'),
+    code:   t('contextModal.placeholders.code'),
+    rule:   t('contextModal.placeholders.rule'),
   }
-  return map[props.type] || 'Enter value'
+  return map[props.type] || t('contextModal.placeholders.default')
 })
 
 const inputType = computed(() => {
@@ -77,36 +80,30 @@ async function handleSelectFolder() {
       errorMessage.value = ''
     }
   } catch (err) {
-    errorMessage.value = 'Failed to select folder'
+    errorMessage.value = t('contextModal.errors.folderFailed')
     console.error('Failed to select folder:', err)
   }
 }
 
 function validateInput(value: string): string | null {
   if (!value.trim()) {
-    return 'Please enter a value'
+    return t('contextModal.errors.empty')
   }
-
-  // 特定类型的验证
   if (props.type === 'web') {
     try {
       const url = new URL(value.trim())
       if (url.protocol !== 'http:' && url.protocol !== 'https:') {
-        return 'URL must start with http:// or https://'
+        return t('contextModal.errors.invalidUrl')
       }
     } catch {
-      return 'Please enter a valid URL (e.g., https://example.com)'
+      return t('contextModal.errors.invalidUrlFormat')
     }
   }
-
   if (props.type === 'folder') {
-    // 简单的路径验证
-    const trimmed = value.trim()
-    if (trimmed.includes('..')) {
-      return 'Path cannot contain ".."'
+    if (value.trim().includes('..')) {
+      return t('contextModal.errors.pathDotDot')
     }
   }
-
   return null
 }
 
@@ -147,7 +144,7 @@ function handleInput() {
     <div class="modal-dialog">
       <div class="modal-header">
         <h3 class="modal-title">{{ modalTitle }}</h3>
-        <button class="close-btn" @click="handleCancel" title="Close (Esc)">
+        <button class="close-btn" @click="handleCancel" :title="t('common.close')">
           <span>&times;</span>
         </button>
       </div>
@@ -170,9 +167,9 @@ function handleInput() {
             v-if="isElectron"
             class="browse-btn"
             @click="handleSelectFolder"
-            title="Browse folder"
+            :title="t('common.browse')"
           >
-            📁 Browse
+            {{ t('common.browse') }}
           </button>
         </div>
 
@@ -193,18 +190,17 @@ function handleInput() {
           {{ errorMessage }}
         </div>
 
-        <!-- Web 环境的提示 -->
         <div v-if="type === 'folder' && !isElectron" class="hint-message">
-          💡 Tip: Enter a relative path like "workspace/src" or an absolute path
+          {{ t('contextModal.hints.folderWeb') }}
         </div>
       </div>
 
       <div class="modal-footer">
         <button class="btn btn-secondary" @click="handleCancel">
-          Cancel
+          {{ t('common.cancel') }}
         </button>
         <button class="btn btn-primary" @click="handleConfirm">
-          Add
+          {{ t('common.add') }}
         </button>
       </div>
     </div>

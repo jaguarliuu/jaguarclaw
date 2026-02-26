@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import type { Session } from '@/types'
 import { useConfirm } from '@/composables/useConfirm'
+import { useI18n } from '@/i18n'
 
 const { confirm } = useConfirm()
+const { t } = useI18n()
 
 defineProps<{
   sessions: Session[]
@@ -37,10 +39,10 @@ function formatDate(dateStr: string): string {
 async function handleDelete(e: Event, sessionId: string) {
   e.stopPropagation()
   const confirmed = await confirm({
-    title: 'Delete Session',
-    message: 'This will permanently delete the session and all its messages. This action cannot be undone.',
-    confirmText: 'Delete',
-    cancelText: 'Cancel',
+    title: t('session.deleteTitle'),
+    message: t('session.deleteMessage'),
+    confirmText: t('common.delete'),
+    cancelText: t('common.cancel'),
     danger: true
   })
   if (confirmed) {
@@ -57,7 +59,7 @@ async function handleDelete(e: Event, sessionId: string) {
         <div class="rail-logo">M</div>
       </div>
       <div class="rail-bottom">
-        <RouterLink to="/settings/llm" class="rail-btn" title="Settings">
+        <RouterLink to="/settings/llm" class="rail-btn" :title="t('common.settings')">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
             <path d="M12.22 2h-.44a2 2 0 00-2 2v.18a2 2 0 01-1 1.73l-.43.25a2 2 0 01-2 0l-.15-.08a2 2 0 00-2.73.73l-.22.38a2 2 0 00.73 2.73l.15.1a2 2 0 011 1.72v.51a2 2 0 01-1 1.74l-.15.09a2 2 0 00-.73 2.73l.22.38a2 2 0 002.73.73l.15-.08a2 2 0 012 0l.43.25a2 2 0 011 1.73V20a2 2 0 002 2h.44a2 2 0 002-2v-.18a2 2 0 011-1.73l.43-.25a2 2 0 012 0l.15.08a2 2 0 002.73-.73l.22-.39a2 2 0 00-.73-2.73l-.15-.08a2 2 0 01-1-1.74v-.5a2 2 0 011-1.74l.15-.09a2 2 0 00.73-2.73l-.22-.38a2 2 0 00-2.73-.73l-.15.08a2 2 0 01-2 0l-.43-.25a2 2 0 01-1-1.73V4a2 2 0 00-2-2z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
             <circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.5"/>
@@ -69,16 +71,16 @@ async function handleDelete(e: Event, sessionId: string) {
     <!-- Session Panel (220px) -->
     <div class="session-panel">
       <div class="panel-header">
-        <button class="new-session-btn" @click="emit('create')" title="New session">
+        <button class="new-session-btn" @click="emit('create')" :title="t('session.new')">
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
             <path d="M7 2V12M2 7H12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
           </svg>
-          New chat
+          {{ t('session.new') }}
         </button>
       </div>
       <nav class="session-list">
         <div v-if="sessions.length === 0" class="empty-state">
-          No sessions yet
+          {{ t('session.empty') }}
         </div>
 
         <div
@@ -89,10 +91,10 @@ async function handleDelete(e: Event, sessionId: string) {
           @click="emit('select', session.id)"
         >
           <div class="session-content">
-            <span class="session-title">{{ session.name || 'Untitled' }}</span>
+            <span class="session-title">{{ session.name || t('session.untitled') }}</span>
             <span class="session-date">{{ formatDate(session.createdAt) }}</span>
           </div>
-          <button class="delete-btn" @click="(e) => handleDelete(e, session.id)" title="Delete session">
+          <button class="delete-btn" @click="(e) => handleDelete(e, session.id)" :title="t('common.delete')">
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
               <path d="M3 3L11 11M11 3L3 11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
             </svg>

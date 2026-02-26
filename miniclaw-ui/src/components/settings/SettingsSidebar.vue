@@ -2,40 +2,42 @@
 import { useRoute, useRouter } from 'vue-router'
 import { computed } from 'vue'
 import { useTheme } from '@/composables/useTheme'
+import { useI18n } from '@/i18n'
 
 const route = useRoute()
 const router = useRouter()
 const { currentTheme, themes, setTheme } = useTheme()
+const { t, locale, setLocale } = useI18n()
 
-const groups = [
+const groups = computed(() => [
   {
-    label: 'AI Core',
+    label: t('settings.groups.aiCore'),
     items: [
-      { id: 'llm', label: 'Models' },
-      { id: 'tools', label: 'Tools' },
-      { id: 'skills', label: 'Skills' },
-      { id: 'memory', label: 'Memory' },
-      { id: 'mcp', label: 'MCP' },
-      { id: 'soul', label: 'Persona' },
+      { id: 'llm',        label: t('settings.nav.models') },
+      { id: 'tools',      label: t('settings.nav.tools') },
+      { id: 'skills',     label: t('settings.nav.skills') },
+      { id: 'memory',     label: t('settings.nav.memory') },
+      { id: 'mcp',        label: t('settings.nav.mcp') },
+      { id: 'soul',       label: t('settings.nav.persona') },
     ]
   },
   {
-    label: 'Integration',
+    label: t('settings.groups.integration'),
     items: [
-      { id: 'nodes', label: 'Nodes' },
-      { id: 'datasources', label: 'Data Sources' },
-      { id: 'channels', label: 'Channels' },
+      { id: 'nodes',       label: t('settings.nav.nodes') },
+      { id: 'datasources', label: t('settings.nav.dataSources') },
+      { id: 'channels',    label: t('settings.nav.channels') },
     ]
   },
   {
-    label: 'Administration',
+    label: t('settings.groups.administration'),
     items: [
-      { id: 'system', label: 'System' },
-      { id: 'audit', label: 'Audit Log' },
-      { id: 'tasks', label: 'Schedules' },
+      { id: 'system', label: t('settings.nav.system') },
+      { id: 'audit',  label: t('settings.nav.audit') },
+      { id: 'tasks',  label: t('settings.nav.schedules') },
     ]
   }
-]
+])
 
 const currentSection = computed(() => {
   return route.params.section as string || 'llm'
@@ -50,11 +52,11 @@ function navigateTo(sectionId: string) {
   <nav class="settings-sidebar">
     <!-- Top: back link + logo -->
     <div class="sidebar-top">
-      <button class="back-btn" @click="router.push('/')" title="Back to Chat">
+      <button class="back-btn" @click="router.push('/')" :title="t('settings.back')">
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
           <path d="M10 3L5 8L10 13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
-        <span>Back</span>
+        <span>{{ t('settings.back') }}</span>
       </button>
       <div class="sidebar-logo">
         <span class="logo-text">MiniClaw</span>
@@ -141,9 +143,9 @@ function navigateTo(sectionId: string) {
       </div>
     </div>
 
-    <!-- Theme picker -->
+    <!-- Theme + Language picker -->
     <div class="theme-picker">
-      <div class="theme-picker-label">Theme</div>
+      <div class="theme-picker-label">{{ t('settings.theme') }}</div>
       <div class="theme-swatches">
         <button
           v-for="theme in themes"
@@ -154,6 +156,20 @@ function navigateTo(sectionId: string) {
           :title="theme.name"
           @click="setTheme(theme.id)"
         />
+      </div>
+
+      <div class="theme-picker-label" style="margin-top: 12px;">{{ t('settings.language') }}</div>
+      <div class="lang-switcher">
+        <button
+          class="lang-btn"
+          :class="{ active: locale === 'zh' }"
+          @click="setLocale('zh')"
+        >中</button>
+        <button
+          class="lang-btn"
+          :class="{ active: locale === 'en' }"
+          @click="setLocale('en')"
+        >EN</button>
       </div>
     </div>
   </nav>
@@ -328,5 +344,35 @@ function navigateTo(sectionId: string) {
 
 .swatch.active {
   box-shadow: 0 0 0 2px var(--color-white), 0 0 0 4px var(--swatch-color);
+}
+
+.lang-switcher {
+  display: flex;
+  gap: 6px;
+}
+
+.lang-btn {
+  flex: 1;
+  height: 26px;
+  border: 1px solid var(--sidebar-panel-border);
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-gray-500);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-in-out);
+}
+
+.lang-btn:hover {
+  background: var(--sidebar-item-hover-bg);
+  color: var(--color-black);
+}
+
+.lang-btn.active {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: var(--color-white);
 }
 </style>

@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import type { Message } from '@/types'
 import { useMarkdown } from '@/composables/useMarkdown'
+import { useI18n } from '@/i18n'
 import ToolCallCard from './ToolCallCard.vue'
 import SkillActivationCard from './SkillActivationCard.vue'
 import SubagentCard from './SubagentCard.vue'
@@ -19,6 +20,7 @@ const emit = defineEmits<{
 }>()
 
 const { render } = useMarkdown()
+const { t } = useI18n()
 
 // 是否有交错的 blocks（assistant 消息）
 const hasBlocks = computed(() =>
@@ -50,8 +52,8 @@ const displayContexts = computed(() => {
   <article class="message" :class="message.role">
     <div class="message-inner">
       <div class="message-meta">
-        <span class="msg-avatar" :class="message.role">{{ message.role === 'user' ? 'U' : 'M' }}</span>
-        <span class="role">{{ message.role === 'user' ? 'You' : 'MiniClaw' }}</span>
+        <span class="msg-avatar" :class="message.role">{{ message.role === 'user' ? t('message.you')[0] : 'M' }}</span>
+        <span class="role">{{ message.role === 'user' ? t('message.you') : t('message.assistant') }}</span>
       </div>
 
       <!-- 有 blocks 的 assistant 消息：交错显示 -->

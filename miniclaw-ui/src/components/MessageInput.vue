@@ -3,6 +3,7 @@ import { ref, computed, onMounted, nextTick } from 'vue'
 import type { SlashCommandItem, AttachedContext, ContextType, DataSourceInfo, ModelOption } from '@/types'
 import type { McpServer } from '@/composables/useMcpServers'
 import { useSlashCommands } from '@/composables/useSlashCommands'
+import { useI18n } from '@/i18n'
 import ContextChip from '@/components/ContextChip.vue'
 import ContextTypeMenu from '@/components/ContextTypeMenu.vue'
 import McpServerFilter from '@/components/McpServerFilter.vue'
@@ -42,6 +43,7 @@ const isExpanded = ref(false)
 
 // Slash command autocomplete
 const { loadCommands, filterCommands } = useSlashCommands()
+const { t } = useI18n()
 
 const showSlashMenu = ref(false)
 const slashItems = ref<SlashCommandItem[]>([])
@@ -456,7 +458,7 @@ onMounted(() => {
             <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
               <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
             </svg>
-            <span>松开以添加文件</span>
+            <span>{{ t('input.dragDrop') }}</span>
           </div>
         </Transition>
         <!-- Hidden file input -->
@@ -479,7 +481,7 @@ onMounted(() => {
                 <path d="M2 8C2 7.44772 2.44772 7 3 7H9C9.55228 7 10 7.44772 10 8V9C10 9.55228 9.55228 10 9 10H3C2.44772 10 2 9.55228 2 9V8Z" fill="currentColor"/>
               </svg>
               <span class="chip-label">{{ selectedDataSource.name }}</span>
-              <button class="chip-remove" @click="handleRemoveDataSource" title="移除">
+              <button class="chip-remove" @click="handleRemoveDataSource" :title="t('common.remove')">
                 <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
                   <path d="M3 3L9 9M9 3L3 9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
                 </svg>
@@ -500,7 +502,7 @@ onMounted(() => {
             ref="inputRef"
             v-model="input"
             :disabled="disabled"
-            :placeholder="selectedDataSource ? '询问关于 ' + selectedDataSource.name + ' 的问题...' : '输入消息...'"
+            :placeholder="selectedDataSource ? t('input.placeholderDs', { name: selectedDataSource.name }) : t('input.placeholder')"
             @keydown="handleKeydown"
             @input="handleInput"
             @focus="handleFocus"
@@ -515,7 +517,7 @@ onMounted(() => {
                 :class="{ active: showContextMenu }"
                 :disabled="disabled"
                 @click="handleAttachClick"
-                title="添加上下文 (#)"
+                :title="t('input.tooltipAttach')"
               >
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
                   <path d="M8 3V13M3 8H13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
@@ -528,7 +530,7 @@ onMounted(() => {
                 :class="{ active: showMcpFilter, highlight: (excludedMcpServers?.size ?? 0) > 0 }"
                 :disabled="disabled"
                 @click="showMcpFilter = !showMcpFilter"
-                title="MCP 工具"
+                :title="t('input.tooltipMcp')"
               >
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
                   <path d="M11 5L8 2L5 5M5 11L8 14L11 11M14 8H2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
@@ -541,7 +543,7 @@ onMounted(() => {
                 :class="{ active: showDataSourceSelector, highlight: selectedDataSourceId }"
                 :disabled="disabled"
                 @click="showDataSourceSelector = !showDataSourceSelector"
-                title="数据源"
+                :title="t('input.tooltipDataSource')"
               >
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
                   <path d="M2 4C2 3.44772 3.34315 3 5 3H11C12.6569 3 14 3.44772 14 4V5.5C14 6.05228 12.6569 6.5 11 6.5H5C3.34315 6.5 2 6.05228 2 5.5V4Z" stroke="currentColor" stroke-width="1.2"/>
@@ -558,7 +560,7 @@ onMounted(() => {
                 :class="{ active: showModelSelector }"
                 :disabled="disabled"
                 @click="showModelSelector = !showModelSelector"
-                title="选择模型"
+                :title="t('input.tooltipModel')"
               >
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
                   <path d="M4 6L8 10L12 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
@@ -571,7 +573,7 @@ onMounted(() => {
                 v-if="isRunning"
                 class="action-btn cancel-btn"
                 @click="handleCancel"
-                title="停止 (Esc)"
+                :title="t('input.tooltipStop')"
               >
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                   <rect x="5" y="5" width="6" height="6" rx="0.5" fill="currentColor"/>
@@ -583,7 +585,7 @@ onMounted(() => {
                 class="action-btn send-btn"
                 :disabled="sendDisabled"
                 @click="handleSubmit"
-                :title="hasUploading ? '等待上传...' : '发送 (Enter)'"
+                :title="hasUploading ? t('input.tooltipWaitUpload') : t('input.tooltipSend')"
               >
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                   <path d="M8 13V3M8 3L5 6M8 3L11 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
@@ -596,19 +598,19 @@ onMounted(() => {
     </div>
     <div class="input-hint">
       <template v-if="hasUploading">
-        <span class="uploading-hint">上传中...</span>
+        <span class="uploading-hint">{{ t('input.hintUploading') }}</span>
       </template>
       <template v-else-if="isRunning">
-        <span class="running">运行中...</span>
+        <span class="running">{{ t('input.hintRunning') }}</span>
         <span class="separator">·</span>
-        <span>Esc 取消</span>
+        <span>{{ t('input.hintStop') }}</span>
       </template>
       <template v-else>
-        <span>Enter 发送</span>
+        <span>{{ t('input.hintSend') }}</span>
         <span class="separator">·</span>
-        <span>Shift+Enter 换行</span>
+        <span>{{ t('input.hintNewline') }}</span>
         <span class="separator">·</span>
-        <span># 插入文件</span>
+        <span>{{ t('input.hintFile') }}</span>
       </template>
     </div>
   </div>

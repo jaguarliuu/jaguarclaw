@@ -1,21 +1,20 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { ConnectionState } from '@/types'
+import { useI18n } from '@/i18n'
 
 const props = defineProps<{
   state: ConnectionState
 }>()
 
+const { t } = useI18n()
+
 const stateText = computed(() => {
   switch (props.state) {
-    case 'connected':
-      return 'Online'
-    case 'connecting':
-      return 'Connecting...'
-    case 'disconnected':
-      return 'Offline'
-    case 'error':
-      return 'Error'
+    case 'connected':    return t('connection.connected')
+    case 'connecting':   return t('connection.connecting')
+    case 'disconnected': return t('connection.disconnected')
+    case 'error':        return t('connection.error')
   }
 })
 </script>

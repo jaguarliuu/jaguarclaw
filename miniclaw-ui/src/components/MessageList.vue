@@ -2,6 +2,7 @@
 import { ref, watch, nextTick, computed } from 'vue'
 import type { Message, StreamBlock } from '@/types'
 import { useMarkdown } from '@/composables/useMarkdown'
+import { useI18n } from '@/i18n'
 import MessageItem from './MessageItem.vue'
 import ToolCallCard from './ToolCallCard.vue'
 import SubagentCard from './SubagentCard.vue'
@@ -23,6 +24,7 @@ const emit = defineEmits<{
 const containerRef = ref<HTMLElement | null>(null)
 
 const { render } = useMarkdown()
+const { t } = useI18n()
 
 // 渲染文本块的 Markdown
 function renderTextBlock(content: string | undefined): string {
@@ -53,8 +55,8 @@ watch(
     <div class="message-container">
       <!-- Empty state -->
       <div v-if="messages.length === 0 && !isStreaming" class="empty-state">
-        <p class="empty-title">Ready</p>
-        <p class="empty-hint">Type a message to begin</p>
+        <p class="empty-title">{{ t('message.emptyTitle') }}</p>
+        <p class="empty-hint">{{ t('message.emptyHint') }}</p>
       </div>
 
       <!-- Messages -->
@@ -70,7 +72,7 @@ watch(
       <!-- Streaming message with interleaved blocks -->
       <article v-if="isStreaming" class="message assistant streaming">
         <div class="message-meta">
-          <span class="role">Assistant</span>
+          <span class="role">{{ t('message.assistantRole') }}</span>
           <span class="streaming-indicator">
             <span class="streaming-dot"></span>
             <span class="streaming-dot"></span>
