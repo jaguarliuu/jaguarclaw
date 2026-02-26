@@ -138,17 +138,16 @@ watch(
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  min-height: 200px;
+  min-height: 55vh;
   text-align: center;
 }
 
 .empty-title {
-  font-family: var(--font-mono);
-  font-size: 14px;
-  font-weight: 500;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  margin-bottom: 8px;
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--color-black);
+  margin-bottom: 10px;
 }
 
 .empty-hint {

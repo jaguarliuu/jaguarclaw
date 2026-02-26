@@ -2,7 +2,6 @@
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { useWebSocket } from '@/composables/useWebSocket'
-import ModeSwitcher from '@/components/layout/ModeSwitcher.vue'
 import SettingsSidebar from '@/components/settings/SettingsSidebar.vue'
 import LlmSection from '@/components/settings/LlmSection.vue'
 import ToolsConfigSection from '@/components/settings/ToolsConfigSection.vue'
@@ -29,14 +28,6 @@ const currentSection = computed(() => {
 
 <template>
   <div class="settings-view">
-    <!-- Header -->
-    <header class="settings-header">
-      <div class="header-left">
-        <ModeSwitcher />
-        <h1 class="logo">MiniClaw</h1>
-      </div>
-    </header>
-
     <!-- Main content -->
     <div class="settings-body">
       <SettingsSidebar />
@@ -71,27 +62,6 @@ const currentSection = computed(() => {
   display: flex;
   flex-direction: column;
   background: var(--color-white);
-}
-
-.settings-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 20px;
-  border-bottom: var(--border);
-}
-
-.header-left {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.logo {
-  font-family: var(--font-mono);
-  font-size: 14px;
-  font-weight: 500;
-  letter-spacing: -0.02em;
 }
 
 .settings-body {

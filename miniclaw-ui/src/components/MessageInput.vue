@@ -478,7 +478,6 @@ onMounted(() => {
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
                   <path d="M11 5L8 2L5 5M5 11L8 14L11 11M14 8H2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
                 </svg>
-                <span class="toolbar-label">工具</span>
               </button>
 
               <button
@@ -493,7 +492,6 @@ onMounted(() => {
                   <path d="M2 4C2 3.44772 3.34315 3 5 3H11C12.6569 3 14 3.44772 14 4V5.5C14 6.05228 12.6569 6.5 11 6.5H5C3.34315 6.5 2 6.05228 2 5.5V4Z" stroke="currentColor" stroke-width="1.2"/>
                   <path d="M2 10.5C2 9.94772 3.34315 9.5 5 9.5H11C12.6569 9.5 14 9.94772 14 10.5V12C14 12.5523 12.6569 13 11 13H5C3.34315 13 2 12.5523 2 12V10.5Z" stroke="currentColor" stroke-width="1.2"/>
                 </svg>
-                <span class="toolbar-label">{{ dataSourceLabel }}</span>
               </button>
             </div>
 
@@ -510,7 +508,7 @@ onMounted(() => {
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
                   <path d="M4 6L8 10L12 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
                 </svg>
-                <span class="toolbar-label">{{ modelLabel }}</span>
+                <span class="toolbar-label model-label">{{ modelLabel }}</span>
               </button>
 
               <!-- Send or Cancel button -->
@@ -734,7 +732,7 @@ textarea:disabled {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 12px;
+  padding: 8px 10px;
   border-top: 1px solid var(--color-gray-100);
   background: var(--color-gray-50);
   margin: 0;
@@ -756,48 +754,46 @@ textarea:disabled {
 .toolbar-btn {
   display: flex;
   align-items: center;
-  gap: 6px;
-  height: 32px;
-  padding: 0 12px;
+  gap: 5px;
+  height: 30px;
+  padding: 0 8px;
   border: none;
-  border-radius: 8px;
-  background: var(--color-white);
-  color: var(--color-gray-600);
+  border-radius: 7px;
+  background: transparent;
+  color: var(--color-gray-500);
   font-family: var(--font-ui);
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.15s ease;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 
 .toolbar-btn:hover:not(:disabled) {
-  background: var(--color-white);
+  background: var(--color-gray-100);
   color: var(--color-gray-800);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  transform: translateY(-1px);
 }
 
 .toolbar-btn.active {
-  background: var(--color-gray-800);
+  background: var(--color-gray-900);
   color: var(--color-white);
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
 }
 
 .toolbar-btn.highlight {
-  background: var(--color-gray-800);
+  background: var(--color-gray-900);
   color: var(--color-white);
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
 }
 
 .toolbar-btn:disabled {
-  opacity: 0.4;
+  opacity: 0.35;
   cursor: not-allowed;
-  transform: none;
 }
 
 .toolbar-btn svg {
   flex-shrink: 0;
+}
+
+.model-btn {
+  padding: 0 10px;
 }
 
 .toolbar-label {

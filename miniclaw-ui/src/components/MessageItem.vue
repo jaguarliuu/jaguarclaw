@@ -123,7 +123,7 @@ const displayContexts = computed(() => {
 
 <style scoped>
 .message {
-  padding: 20px 0;
+  padding: 24px 0;
   border-bottom: var(--border-light);
 }
 
@@ -153,7 +153,7 @@ const displayContexts = computed(() => {
 .msg-avatar {
   width: 22px;
   height: 22px;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -175,7 +175,7 @@ const displayContexts = computed(() => {
 
 .message-content {
   font-size: 15px;
-  line-height: 1.7;
+  line-height: 1.75;
   padding-left: 30px;
 }
 

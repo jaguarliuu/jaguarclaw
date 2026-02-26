@@ -51,91 +51,143 @@ async function handleDelete(e: Event, sessionId: string) {
 </script>
 
 <template>
-  <aside class="sidebar">
-    <header class="sidebar-header">
-      <div class="header-left">
+  <aside class="sidebar-root">
+    <!-- Icon Rail (56px) -->
+    <div class="app-rail">
+      <div class="rail-top">
+        <div class="rail-logo">M</div>
+        <button class="rail-btn" @click="emit('create')" title="New session">
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+            <path d="M9 4V14M4 9H14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </div>
+      <div class="rail-bottom">
         <ModeSwitcher />
-        <h1 class="logo">MiniClaw</h1>
-      </div>
-      <button class="new-btn" @click="emit('create')" title="New session">+</button>
-    </header>
-
-    <nav class="session-list">
-      <div v-if="sessions.length === 0" class="empty-state">
-        No sessions yet
-      </div>
-
-      <div
-        v-for="session in sessions"
-        :key="session.id"
-        class="session-item"
-        :class="{ active: session.id === currentId }"
-        @click="emit('select', session.id)"
-      >
-        <div class="session-content">
-          <span class="session-title">{{ session.name || 'Untitled' }}</span>
-          <span class="session-date">{{ formatDate(session.createdAt) }}</span>
+        <RouterLink to="/settings/llm" class="rail-btn" title="Settings">
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+            <circle cx="9" cy="9" r="2.5" stroke="currentColor" stroke-width="1.4"/>
+            <path d="M9 1.5v2M9 14.5v2M1.5 9h2M14.5 9h2M3.4 3.4l1.42 1.42M13.18 13.18l1.42 1.42M14.6 3.4l-1.42 1.42M4.82 13.18L3.4 14.6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+          </svg>
+        </RouterLink>
+        <div class="rail-status">
+          <slot name="footer"></slot>
         </div>
-        <button class="delete-btn" @click="(e) => handleDelete(e, session.id)" title="Delete session">×</button>
       </div>
-    </nav>
+    </div>
 
-    <footer class="sidebar-footer">
-      <slot name="footer"></slot>
-    </footer>
+    <!-- Session Panel (220px) -->
+    <div class="session-panel">
+      <nav class="session-list">
+        <div v-if="sessions.length === 0" class="empty-state">
+          No sessions yet
+        </div>
+
+        <div
+          v-for="session in sessions"
+          :key="session.id"
+          class="session-item"
+          :class="{ active: session.id === currentId }"
+          @click="emit('select', session.id)"
+        >
+          <div class="session-content">
+            <span class="session-title">{{ session.name || 'Untitled' }}</span>
+            <span class="session-date">{{ formatDate(session.createdAt) }}</span>
+          </div>
+          <button class="delete-btn" @click="(e) => handleDelete(e, session.id)" title="Delete session">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+              <path d="M3 3L11 11M11 3L3 11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+          </button>
+        </div>
+      </nav>
+    </div>
   </aside>
 </template>
 
 <style scoped>
-.sidebar {
-  width: 260px;
+.sidebar-root {
+  display: flex;
+  height: 100%;
+  flex-shrink: 0;
+}
+
+/* Icon Rail */
+.app-rail {
+  width: 56px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  border-right: var(--border);
+  background: var(--color-white);
+  padding: 10px 0;
+}
+
+.rail-top {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.rail-logo {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: var(--color-black);
+  margin-bottom: 6px;
+}
+
+.rail-btn {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-gray-500);
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-in-out);
+  text-decoration: none;
+}
+
+.rail-btn:hover {
+  background: var(--color-gray-100);
+  color: var(--color-black);
+}
+
+.rail-bottom {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding-bottom: 4px;
+}
+
+.rail-status {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+}
+
+/* Session Panel */
+.session-panel {
+  width: 220px;
   height: 100%;
   display: flex;
   flex-direction: column;
   border-right: var(--border);
   background: var(--color-white);
-}
-
-.sidebar-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 16px 20px;
-  border-bottom: var(--border);
-}
-
-.header-left {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.logo {
-  font-family: var(--font-mono);
-  font-size: 14px;
-  font-weight: 500;
-  letter-spacing: -0.02em;
-}
-
-.new-btn {
-  width: 28px;
-  height: 28px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid var(--color-gray-200);
-  border-radius: var(--radius-md);
-  background: var(--color-gray-100);
-  font-family: var(--font-mono);
-  font-size: 18px;
-  font-weight: 400;
-  cursor: pointer;
-  transition: all var(--duration-fast) var(--ease-in-out);
-}
-
-.new-btn:hover {
-  background: var(--color-black);
-  color: var(--color-white);
 }
 
 .session-list {
@@ -145,9 +197,10 @@ async function handleDelete(e: Event, sessionId: string) {
 }
 
 .empty-state {
-  padding: 20px 12px;
+  padding: 24px 12px;
   font-size: 13px;
-  color: var(--color-gray-dark);
+  color: var(--color-gray-400);
+  text-align: center;
 }
 
 .session-item {
@@ -155,8 +208,8 @@ async function handleDelete(e: Event, sessionId: string) {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
-  padding: 12px;
+  gap: 6px;
+  padding: 10px 12px;
   border: none;
   border-radius: var(--radius-md);
   background: transparent;
@@ -173,7 +226,6 @@ async function handleDelete(e: Event, sessionId: string) {
 .session-item.active {
   background: var(--color-black);
   color: var(--color-white);
-  border-radius: var(--radius-md);
   box-shadow: var(--shadow-sm);
 }
 
@@ -182,17 +234,16 @@ async function handleDelete(e: Event, sessionId: string) {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 3px;
 }
 
 .session-title {
   font-size: 13px;
   font-weight: 500;
   line-height: 1.3;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
   overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .session-date {
@@ -202,24 +253,24 @@ async function handleDelete(e: Event, sessionId: string) {
 }
 
 .session-item.active .session-date {
-  color: var(--color-gray-light);
+  color: rgba(255, 255, 255, 0.5);
 }
 
 .delete-btn {
   opacity: 0;
-  width: 20px;
-  height: 20px;
+  width: 22px;
+  height: 22px;
   display: flex;
   align-items: center;
   justify-content: center;
   border: none;
   background: transparent;
-  font-size: 16px;
-  font-weight: 500;
-  color: var(--color-gray-dark);
+  color: var(--color-gray-400);
   cursor: pointer;
+  border-radius: var(--radius-sm);
   transition: all var(--duration-fast) var(--ease-in-out);
   flex-shrink: 0;
+  padding: 0;
 }
 
 .session-item:hover .delete-btn {
@@ -227,19 +278,16 @@ async function handleDelete(e: Event, sessionId: string) {
 }
 
 .delete-btn:hover {
+  background: var(--color-gray-100);
   color: var(--color-error);
 }
 
 .session-item.active .delete-btn {
-  color: var(--color-gray-light);
+  color: rgba(255, 255, 255, 0.6);
 }
 
 .session-item.active .delete-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
   color: #ffaaaa;
-}
-
-.sidebar-footer {
-  padding: 12px 20px;
-  border-top: var(--border-light);
 }
 </style>
