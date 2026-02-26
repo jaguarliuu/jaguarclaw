@@ -168,7 +168,8 @@ public class LlmProperties {
             }
         }
 
-        log.info("Loaded LLM config from file (v1 migrated): endpoint={}, model={}", endpoint, model);
+        log.info("Loaded LLM config from file (v1 migrated): endpoint={}, model={}", 
+                com.jaguarliu.ai.common.util.LogSanitizer.sanitizeEndpoint(endpoint), model);
     }
 
     /**
