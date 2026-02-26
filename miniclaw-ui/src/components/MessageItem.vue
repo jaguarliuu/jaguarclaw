@@ -169,7 +169,7 @@ const displayContexts = computed(() => {
 }
 
 .msg-avatar.assistant {
-  background: var(--color-black);
+  background: var(--color-primary);
   color: white;
 }
 

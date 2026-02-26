@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { useRoute, useRouter } from 'vue-router'
 import { computed } from 'vue'
-import ModeSwitcher from '@/components/layout/ModeSwitcher.vue'
+import { useTheme } from '@/composables/useTheme'
 
 const route = useRoute()
 const router = useRouter()
+const { currentTheme, themes, setTheme } = useTheme()
 
 const groups = [
   {
@@ -57,7 +58,6 @@ function navigateTo(sectionId: string) {
       </button>
       <div class="sidebar-logo">
         <span class="logo-text">MiniClaw</span>
-        <ModeSwitcher />
       </div>
     </div>
 
@@ -66,8 +66,7 @@ function navigateTo(sectionId: string) {
       <div v-for="group in groups" :key="group.label" class="nav-group">
         <div class="group-label">{{ group.label }}</div>
         <ul class="nav-list">
-          <li v-for="item in group.items" :key="item.id">
-            <button
+          <li v-for="item in group.items" :key="item.id">            <button
               class="nav-item"
               :class="{ active: currentSection === item.id }"
               @click="navigateTo(item.id)"
@@ -141,6 +140,22 @@ function navigateTo(sectionId: string) {
         </ul>
       </div>
     </div>
+
+    <!-- Theme picker -->
+    <div class="theme-picker">
+      <div class="theme-picker-label">Theme</div>
+      <div class="theme-swatches">
+        <button
+          v-for="theme in themes"
+          :key="theme.id"
+          class="swatch"
+          :class="{ active: currentTheme === theme.id }"
+          :style="{ '--swatch-color': theme.color }"
+          :title="theme.name"
+          @click="setTheme(theme.id)"
+        />
+      </div>
+    </div>
   </nav>
 </template>
 
@@ -148,8 +163,8 @@ function navigateTo(sectionId: string) {
 .settings-sidebar {
   width: 220px;
   height: 100%;
-  border-right: var(--border);
-  background: var(--color-gray-50);
+  border-right: 1px solid var(--sidebar-panel-border);
+  background: var(--settings-sidebar-bg);
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
@@ -158,7 +173,7 @@ function navigateTo(sectionId: string) {
 /* Top area */
 .sidebar-top {
   padding: 16px 12px 12px;
-  border-bottom: var(--border-light);
+  border-bottom: 1px solid var(--sidebar-panel-border);
 }
 
 .back-btn {
@@ -181,14 +196,13 @@ function navigateTo(sectionId: string) {
 }
 
 .back-btn:hover {
-  background: var(--color-gray-100);
+  background: var(--sidebar-item-hover-bg);
   color: var(--color-black);
 }
 
 .sidebar-logo {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   padding: 0 4px;
 }
 
@@ -246,13 +260,13 @@ function navigateTo(sectionId: string) {
 }
 
 .nav-item:hover {
-  background: var(--color-gray-100);
+  background: var(--sidebar-item-hover-bg);
   color: var(--color-black);
 }
 
 .nav-item.active {
   background: var(--color-white);
-  color: var(--color-black);
+  color: var(--color-primary);
   font-weight: 500;
   box-shadow: var(--shadow-xs);
 }
@@ -264,9 +278,55 @@ function navigateTo(sectionId: string) {
 
 .nav-item.active .nav-icon {
   opacity: 1;
+  color: var(--color-primary);
+}
+
+.nav-item.active .nav-icon {
+  opacity: 1;
 }
 
 .nav-label {
   flex: 1;
+}
+
+/* Theme picker */
+.theme-picker {
+  padding: 12px 16px 16px;
+  border-top: 1px solid var(--sidebar-panel-border);
+}
+
+.theme-picker-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-gray-400);
+  margin-bottom: 10px;
+}
+
+.theme-swatches {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.swatch {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  background: var(--swatch-color);
+  cursor: pointer;
+  padding: 0;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.swatch:hover {
+  transform: scale(1.2);
+}
+
+.swatch.active {
+  box-shadow: 0 0 0 2px var(--color-white), 0 0 0 4px var(--swatch-color);
 }
 </style>

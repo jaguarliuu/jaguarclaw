@@ -9,7 +9,6 @@ import { useMcpServers } from '@/composables/useMcpServers'
 import { useDataSource } from '@/composables/useDataSource'
 import { useModelSelector } from '@/composables/useModelSelector'
 import type { ContextType } from '@/types'
-import ConnectionStatus from '@/components/ConnectionStatus.vue'
 import SessionSidebar from '@/components/SessionSidebar.vue'
 import MessageList from '@/components/MessageList.vue'
 import MessageInput from '@/components/MessageInput.vue'
@@ -220,11 +219,7 @@ async function handleInstallAction() {
       @select="handleSelectSession"
       @create="handleCreateSession"
       @delete="handleDeleteSession"
-    >
-      <template #footer>
-        <ConnectionStatus :state="connectionState" />
-      </template>
-    </SessionSidebar>
+    />
 
     <main class="main-area">
       <MessageList
@@ -296,7 +291,7 @@ async function handleInstallAction() {
   display: flex;
   flex-direction: column;
   min-width: 0;
-  background: var(--color-white);
+  background: var(--content-bg);
   transition: all var(--duration-normal) var(--ease-out);
 }
 

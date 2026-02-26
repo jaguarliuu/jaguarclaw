@@ -186,7 +186,7 @@ watch(
   width: 4px;
   height: 4px;
   border-radius: 50%;
-  background: var(--color-black);
+  background: var(--color-primary);
   animation: stream-bounce 1.4s ease-in-out infinite;
 }
 .streaming-dot:nth-child(2) { animation-delay: 0.16s; }

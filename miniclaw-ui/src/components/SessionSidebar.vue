@@ -63,9 +63,6 @@ async function handleDelete(e: Event, sessionId: string) {
             <circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.5"/>
           </svg>
         </RouterLink>
-        <div class="rail-status">
-          <slot name="footer"></slot>
-        </div>
       </div>
     </div>
 
@@ -120,8 +117,8 @@ async function handleDelete(e: Event, sessionId: string) {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  border-right: var(--border);
-  background: var(--color-white);
+  border-right: 1px solid var(--sidebar-panel-border);
+  background: var(--sidebar-rail-bg);
   padding: 10px 0;
 }
 
@@ -142,7 +139,7 @@ async function handleDelete(e: Event, sessionId: string) {
   font-size: 17px;
   font-weight: 700;
   letter-spacing: -0.03em;
-  color: var(--color-black);
+  color: var(--sidebar-rail-logo-fg);
   margin-bottom: 6px;
 }
 
@@ -155,15 +152,15 @@ async function handleDelete(e: Event, sessionId: string) {
   border: none;
   border-radius: var(--radius-md);
   background: transparent;
-  color: var(--color-gray-500);
+  color: var(--sidebar-rail-fg);
   cursor: pointer;
   transition: all var(--duration-fast) var(--ease-in-out);
   text-decoration: none;
 }
 
 .rail-btn:hover {
-  background: var(--color-gray-100);
-  color: var(--color-black);
+  background: var(--sidebar-rail-hover-bg);
+  color: var(--sidebar-rail-logo-fg);
 }
 
 .rail-bottom {
@@ -174,21 +171,14 @@ async function handleDelete(e: Event, sessionId: string) {
   padding-bottom: 4px;
 }
 
-.rail-status {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-}
-
 /* Session Panel */
 .session-panel {
   width: 220px;
   height: 100%;
   display: flex;
   flex-direction: column;
-  border-right: var(--border);
-  background: var(--color-white);
+  border-right: 1px solid var(--sidebar-panel-border);
+  background: var(--sidebar-panel-bg);
 }
 
 .panel-header {
@@ -201,10 +191,10 @@ async function handleDelete(e: Event, sessionId: string) {
   align-items: center;
   gap: 8px;
   padding: 8px 10px;
-  border: 1px solid var(--color-gray-200);
+  border: 1px solid var(--sidebar-panel-border);
   border-radius: var(--radius-md);
-  background: var(--color-white);
-  color: var(--color-gray-600);
+  background: transparent;
+  color: var(--color-primary);
   font-family: var(--font-ui);
   font-size: 13px;
   font-weight: 500;
@@ -213,9 +203,8 @@ async function handleDelete(e: Event, sessionId: string) {
 }
 
 .new-session-btn:hover {
-  background: var(--color-gray-50);
-  border-color: var(--color-gray-300);
-  color: var(--color-black);
+  background: var(--sidebar-item-hover-bg);
+  border-color: var(--color-primary);
 }
 
 .session-list {
@@ -248,11 +237,11 @@ async function handleDelete(e: Event, sessionId: string) {
 }
 
 .session-item:hover {
-  background: var(--color-gray-50);
+  background: var(--sidebar-item-hover-bg);
 }
 
 .session-item.active {
-  background: var(--color-black);
+  background: var(--color-primary);
   color: var(--color-white);
   box-shadow: var(--shadow-sm);
 }
@@ -306,7 +295,7 @@ async function handleDelete(e: Event, sessionId: string) {
 }
 
 .delete-btn:hover {
-  background: var(--color-gray-100);
+  background: rgba(0, 0, 0, 0.08);
   color: var(--color-error);
 }
 

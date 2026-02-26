@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
-import { useWebSocket } from '@/composables/useWebSocket'
 import SettingsSidebar from '@/components/settings/SettingsSidebar.vue'
 import LlmSection from '@/components/settings/LlmSection.vue'
 import ToolsConfigSection from '@/components/settings/ToolsConfigSection.vue'
@@ -16,10 +15,8 @@ import ChannelsSection from '@/components/settings/ChannelsSection.vue'
 import AuditLogSection from '@/components/settings/AuditLogSection.vue'
 import SchedulesSection from '@/components/settings/SchedulesSection.vue'
 import PlaceholderSection from '@/components/settings/PlaceholderSection.vue'
-import ConnectionStatus from '@/components/ConnectionStatus.vue'
 
 const route = useRoute()
-const { state: connectionState } = useWebSocket()
 
 const currentSection = computed(() => {
   return route.params.section as string || 'llm'
@@ -48,11 +45,6 @@ const currentSection = computed(() => {
         <PlaceholderSection v-else title="Not Found" message="Section not found" />
       </main>
     </div>
-
-    <!-- Footer -->
-    <footer class="settings-footer">
-      <ConnectionStatus :state="connectionState" />
-    </footer>
   </div>
 </template>
 
@@ -61,7 +53,7 @@ const currentSection = computed(() => {
   height: 100%;
   display: flex;
   flex-direction: column;
-  background: var(--color-white);
+  background: var(--content-bg);
 }
 
 .settings-body {
@@ -73,10 +65,5 @@ const currentSection = computed(() => {
 .settings-content {
   flex: 1;
   overflow: hidden;
-}
-
-.settings-footer {
-  padding: 12px 20px;
-  border-top: var(--border-light);
 }
 </style>

@@ -240,8 +240,16 @@ function handleInput(e: Event) {
   target.style.height = 'auto'
   target.style.height = Math.min(target.scrollHeight, 200) + 'px'
 
-  // Slash command detection
   const val = target.value
+
+  // # shortcut: open context type menu
+  if (val === '#') {
+    input.value = ''
+    showContextMenu.value = true
+    return
+  }
+
+  // Slash command detection
   if (val.startsWith('/')) {
     const query = val.substring(1).split(/\s/)[0] ?? ''
     if (!val.includes(' ')) {
@@ -301,6 +309,8 @@ function handleRemoveDataSource() {
 
 const isHovered = ref(false)
 const isFocused = ref(false)
+const isDragging = ref(false)
+let dragDepth = 0
 
 function handleFocus() {
   isFocused.value = true
@@ -329,6 +339,38 @@ function handleBlur() {
       isExpanded.value = false
     }
   }, 200)
+}
+
+function handleDragEnter(e: DragEvent) {
+  e.preventDefault()
+  dragDepth++
+  if (e.dataTransfer?.types.includes('Files')) {
+    isDragging.value = true
+  }
+}
+
+function handleDragLeave(e: DragEvent) {
+  e.preventDefault()
+  dragDepth--
+  if (dragDepth === 0) {
+    isDragging.value = false
+  }
+}
+
+function handleDragOver(e: DragEvent) {
+  e.preventDefault()
+  if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy'
+}
+
+function handleDrop(e: DragEvent) {
+  e.preventDefault()
+  isDragging.value = false
+  dragDepth = 0
+  const files = e.dataTransfer?.files
+  if (!files || files.length === 0) return
+  for (const file of Array.from(files)) {
+    emit('attach-file', file)
+  }
 }
 
 onMounted(() => {
@@ -400,10 +442,23 @@ onMounted(() => {
 
       <div
         class="input-wrap"
-        :class="{ expanded: isExpanded || input.length > 0 || (attachedContexts && attachedContexts.length > 0) || selectedDataSource }"
+        :class="{ expanded: isExpanded || input.length > 0 || (attachedContexts && attachedContexts.length > 0) || selectedDataSource, dragging: isDragging }"
         @mouseenter="handleMouseEnter"
         @mouseleave="handleMouseLeave"
+        @dragenter="handleDragEnter"
+        @dragleave="handleDragLeave"
+        @dragover="handleDragOver"
+        @drop="handleDrop"
       >
+        <!-- Drag & drop overlay -->
+        <Transition name="drag-fade">
+          <div v-if="isDragging" class="drag-overlay">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
+            </svg>
+            <span>松开以添加文件</span>
+          </div>
+        </Transition>
         <!-- Hidden file input -->
         <input
           ref="fileInputRef"
@@ -460,7 +515,7 @@ onMounted(() => {
                 :class="{ active: showContextMenu }"
                 :disabled="disabled"
                 @click="handleAttachClick"
-                title="添加上下文"
+                title="添加上下文 (#)"
               >
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
                   <path d="M8 3V13M3 8H13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
@@ -552,6 +607,8 @@ onMounted(() => {
         <span>Enter 发送</span>
         <span class="separator">·</span>
         <span>Shift+Enter 换行</span>
+        <span class="separator">·</span>
+        <span># 插入文件</span>
       </template>
     </div>
   </div>
@@ -559,9 +616,9 @@ onMounted(() => {
 
 <style scoped>
 .input-area {
-  padding: 10px 48px 14px;
-  border-top: var(--border);
-  background: var(--color-white);
+  padding: 10px 48px 18px;
+  border-top: 1px solid var(--sidebar-panel-border);
+  background: var(--content-bg);
 }
 
 .input-container {
@@ -575,28 +632,28 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: 0;
-  border: 1.5px solid var(--color-gray-200);
-  border-radius: 16px;
-  background: var(--color-white);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  border: 1.5px solid var(--sidebar-panel-border);
+  border-radius: 14px;
+  background: var(--sidebar-panel-bg);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 4px 12px rgba(0, 0, 0, 0.04);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   overflow: hidden;
 }
 
 .input-wrap:hover {
   border-color: var(--color-gray-300);
   box-shadow:
-    0 1px 2px rgba(0, 0, 0, 0.04),
-    0 4px 12px rgba(0, 0, 0, 0.04);
+    0 2px 6px rgba(0, 0, 0, 0.06),
+    0 6px 16px rgba(0, 0, 0, 0.05);
 }
 
 .input-wrap.expanded,
 .input-wrap:focus-within {
-  border-color: var(--color-gray-400);
+  border-color: var(--color-primary);
   box-shadow:
-    0 1px 2px rgba(0, 0, 0, 0.04),
-    0 8px 24px rgba(0, 0, 0, 0.06),
-    0 0 0 3px rgba(0, 0, 0, 0.03);
+    0 2px 6px rgba(0, 0, 0, 0.06),
+    0 8px 20px rgba(0, 0, 0, 0.06),
+    0 0 0 3px rgba(var(--color-primary-rgb), 0.08);
 }
 
 /* Main input area */
@@ -604,15 +661,15 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   flex: 1;
-  padding: 10px 14px;
+  padding: 12px 14px 4px;
   gap: 6px;
-  min-height: 40px;
-  transition: min-height 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  min-height: 42px;
+  transition: min-height 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .input-wrap.expanded .input-main,
 .input-wrap:focus-within .input-main {
-  min-height: 64px;
+  min-height: 68px;
 }
 
 /* Chips container */
@@ -727,60 +784,58 @@ textarea:disabled {
   cursor: not-allowed;
 }
 
-/* Bottom toolbar */
+/* Bottom toolbar — seamless, no separator */
 .input-toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 10px;
-  border-top: 1px solid var(--color-gray-100);
-  background: var(--color-gray-50);
+  padding: 2px 6px 8px;
+  background: transparent;
   margin: 0;
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .toolbar-left {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 2px;
 }
 
 .toolbar-right {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 4px;
 }
 
 .toolbar-btn {
   display: flex;
   align-items: center;
-  gap: 5px;
-  height: 30px;
-  padding: 0 8px;
+  gap: 4px;
+  height: 28px;
+  padding: 0 7px;
   border: none;
-  border-radius: 7px;
+  border-radius: 6px;
   background: transparent;
-  color: var(--color-gray-500);
+  color: var(--color-gray-400);
   font-family: var(--font-ui);
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all 0.12s ease;
 }
 
 .toolbar-btn:hover:not(:disabled) {
-  background: var(--color-gray-100);
-  color: var(--color-gray-800);
+  background: rgba(0, 0, 0, 0.06);
+  color: var(--color-gray-700);
 }
 
 .toolbar-btn.active {
-  background: var(--color-gray-900);
-  color: var(--color-white);
+  background: rgba(var(--color-primary-rgb), 0.12);
+  color: var(--color-primary);
 }
 
 .toolbar-btn.highlight {
-  background: var(--color-gray-900);
-  color: var(--color-white);
+  background: rgba(var(--color-primary-rgb), 0.12);
+  color: var(--color-primary);
 }
 
 .toolbar-btn:disabled {
@@ -793,7 +848,11 @@ textarea:disabled {
 }
 
 .model-btn {
-  padding: 0 10px;
+  padding: 0 8px;
+  gap: 4px;
+  font-size: 11px;
+  font-family: var(--font-mono);
+  letter-spacing: -0.01em;
 }
 
 .toolbar-label {
@@ -802,28 +861,28 @@ textarea:disabled {
 
 /* Action buttons (Send/Cancel) */
 .action-btn {
-  width: 36px;
-  height: 36px;
+  width: 30px;
+  height: 30px;
   display: flex;
   align-items: center;
   justify-content: center;
   border: none;
-  border-radius: 10px;
+  border-radius: 8px;
   cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
   flex-shrink: 0;
 }
 
 .send-btn {
-  background: linear-gradient(135deg, var(--color-black) 0%, var(--color-gray-700) 100%);
+  background: var(--color-primary);
   color: var(--color-white);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 2px 8px rgba(var(--color-primary-rgb), 0.25);
 }
 
 .send-btn:hover:not(:disabled) {
-  background: linear-gradient(135deg, var(--color-gray-700) 0%, var(--color-gray-600) 100%);
+  background: var(--color-primary-hover);
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 4px 12px rgba(var(--color-primary-rgb), 0.35);
 }
 
 .send-btn:active:not(:disabled) {
@@ -840,15 +899,13 @@ textarea:disabled {
 }
 
 .cancel-btn {
-  background: var(--color-white);
+  background: rgba(0, 0, 0, 0.06);
   color: var(--color-gray-600);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 .cancel-btn:hover {
-  background: var(--color-gray-100);
+  background: rgba(0, 0, 0, 0.1);
   color: var(--color-gray-700);
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
   transform: translateY(-1px);
 }
 
@@ -943,5 +1000,40 @@ textarea:disabled {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* Drag & drop overlay */
+.drag-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(var(--color-primary-rgb), 0.07);
+  border: 2px dashed var(--color-primary);
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  z-index: 10;
+  pointer-events: none;
+  color: var(--color-primary);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.input-wrap.dragging {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(var(--color-primary-rgb), 0.12);
+}
+
+.drag-fade-enter-active,
+.drag-fade-leave-active {
+  transition: opacity 0.15s ease;
+}
+
+.drag-fade-enter-from,
+.drag-fade-leave-to {
+  opacity: 0;
 }
 </style>
