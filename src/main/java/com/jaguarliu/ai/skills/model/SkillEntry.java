@@ -13,6 +13,11 @@ import lombok.NoArgsConstructor;
  * 1. Discovery 阶段：解析 SKILL.md → 得到 SkillMetadata
  * 2. Gating 阶段：检查 requires → 设置 available / unavailableReason
  * 3. Indexing 阶段：计算 tokenCost → 用于 budget 控制
+ *
+ * 渐进式加载支持：
+ * - L0: name + description + tags (~20-50 tokens)
+ * - L1: L0 + usageSummary + example (~100-300 tokens)
+ * - L2: 完整 body（激活时加载）
  */
 @Data
 @Builder
@@ -27,41 +32,69 @@ public class SkillEntry {
 
     /**
      * 是否可用（gating 结果）
-     * true = 满足所有 requires 条件
      */
     private boolean available;
 
     /**
-     * 不可用原因（gating 失败时记录）
-     * 示例："Missing env: OPENAI_API_KEY; Missing binary: git"
+     * 不可用原因
      */
     private String unavailableReason;
 
     /**
-     * 文件最后修改时间（用于热更新检测）
+     * 文件最后修改时间
      */
     private long lastModified;
 
     /**
      * 预估 token 成本（索引部分）
-     * 用于 budget 控制，避免索引占用过多 context window
      */
     private int tokenCost;
 
+    // ==================== 渐进式加载字段 ====================
+
     /**
-     * 计算索引 token 成本
-     * 公式：base_overhead（XML 标签） + name_tokens + description_tokens
+     * 用法摘要（L1 字段）
+     */
+    private String usageSummary;
+
+    /**
+     * 使用示例（L1 字段）
+     */
+    private String example;
+
+    // ==================== Token 估算 ====================
+
+    /**
+     * 估算 L0 tokens（名称 + 描述）
+     */
+    public int estimateL0Tokens() {
+        int tokens = 20;
+        if (metadata != null) {
+            tokens += estimateTokens(metadata.getName());
+            tokens += estimateTokens(metadata.getDescription());
+        }
+        return Math.max(tokens, 30);
+    }
+
+    /**
+     * 估算 L1 tokens（L0 + 用法摘要 + 示例）
+     */
+    public int estimateL1Tokens() {
+        int tokens = estimateL0Tokens();
+        if (usageSummary != null) tokens += estimateTokens(usageSummary);
+        if (example != null) tokens += estimateTokens(example);
+        return Math.max(tokens, 100);
+    }
+
+    /**
+     * 计算索引 token 成本（兼容旧方法）
      */
     public static int calculateTokenCost(SkillMetadata metadata) {
-        int baseCost = 20;
-        int nameCost = estimateTokens(metadata.getName());
-        int descCost = estimateTokens(metadata.getDescription());
-        return baseCost + nameCost + descCost;
+        return new SkillEntry(metadata, true, null, 0, 0, null, null).estimateL0Tokens();
     }
 
     /**
      * 简单 token 估算
-     * 中文字符约 2 token/字，英文约 0.3 token/字符
      */
     private static int estimateTokens(String text) {
         if (text == null || text.isEmpty()) return 0;
