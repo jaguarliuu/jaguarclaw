@@ -229,31 +229,42 @@ public class AgentRuntime {
                     log.info("Detected skill auto-selection: skill={}, runId={}",
                             selection.getSkillName(), context.getRunId());
 
-                    // 尝试激活 skill 并重新调用
-                    Optional<ContextBuilder.SkillAwareRequest> skillRequest =
-                            contextBuilder.handleAutoSkillSelection(
-                                    result.content(),
-                                    context.getOriginalInput(),
-                                    extractHistory(messages),
-                                    true);
+                    // 检查 Skill 激活限制
+                    String skillName = selection.getSkillName();
+                    if (context.isSkillActivationLimitReached(skillName)) {
+                        log.warn("Skill activation limit reached for: {}, runId={}", skillName, context.getRunId());
+                        // 不激活，继续正常流程
+                    } else {
+                        // 尝试激活 skill 并重新调用
+                        Optional<ContextBuilder.SkillAwareRequest> skillRequest =
+                                contextBuilder.handleAutoSkillSelection(
+                                        result.content(),
+                                        context.getOriginalInput(),
+                                        extractHistory(messages),
+                                        true);
 
-                    if (skillRequest.isPresent()) {
-                        // 发布 skill.activated 事件
-                        eventBus.publish(AgentEvent.skillActivated(
-                                context.getConnectionId(),
-                                context.getRunId(),
-                                selection.getSkillName(),
-                                "auto"));
+                        if (skillRequest.isPresent()) {
+                            // 记录激活计数
+                            int activationCount = context.incrementSkillActivation(skillName);
+                            log.info("Skill {} activated (count: {}), runId={}", skillName, activationCount, context.getRunId());
 
-                        // 用新的请求重新开始循环
-                        messages.clear();
-                        messages.addAll(skillRequest.get().request().getMessages());
-                        context.setActiveSkill(skillRequest.get());
-                        context.setSkillBasePath(skillRequest.get().skillBasePath());
+                            // 发布 skill.activated 事件
+                            eventBus.publish(AgentEvent.skillActivated(
+                                    context.getConnectionId(),
+                                    context.getRunId(),
+                                    skillName,
+                                    "auto"));
 
-                        log.info("Re-invoking with skill: {}, runId={}",
-                                selection.getSkillName(), context.getRunId());
-                        continue;
+                            // 用新的请求重新开始循环
+                            messages.clear();
+                            messages.addAll(skillRequest.get().request().getMessages());
+                            context.setActiveSkill(skillRequest.get());
+                            context.setSkillBasePath(skillRequest.get().skillBasePath());
+
+                            log.info("Re-invoking with skill: {}, runId={}",
+                                    skillName, context.getRunId());
+                            continue;
+                        }
                     }
                 }
 
@@ -688,13 +699,34 @@ public class AgentRuntime {
      */
     private String waitForPendingSubagents(List<String> subRunIds, RunContext context) {
         long remainingSeconds = context.getConfig().getRunTimeoutSeconds() - context.getElapsedSeconds();
-        long waitTimeoutSeconds = Math.max(30, Math.min(remainingSeconds, 600));
+        // 每个子代理最多等待 5 分钟，或剩余时间（取较小值）
+        long perSubagentTimeoutSeconds = Math.max(30, Math.min(remainingSeconds, 300));
 
         List<SubagentCompletionTracker.SubagentResult> results = new ArrayList<>();
+        long totalWaitStart = System.currentTimeMillis();
 
-        for (String subRunId : subRunIds) {
+        for (int i = 0; i < subRunIds.size(); i++) {
+            String subRunId = subRunIds.get(i);
+            
             if (context.isAborted()) {
                 log.info("Subagent barrier aborted by cancellation: runId={}", context.getRunId());
+                // 标记剩余的为取消
+                for (int j = i; j < subRunIds.size(); j++) {
+                    results.add(new SubagentCompletionTracker.SubagentResult(
+                            subRunIds.get(j), "unknown", "cancelled", null, "Parent run cancelled", 0));
+                }
+                break;
+            }
+
+            // 检查总等待时间
+            long elapsedTotal = (System.currentTimeMillis() - totalWaitStart) / 1000;
+            if (elapsedTotal > Math.min(remainingSeconds, 600)) {
+                log.warn("Subagent barrier total timeout reached: {}s, runId={}", elapsedTotal, context.getRunId());
+                // 标记剩余的为超时
+                for (int j = i; j < subRunIds.size(); j++) {
+                    results.add(new SubagentCompletionTracker.SubagentResult(
+                            subRunIds.get(j), "unknown", "timeout", null, "Barrier total timeout", 0));
+                }
                 break;
             }
 
@@ -710,7 +742,7 @@ public class AgentRuntime {
 
             try {
                 SubagentCompletionTracker.SubagentResult result =
-                        future.get(waitTimeoutSeconds, TimeUnit.SECONDS);
+                        future.get(perSubagentTimeoutSeconds, TimeUnit.SECONDS);
                 results.add(result);
                 log.info("Subagent completed: subRunId={}, status={}", subRunId, result.status());
             } catch (TimeoutException e) {
