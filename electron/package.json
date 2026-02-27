@@ -6,6 +6,7 @@
   "private": true,
   "scripts": {
     "start": "electron .",
+    "prestart": "node -e \"const fs=require('fs'); if(!fs.existsSync('resources')) fs.mkdirSync('resources'); fs.copyFileSync('assets/icon.png', 'resources/icon.png');\"",
     "dist": "electron-builder",
     "download-jre": "node scripts/download-jre.js",
     "build": "node scripts/build.js",
@@ -27,6 +28,10 @@
     },
     "extraResources": [
       {
+        "from": "assets/icon.png",
+        "to": "icon.png"
+      },
+      {
         "from": "resources/jre",
         "to": "jre"
       },
@@ -45,11 +50,11 @@
     ],
     "win": {
       "target": "nsis",
-      "icon": "resources/icon.png"
+      "icon": "assets/icon.ico"
     },
     "mac": {
       "target": "dmg",
-      "icon": "resources/icon.png",
+      "icon": "assets/icon.png",
       "identity": null
     },
     "nsis": {
