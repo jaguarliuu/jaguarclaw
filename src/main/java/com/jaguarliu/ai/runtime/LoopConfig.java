@@ -1,6 +1,9 @@
 package com.jaguarliu.ai.runtime;
 
+import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
 
@@ -8,6 +11,9 @@ import org.springframework.stereotype.Component;
  * ReAct 循环配置
  */
 @Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
 @Component
 @ConfigurationProperties(prefix = "agent.loop")
 public class LoopConfig {

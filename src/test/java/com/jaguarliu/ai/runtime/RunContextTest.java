@@ -18,7 +18,7 @@ class RunContextTest {
                 .runId("test-run-123")
                 .sessionId("test-session")
                 .startTime(java.time.Instant.now())
-                .loopConfig(LoopConfig.builder().build())
+                .config(LoopConfig.builder().build())
                 .cancellationManager(new CancellationManager())
                 .build();
     }

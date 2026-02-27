@@ -9,6 +9,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import org.springframework.context.ApplicationContext;
+import static org.mockito.Mockito.mock;
+
 /**
  * ToolRegistry 渐进式加载测试
  */
@@ -18,7 +21,8 @@ class ToolRegistryProgressiveTest {
 
     @BeforeEach
     void setUp() {
-        registry = new ToolRegistry();
+        ApplicationContext applicationContext = mock(ApplicationContext.class);
+        registry = new ToolRegistry(applicationContext);
 
         // 注册测试工具
         registry.register(new MockTool("read_file", "Read file contents", "low"));
