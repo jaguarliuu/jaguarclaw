@@ -317,6 +317,9 @@ function createMainWindow(port) {
     },
   });
 
+  // Hide the default menu bar
+  mainWindow.setMenuBarVisibility(false);
+
   mainWindow.loadURL(`http://localhost:${port}`);
 
   mainWindow.on('closed', () => {
