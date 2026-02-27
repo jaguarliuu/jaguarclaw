@@ -25,6 +25,8 @@ export default {
     empty: '暂无对话',
     deleteTitle: '删除会话',
     deleteMessage: '将永久删除该会话及所有消息，此操作不可撤销。',
+    collapse: '收起会话列表',
+    expand: '展开会话列表',
   },
   message: {
     you: '你',

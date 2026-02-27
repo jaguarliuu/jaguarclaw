@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { Session } from '@/types'
+import { ref, watch } from 'vue'
 import { useConfirm } from '@/composables/useConfirm'
 import { useI18n } from '@/i18n'
 
@@ -16,6 +17,9 @@ const emit = defineEmits<{
   create: []
   delete: [id: string]
 }>()
+
+const collapsed = ref(localStorage.getItem('sidebar-collapsed') === 'true')
+watch(collapsed, (v) => localStorage.setItem('sidebar-collapsed', String(v)))
 
 function formatDate(dateStr: string): string {
   const date = new Date(dateStr)
@@ -59,6 +63,16 @@ async function handleDelete(e: Event, sessionId: string) {
         <div class="rail-logo">M</div>
       </div>
       <div class="rail-bottom">
+        <button
+          v-if="collapsed"
+          class="rail-btn"
+          @click="collapsed = false"
+          :title="t('session.expand')"
+        >
+          <svg width="15" height="15" viewBox="0 0 15 15" fill="none">
+            <path d="M6 3L10 7.5L6 12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
         <RouterLink to="/settings/llm" class="rail-btn" :title="t('common.settings')">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
             <path d="M12.22 2h-.44a2 2 0 00-2 2v.18a2 2 0 01-1 1.73l-.43.25a2 2 0 01-2 0l-.15-.08a2 2 0 00-2.73.73l-.22.38a2 2 0 00.73 2.73l.15.1a2 2 0 011 1.72v.51a2 2 0 01-1 1.74l-.15.09a2 2 0 00-.73 2.73l.22.38a2 2 0 002.73.73l.15-.08a2 2 0 012 0l.43.25a2 2 0 011 1.73V20a2 2 0 002 2h.44a2 2 0 002-2v-.18a2 2 0 011-1.73l.43-.25a2 2 0 012 0l.15.08a2 2 0 002.73-.73l.22-.39a2 2 0 00-.73-2.73l-.15-.08a2 2 0 01-1-1.74v-.5a2 2 0 011-1.74l.15-.09a2 2 0 00.73-2.73l-.22-.38a2 2 0 00-2.73-.73l-.15.08a2 2 0 01-2 0l-.43-.25a2 2 0 01-1-1.73V4a2 2 0 00-2-2z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
@@ -68,8 +82,8 @@ async function handleDelete(e: Event, sessionId: string) {
       </div>
     </div>
 
-    <!-- Session Panel (220px) -->
-    <div class="session-panel">
+    <!-- Session Panel (220px, collapsible) -->
+    <div class="session-panel" :class="{ collapsed }">
       <div class="panel-header">
         <button class="new-session-btn" @click="emit('create')" :title="t('session.new')">
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
@@ -101,6 +115,14 @@ async function handleDelete(e: Event, sessionId: string) {
           </button>
         </div>
       </nav>
+
+      <div class="panel-footer">
+        <button class="collapse-toggle" @click="collapsed = true" :title="t('session.collapse')">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+            <path d="M9 2L5 7L9 12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+      </div>
     </div>
   </aside>
 </template>
@@ -181,6 +203,15 @@ async function handleDelete(e: Event, sessionId: string) {
   flex-direction: column;
   border-right: 1px solid var(--sidebar-panel-border);
   background: var(--sidebar-panel-bg);
+  overflow: hidden;
+  transition: width 0.25s var(--ease-in-out), opacity 0.2s var(--ease-in-out);
+}
+
+.session-panel.collapsed {
+  width: 0;
+  opacity: 0;
+  border-right: none;
+  pointer-events: none;
 }
 
 .panel-header {
@@ -308,5 +339,30 @@ async function handleDelete(e: Event, sessionId: string) {
 .session-item.active .delete-btn:hover {
   background: rgba(255, 255, 255, 0.1);
   color: #ffaaaa;
+}
+
+.panel-footer {
+  padding: 8px;
+  border-top: 1px solid var(--sidebar-panel-border);
+  flex-shrink: 0;
+}
+
+.collapse-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding: 7px 0;
+  border: none;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-gray-400);
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-in-out), color var(--duration-fast) var(--ease-in-out);
+}
+
+.collapse-toggle:hover {
+  background: var(--sidebar-item-hover-bg);
+  color: var(--color-gray-600);
 }
 </style>

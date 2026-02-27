@@ -25,6 +25,8 @@ export default {
     empty: 'No sessions yet',
     deleteTitle: 'Delete Session',
     deleteMessage: 'This will permanently delete the session and all its messages. This action cannot be undone.',
+    collapse: 'Collapse sessions',
+    expand: 'Expand sessions',
   },
   message: {
     you: 'You',

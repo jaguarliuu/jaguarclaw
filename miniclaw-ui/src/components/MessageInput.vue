@@ -618,13 +618,13 @@ onMounted(() => {
 
 <style scoped>
 .input-area {
-  padding: 10px 48px 18px;
+  padding: 10px 32px 18px;
   border-top: 1px solid var(--sidebar-panel-border);
   background: var(--content-bg);
 }
 
 .input-container {
-  max-width: 720px;
+  max-width: 900px;
   margin: 0 auto;
   position: relative;
 }
@@ -920,7 +920,7 @@ textarea:disabled {
 }
 
 .input-hint {
-  max-width: 720px;
+  max-width: 900px;
   margin: 5px auto 0;
   font-family: var(--font-mono);
   font-size: 11px;
