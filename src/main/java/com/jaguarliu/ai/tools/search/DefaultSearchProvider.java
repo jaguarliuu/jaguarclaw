@@ -34,7 +34,13 @@ public class DefaultSearchProvider implements SearchProvider {
 
     public DefaultSearchProvider() {
         this.webClient = WebClient.builder()
-                .defaultHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+                .defaultHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+                .defaultHeader("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8")
+                .defaultHeader("Accept-Language", "en-US,en;q=0.5")
+                .defaultHeader("Accept-Encoding", "gzip, deflate, br")
+                .defaultHeader("DNT", "1")
+                .defaultHeader("Connection", "keep-alive")
+                .defaultHeader("Upgrade-Insecure-Requests", "1")
                 .codecs(configurer -> configurer.defaultCodecs().maxInMemorySize(2 * 1024 * 1024))
                 .build();
     }
@@ -58,11 +64,17 @@ public class DefaultSearchProvider implements SearchProvider {
                 .uri(url)
                 .retrieve()
                 .bodyToMono(String.class)
-                .timeout(Duration.ofSeconds(15))
+                .timeout(Duration.ofSeconds(20))
                 .map(html -> parseResults(html, maxResults))
                 .onErrorResume(e -> {
                     log.error("DuckDuckGo search failed for '{}': {}", query, e.getMessage());
-                    return Mono.just(List.of());
+                    // 返回带有错误提示的结果，而不是空列表
+                    return Mono.just(List.of(SearchResult.builder()
+                            .title("Search Failed")
+                            .url("")
+                            .snippet("DuckDuckGo search failed: " + e.getMessage() + 
+                                    ". Consider using Brave Search (set search-provider=brave in config).")
+                            .build()));
                 });
     }
 
