@@ -24,8 +24,8 @@ defineProps<{
         <span class="status-text">{{ skill.available ? t('sections.skills.detail.available') : t('sections.skills.detail.unavailable') }}</span>
       </div>
       <div class="detail-badges">
-        <Badge variant="muted">{{ t('sections.skills.detail.tokensBadge', { n: skill.tokenCost }) }}</Badge>
-        <Badge v-if="skill.priority > 0" variant="outline">{{ t('sections.skills.detail.priorityBadge', { n: skill.priority }) }}</Badge>
+        <Badge variant="muted">{{ t('sections.skills.detail.tokensBadge', { n: String(skill.tokenCost) }) }}</Badge>
+        <Badge v-if="skill.priority > 0" variant="outline">{{ t('sections.skills.detail.priorityBadge', { n: String(skill.priority) }) }}</Badge>
       </div>
     </div>
 

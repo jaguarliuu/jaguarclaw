@@ -55,7 +55,7 @@ onMounted(() => {
   <div class="skills-section">
     <header class="section-header">
       <h2 class="section-title">{{ t('settings.nav.skills') }}</h2>
-      <span class="section-count">{{ t('sections.skills.totalCount', { n: skills.length }) }}</span>
+      <span class="section-count">{{ t('sections.skills.totalCount', { n: String(skills.length) }) }}</span>
       <button class="upload-btn" @click="fileInput?.click()" :disabled="uploading">
         {{ uploading ? t('sections.skills.uploadingBtn') : t('sections.skills.uploadBtn') }}
       </button>
@@ -74,7 +74,7 @@ onMounted(() => {
     <div v-else class="skills-list">
       <!-- Available -->
       <div v-if="availableSkills.length" class="skill-group">
-        <h3 class="group-title">{{ t('sections.skills.availableGroup', { n: availableSkills.length }) }}</h3>
+        <h3 class="group-title">{{ t('sections.skills.availableGroup', { n: String(availableSkills.length) }) }}</h3>
         <div class="group-list">
           <SkillRow
             v-for="skill in availableSkills"
@@ -88,7 +88,7 @@ onMounted(() => {
 
       <!-- Unavailable -->
       <div v-if="unavailableSkills.length" class="skill-group">
-        <h3 class="group-title">{{ t('sections.skills.unavailableGroup', { n: unavailableSkills.length }) }}</h3>
+        <h3 class="group-title">{{ t('sections.skills.unavailableGroup', { n: String(unavailableSkills.length) }) }}</h3>
         <div class="group-list">
           <SkillRow
             v-for="skill in unavailableSkills"

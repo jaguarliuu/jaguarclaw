@@ -82,13 +82,13 @@ function getCronDescription(cron: string): string {
 
   // Simple descriptions for common patterns
   if (min === '0' && hour === '*' && dom === '*' && mon === '*' && dow === '*') return t('sections.schedules.cronDescriptions.everyHour')
-  if (min === '0' && hour !== '*' && dom === '*' && mon === '*' && dow === '*') return t('sections.schedules.cronDescriptions.daily', { h: hour })
+  if (min === '0' && hour !== '*' && dom === '*' && mon === '*' && dow === '*') return t('sections.schedules.cronDescriptions.daily', { h: String(hour) })
   if (min !== '*' && hour !== '*' && dom === '*' && mon === '*' && dow !== '*') {
     const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
     const dayName = days[parseInt(dow!)] || `day ${dow}`
-    return t('sections.schedules.cronDescriptions.weekly', { day: dayName, h: hour })
+    return t('sections.schedules.cronDescriptions.weekly', { day: dayName, h: String(hour) })
   }
-  if (min === '0' && hour !== '*' && dom !== '*' && mon === '*' && dow === '*') return t('sections.schedules.cronDescriptions.monthly', { date: dom, h: hour })
+  if (min === '0' && hour !== '*' && dom !== '*' && mon === '*' && dow === '*') return t('sections.schedules.cronDescriptions.monthly', { date: String(dom), h: String(hour) })
   return `${min} ${hour} ${dom} ${mon} ${dow}`
 }
 

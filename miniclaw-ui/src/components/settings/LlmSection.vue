@@ -225,7 +225,7 @@ onMounted(async () => {
     <div v-if="multiConfig" class="status-bar" :class="multiConfig.configured ? 'status-configured' : 'status-unconfigured'">
       <span class="status-dot">&#9679;</span>
       <span v-if="multiConfig.configured">
-        {{ t('sections.llm.configuredCount', { n: multiConfig.providers.length }) }}
+        {{ t('sections.llm.configuredCount', { n: String(multiConfig.providers.length) }) }}
       </span>
       <span v-else>{{ t('sections.llm.notConfigured') }}</span>
     </div>
@@ -251,7 +251,7 @@ onMounted(async () => {
               <span class="provider-endpoint">{{ truncateEndpoint(provider.endpoint) }}</span>
             </div>
             <div class="provider-meta">
-              <span class="model-count">{{ t('sections.llm.modelCount', { n: provider.models?.length ?? 0 }) }}</span>
+              <span class="model-count">{{ t('sections.llm.modelCount', { n: String(provider.models?.length ?? 0) }) }}</span>
               <button class="icon-btn" :title="t('sections.llm.editTooltip')" @click="startEdit(provider)">
                 <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M10 2L12 4L5 11H3V9L10 2Z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg>
               </button>

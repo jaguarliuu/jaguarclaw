@@ -229,7 +229,7 @@ onMounted(() => {
       <div class="pagination">
         <button class="page-btn" :disabled="!hasPrev" @click="prevPage">{{ t('sections.audit.prevBtn') }}</button>
         <span class="page-info">
-          {{ t('sections.audit.pageInfo', { page: page + 1, total: totalPages, count: totalElements }) }}
+          {{ t('sections.audit.pageInfo', { page: String(page + 1), total: String(totalPages), count: String(totalElements) }) }}
         </span>
         <button class="page-btn" :disabled="!hasNext" @click="nextPage">{{ t('sections.audit.nextBtn') }}</button>
       </div>

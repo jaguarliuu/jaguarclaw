@@ -113,7 +113,7 @@ function getTransportBadgeClass(type: string) {
               </span>
             </td>
             <td class="tools-count">
-              {{ t('sections.mcp.toolCount', { n: server.toolCount || 0 }) }}
+              {{ t('sections.mcp.toolCount', { n: String(server.toolCount || 0) }) }}
             </td>
             <td>
               <div class="actions">
