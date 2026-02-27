@@ -162,13 +162,16 @@ public class AgentRuntime {
                         context.incrementSkillActivation(skillName);
                         skillActivator.publishActivationEvent(context, activation.get());
 
+                        // Extract history BEFORE modifying messages
+                        List<LlmRequest.Message> historyForContext = extractHistory(messages);
+
                         messages.clear();
                         messages.addAll(skillRequest.get().messages());
                         
                         // 设置 active skill（使用 ContextBuilder 创建）
                         Optional<ContextBuilder.SkillAwareRequest> ctxRequest =
                                 contextBuilder.handleSkillActivationByName(skillName,
-                                        context.getOriginalInput(), extractHistory(messages), true);
+                                        context.getOriginalInput(), historyForContext, true);
                         
                         if (ctxRequest.isPresent()) {
                             context.setActiveSkill(ctxRequest.get());
@@ -249,13 +252,16 @@ public class AgentRuntime {
                 if (skillRequest.isPresent()) {
                     skillActivator.publishActivationEvent(context, toolActivation.get());
 
+                    // Extract history BEFORE modifying messages
+                    List<LlmRequest.Message> historyForContext = extractHistory(messages);
+
                     messages.clear();
                     messages.addAll(skillRequest.get().messages());
                     
                     // 设置 active skill（使用 ContextBuilder 创建）
                     Optional<ContextBuilder.SkillAwareRequest> ctxRequest =
                             contextBuilder.handleSkillActivationByName(skillName,
-                                    context.getOriginalInput(), extractHistory(messages), true);
+                                    context.getOriginalInput(), historyForContext, true);
                     
                     if (ctxRequest.isPresent()) {
                         context.setActiveSkill(ctxRequest.get());
@@ -330,17 +336,18 @@ public class AgentRuntime {
                     if (chunk.getDelta() != null) {
                         content.append(chunk.getDelta());
                         eventBus.publish(AgentEvent.assistantDelta(connectionId, runId, chunk.getDelta()));
+                        
+                        // 处理 artifact 提取（在 null check 内）
+                        ArtifactStreamExtractor.ExtractionResult result = artifactExtractor.append(chunk.getDelta());
+                        if (result.pathDetected() != null) {
+                            eventBus.publish(AgentEvent.artifactOpen(connectionId, runId, result.pathDetected()));
+                        }
+                        if (result.contentDelta() != null) {
+                            eventBus.publish(AgentEvent.artifactDelta(connectionId, runId, result.contentDelta()));
+                        }
                     }
                     if (chunk.getToolCalls() != null) {
                         toolCalls.addAll(chunk.getToolCalls());
-                    }
-                    // 处理 artifact 提取
-                    ArtifactStreamExtractor.ExtractionResult result = artifactExtractor.append(chunk.getDelta());
-                    if (result.pathDetected() != null) {
-                        eventBus.publish(AgentEvent.artifactOpen(connectionId, runId, result.pathDetected()));
-                    }
-                    if (result.contentDelta() != null) {
-                        eventBus.publish(AgentEvent.artifactDelta(connectionId, runId, result.contentDelta()));
                     }
                 })
                 .blockLast();
