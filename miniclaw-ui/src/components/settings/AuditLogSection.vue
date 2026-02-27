@@ -110,9 +110,9 @@ onMounted(() => {
         :placeholder="t('sections.audit.filters.nodePlaceholder')"
         @keyup.enter="applyFilters"
       />
-      <Select v-model="filterEventType" :options="eventTypeSelectOptions" @update:modelValue="applyFilters" />
-      <Select v-model="filterSafetyLevel" :options="safetyLevelSelectOptions" @update:modelValue="applyFilters" />
-      <Select v-model="filterResultStatus" :options="resultStatusSelectOptions" @update:modelValue="applyFilters" />
+      <Select v-model="filterEventType" :options="eventTypeSelectOptions" @update:modelValue="applyFilters" style="width: 155px" />
+      <Select v-model="filterSafetyLevel" :options="safetyLevelSelectOptions" @update:modelValue="applyFilters" style="width: 135px" />
+      <Select v-model="filterResultStatus" :options="resultStatusSelectOptions" @update:modelValue="applyFilters" style="width: 130px" />
       <button class="filter-btn" @click="applyFilters">{{ t('sections.audit.searchBtn') }}</button>
       <button class="filter-btn refresh-btn" @click="refresh">{{ t('common.refresh') }}</button>
     </div>
@@ -272,6 +272,12 @@ onMounted(() => {
   gap: 8px;
   margin-bottom: 16px;
   flex-wrap: wrap;
+}
+
+.filter-bar :deep(.select-trigger) {
+  padding: 6px 10px;
+  font-size: 12px;
+  font-family: var(--font-mono);
 }
 
 .filter-input {
