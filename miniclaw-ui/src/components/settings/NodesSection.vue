@@ -1,7 +1,9 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useNodeConsole } from '@/composables/useNodeConsole'
 import { useI18n } from '@/i18n'
+import Select from '@/components/common/Select.vue'
+import type { SelectOption } from '@/components/common/Select.vue'
 import type { ConnectorType, AuthType, SafetyPolicy, NodeInfo } from '@/types'
 
 const { nodes, loading, error, loadNodes, registerNode, removeNode, testNode } = useNodeConsole()
@@ -139,6 +141,18 @@ function getAuthTypeOptions(type: ConnectorType): { value: AuthType; label: stri
   }
 }
 
+const connectorTypeOptions = computed<SelectOption<ConnectorType>[]>(() => [
+  { label: t('sections.nodes.fields.typeOptions.ssh'), value: 'ssh' },
+  { label: t('sections.nodes.fields.typeOptions.k8s'), value: 'k8s' },
+  { label: t('sections.nodes.fields.typeOptions.db'), value: 'db' },
+])
+const authTypeOptions = computed(() => getAuthTypeOptions(formConnectorType.value))
+const safetyPolicyOptions = computed<SelectOption<SafetyPolicy>[]>(() => [
+  { label: t('sections.nodes.fields.safetyOptions.strict'), value: 'strict' },
+  { label: t('sections.nodes.fields.safetyOptions.standard'), value: 'standard' },
+  { label: t('sections.nodes.fields.safetyOptions.relaxed'), value: 'relaxed' },
+])
+
 function getCredentialPlaceholder(): string {
   switch (formAuthType.value) {
     case 'password': return t('sections.nodes.fields.credentialPlaceholders.password')
@@ -193,11 +207,7 @@ onMounted(() => {
 
         <div class="form-group">
           <label class="form-label">{{ t('sections.nodes.fields.typeLabel') }}</label>
-          <select v-model="formConnectorType" class="form-input">
-            <option value="ssh">{{ t('sections.nodes.fields.typeOptions.ssh') }}</option>
-            <option value="k8s">{{ t('sections.nodes.fields.typeOptions.k8s') }}</option>
-            <option value="db">{{ t('sections.nodes.fields.typeOptions.db') }}</option>
-          </select>
+          <Select v-model="formConnectorType" :options="connectorTypeOptions" />
         </div>
 
         <div class="form-group" v-if="formConnectorType !== 'k8s'">
@@ -217,11 +227,7 @@ onMounted(() => {
 
         <div class="form-group">
           <label class="form-label">{{ t('sections.nodes.fields.authTypeLabel') }}</label>
-          <select v-model="formAuthType" class="form-input">
-            <option v-for="opt in getAuthTypeOptions(formConnectorType)" :key="opt.value" :value="opt.value">
-              {{ opt.label }}
-            </option>
-          </select>
+          <Select v-model="formAuthType" :options="authTypeOptions" />
         </div>
 
         <div class="form-group">
@@ -231,11 +237,7 @@ onMounted(() => {
 
         <div class="form-group">
           <label class="form-label">{{ t('sections.nodes.fields.safetyLabel') }}</label>
-          <select v-model="formSafetyPolicy" class="form-input">
-            <option value="strict">{{ t('sections.nodes.fields.safetyOptions.strict') }}</option>
-            <option value="standard">{{ t('sections.nodes.fields.safetyOptions.standard') }}</option>
-            <option value="relaxed">{{ t('sections.nodes.fields.safetyOptions.relaxed') }}</option>
-          </select>
+          <Select v-model="formSafetyPolicy" :options="safetyPolicyOptions" />
         </div>
       </div>
 
@@ -382,6 +384,7 @@ onMounted(() => {
 .add-btn {
   padding: 8px 16px;
   border: none;
+  border-radius: var(--radius-md);
   background: var(--color-black);
   color: var(--color-white);
   font-family: var(--font-mono);

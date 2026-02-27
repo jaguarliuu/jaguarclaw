@@ -3,6 +3,8 @@ import { ref, computed, onMounted } from 'vue'
 import { useSchedules } from '@/composables/useSchedules'
 import { useChannels } from '@/composables/useChannels'
 import { useI18n } from '@/i18n'
+import Select from '@/components/common/Select.vue'
+import type { SelectOption } from '@/components/common/Select.vue'
 import type { ChannelType, ChannelInfo, ScheduleInfo } from '@/types'
 
 const { schedules, loading, error, loadSchedules, createSchedule, removeSchedule, toggleSchedule, runSchedule } = useSchedules()
@@ -41,6 +43,11 @@ const selectedChannel = computed<ChannelInfo | undefined>(() => {
 const isEmailChannel = computed(() => {
   return selectedChannel.value?.type === 'email'
 })
+
+const channelSelectOptions = computed<SelectOption<string>[]>(() => [
+  { label: t('sections.schedules.fields.channelPlaceholder'), value: '', disabled: true },
+  ...channels.value.map(ch => ({ label: `${ch.name} (${ch.type})`, value: ch.id }))
+])
 
 function resetForm() {
   formName.value = ''
@@ -246,12 +253,7 @@ onMounted(() => {
 
       <div class="form-group">
         <label class="form-label">{{ t('sections.schedules.fields.channelLabel') }}</label>
-        <select v-model="formChannelId" class="form-input">
-          <option value="" disabled>{{ t('sections.schedules.fields.channelPlaceholder') }}</option>
-          <option v-for="ch in channels" :key="ch.id" :value="ch.id">
-            {{ ch.name }} ({{ ch.type }})
-          </option>
-        </select>
+        <Select v-model="formChannelId" :options="channelSelectOptions" />
       </div>
 
       <!-- Email fields -->
@@ -381,6 +383,7 @@ onMounted(() => {
 .add-btn {
   padding: 8px 16px;
   border: none;
+  border-radius: var(--radius-md);
   background: var(--color-black);
   color: var(--color-white);
   font-family: var(--font-mono);
@@ -434,6 +437,7 @@ onMounted(() => {
 .form-input {
   padding: 8px 10px;
   border: var(--border);
+  border-radius: var(--radius-md);
   background: var(--color-white);
   font-family: var(--font-mono);
   font-size: 13px;
@@ -443,6 +447,7 @@ onMounted(() => {
   width: 100%;
   padding: 8px 10px;
   border: var(--border);
+  border-radius: var(--radius-md);
   background: var(--color-white);
   font-family: var(--font-mono);
   font-size: 13px;

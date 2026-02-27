@@ -2,6 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useLlmConfig } from '@/composables/useLlmConfig'
 import { providerPresets } from '@/data/providerPresets'
+import Select from '@/components/common/Select.vue'
 import type { LlmProviderConfig, LlmProviderInput } from '@/types'
 import { useI18n } from '@/i18n'
 
@@ -232,11 +233,7 @@ onMounted(async () => {
     <!-- Default Model Selector -->
     <div v-if="allModelOptions.length > 0" class="default-model">
       <label class="form-label">{{ t('sections.llm.defaultModel') }}</label>
-      <select v-model="defaultModelValue" class="form-select">
-        <option v-for="opt in allModelOptions" :key="opt.value" :value="opt.value">
-          {{ opt.label }}
-        </option>
-      </select>
+      <Select v-model="defaultModelValue" :options="allModelOptions" />
     </div>
 
     <!-- Provider List -->

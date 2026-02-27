@@ -58,9 +58,6 @@ function navigateTo(sectionId: string) {
         </svg>
         <span>{{ t('settings.back') }}</span>
       </button>
-      <div class="sidebar-logo">
-        <span class="logo-text">MiniClaw</span>
-      </div>
     </div>
 
     <!-- Grouped nav -->
@@ -216,25 +213,11 @@ function navigateTo(sectionId: string) {
   color: var(--color-black);
 }
 
-.sidebar-logo {
-  display: flex;
-  align-items: center;
-  padding: 0 4px;
-}
-
-.logo-text {
-  font-family: var(--font-mono);
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: -0.02em;
-  color: var(--color-black);
-}
-
 /* Groups */
 .nav-groups {
   flex: 1;
   overflow-y: auto;
-  padding: 8px 8px 16px;
+  padding: 8px 12px 16px;
 }
 
 .nav-group {
@@ -242,7 +225,7 @@ function navigateTo(sectionId: string) {
 }
 
 .group-label {
-  padding: 8px 12px 4px;
+  padding: 8px 14px 4px;
   font-family: var(--font-mono);
   font-size: 10px;
   font-weight: 600;
@@ -262,7 +245,7 @@ function navigateTo(sectionId: string) {
   display: flex;
   align-items: center;
   gap: 9px;
-  padding: 8px 12px;
+  padding: 8px 14px;
   border: none;
   border-radius: var(--radius-md);
   background: transparent;

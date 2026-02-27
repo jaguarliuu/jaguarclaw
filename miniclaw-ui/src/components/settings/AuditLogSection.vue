@@ -2,6 +2,8 @@
 import { onMounted, ref, computed } from 'vue'
 import { useAuditLog } from '@/composables/useAuditLog'
 import { useI18n } from '@/i18n'
+import Select from '@/components/common/Select.vue'
+import type { SelectOption } from '@/components/common/Select.vue'
 
 const { logs, loading, error, page, totalElements, totalPages, loadLogs } = useAuditLog()
 const { t } = useI18n()
@@ -18,6 +20,19 @@ const expandedId = ref<string | null>(null)
 const eventTypeOptions = ['', 'command.execute', 'command.reject', 'node.register', 'node.remove', 'node.test']
 const safetyLevelOptions = ['', 'read_only', 'side_effect', 'destructive']
 const resultStatusOptions = ['', 'success', 'error', 'rejected', 'blocked']
+
+const eventTypeSelectOptions = computed<SelectOption<string>[]>(() => [
+  { label: t('sections.audit.filters.allEvents'), value: '' },
+  ...eventTypeOptions.slice(1).map(v => ({ label: v, value: v }))
+])
+const safetyLevelSelectOptions = computed<SelectOption<string>[]>(() => [
+  { label: t('sections.audit.filters.allLevels'), value: '' },
+  ...safetyLevelOptions.slice(1).map(v => ({ label: v, value: v }))
+])
+const resultStatusSelectOptions = computed<SelectOption<string>[]>(() => [
+  { label: t('sections.audit.filters.allStatus'), value: '' },
+  ...resultStatusOptions.slice(1).map(v => ({ label: v, value: v }))
+])
 
 function currentFilters() {
   const filters: Record<string, string> = {}
@@ -95,18 +110,9 @@ onMounted(() => {
         :placeholder="t('sections.audit.filters.nodePlaceholder')"
         @keyup.enter="applyFilters"
       />
-      <select v-model="filterEventType" class="filter-select" @change="applyFilters">
-        <option value="">{{ t('sections.audit.filters.allEvents') }}</option>
-        <option v-for="opt in eventTypeOptions.slice(1)" :key="opt" :value="opt">{{ opt }}</option>
-      </select>
-      <select v-model="filterSafetyLevel" class="filter-select" @change="applyFilters">
-        <option value="">{{ t('sections.audit.filters.allLevels') }}</option>
-        <option v-for="opt in safetyLevelOptions.slice(1)" :key="opt" :value="opt">{{ opt }}</option>
-      </select>
-      <select v-model="filterResultStatus" class="filter-select" @change="applyFilters">
-        <option value="">{{ t('sections.audit.filters.allStatus') }}</option>
-        <option v-for="opt in resultStatusOptions.slice(1)" :key="opt" :value="opt">{{ opt }}</option>
-      </select>
+      <Select v-model="filterEventType" :options="eventTypeSelectOptions" @update:modelValue="applyFilters" />
+      <Select v-model="filterSafetyLevel" :options="safetyLevelSelectOptions" @update:modelValue="applyFilters" />
+      <Select v-model="filterResultStatus" :options="resultStatusSelectOptions" @update:modelValue="applyFilters" />
       <button class="filter-btn" @click="applyFilters">{{ t('sections.audit.searchBtn') }}</button>
       <button class="filter-btn refresh-btn" @click="refresh">{{ t('common.refresh') }}</button>
     </div>
@@ -271,23 +277,17 @@ onMounted(() => {
 .filter-input {
   padding: 6px 10px;
   border: var(--border);
+  border-radius: var(--radius-md);
   background: var(--color-white);
   font-family: var(--font-mono);
   font-size: 12px;
   width: 140px;
 }
 
-.filter-select {
-  padding: 6px 10px;
-  border: var(--border);
-  background: var(--color-white);
-  font-family: var(--font-mono);
-  font-size: 12px;
-}
-
 .filter-btn {
   padding: 6px 14px;
   border: var(--border);
+  border-radius: var(--radius-md);
   background: var(--color-white);
   font-family: var(--font-mono);
   font-size: 12px;

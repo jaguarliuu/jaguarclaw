@@ -1,7 +1,9 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useChannels } from '@/composables/useChannels'
 import { useI18n } from '@/i18n'
+import Select from '@/components/common/Select.vue'
+import type { SelectOption } from '@/components/common/Select.vue'
 import type { ChannelType, ChannelInfo } from '@/types'
 
 const { channels, loading, error, loadChannels, createChannel, removeChannel, testChannel } = useChannels()
@@ -35,6 +37,24 @@ const testingChannels = ref<Set<string>>(new Set())
 
 // Delete confirmation
 const confirmDeleteId = ref<string | null>(null)
+
+// Select options
+const channelTypeOptions = computed<SelectOption<string>[]>(() => [
+  { label: t('sections.channels.fields.typeOptions.email'), value: 'email' },
+  { label: t('sections.channels.fields.typeOptions.webhook'), value: 'webhook' },
+])
+const tlsOptions = computed<SelectOption<string>[]>(() => [
+  { label: t('sections.channels.fields.tlsOptions.enabled'), value: 'true' },
+  { label: t('sections.channels.fields.tlsOptions.disabled'), value: 'false' },
+])
+const emailTlsStr = computed({
+  get: () => emailTls.value ? 'true' : 'false',
+  set: (v: string) => { emailTls.value = v === 'true' }
+})
+const webhookMethodOptions = computed<SelectOption<string>[]>(() => [
+  { label: t('sections.channels.fields.methodOptions.post'), value: 'POST' },
+  { label: t('sections.channels.fields.methodOptions.put'), value: 'PUT' },
+])
 
 function resetForm() {
   formName.value = ''
@@ -219,10 +239,7 @@ onMounted(() => {
 
         <div class="form-group">
           <label class="form-label">{{ t('sections.channels.fields.typeLabel') }}</label>
-          <select v-model="formType" class="form-input">
-            <option value="email">{{ t('sections.channels.fields.typeOptions.email') }}</option>
-            <option value="webhook">{{ t('sections.channels.fields.typeOptions.webhook') }}</option>
-          </select>
+          <Select v-model="formType" :options="channelTypeOptions" />
         </div>
       </div>
 
@@ -250,10 +267,7 @@ onMounted(() => {
         <div class="form-grid">
           <div class="form-group">
             <label class="form-label">{{ t('sections.channels.fields.tlsLabel') }}</label>
-            <select v-model="emailTls" class="form-input">
-              <option :value="true">{{ t('sections.channels.fields.tlsOptions.enabled') }}</option>
-              <option :value="false">{{ t('sections.channels.fields.tlsOptions.disabled') }}</option>
-            </select>
+            <Select v-model="emailTlsStr" :options="tlsOptions" />
           </div>
         </div>
 
@@ -297,10 +311,7 @@ onMounted(() => {
           </div>
           <div class="form-group">
             <label class="form-label">{{ t('sections.channels.fields.methodLabel') }}</label>
-            <select v-model="webhookMethod" class="form-input">
-              <option value="POST">{{ t('sections.channels.fields.methodOptions.post') }}</option>
-              <option value="PUT">{{ t('sections.channels.fields.methodOptions.put') }}</option>
-            </select>
+            <Select v-model="webhookMethod" :options="webhookMethodOptions" />
           </div>
         </div>
 
@@ -440,6 +451,7 @@ onMounted(() => {
 .add-btn {
   padding: 8px 16px;
   border: none;
+  border-radius: var(--radius-md);
   background: var(--color-black);
   color: var(--color-white);
   font-family: var(--font-mono);
