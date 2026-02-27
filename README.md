@@ -1,71 +1,195 @@
+<div align="center">
+
 # JaguarClaw
 
-[English](#english) | [中文](#中文)
+**Enterprise-Grade Desktop AI Assistant**
+
+An open-source, self-hosted AI agent platform that turns any LLM into a powerful desktop assistant — with tool execution, long-term memory, scheduled automation, and full MCP protocol support.
+
+[English](README.md) | [中文](README.zh-CN.md)
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Java](https://img.shields.io/badge/Java-24-orange.svg)](https://openjdk.org/)
+[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.4-green.svg)](https://spring.io/projects/spring-boot)
+[![Vue](https://img.shields.io/badge/Vue-3-brightgreen.svg)](https://vuejs.org/)
+
+</div>
 
 ---
 
-## English
+## Why JaguarClaw
 
-**Desktop AI Assistant for Developers**
+Most AI assistants are chat boxes. JaguarClaw is an **agent** — it doesn't just answer questions, it *does* things.
 
-JaguarClaw is a production-ready AI assistant that runs on your desktop. It helps developers and knowledge workers complete tasks through natural language interaction.
+Give it a task, and it will reason through the steps, execute tools, observe results, and iterate until the job is done. It reads and writes files, runs shell commands, searches the web, remembers what you told it last week, and can even schedule recurring tasks to run while you sleep.
 
-### What can it do
+It runs entirely on your machine. Your data never leaves your network. You bring your own LLM — DeepSeek, Qwen, OpenAI, Ollama, or any OpenAI-compatible provider.
 
-- **File Operations** - Read, create, modify files in your workspace
-- **Shell Execution** - Run commands with intelligent safety checks
-- **Web Search** - Search the internet for up-to-date information
-- **Long-term Memory** - Remember preferences and context across sessions
-- **Task Scheduling** - Automate recurring tasks with cron expressions
-- **Parallel Execution** - Run multiple subtasks simultaneously
-- **MCP Protocol** - Connect to external tools and services
+---
 
-### How it works
+## Features
 
-JaguarClaw uses the ReAct (Reasoning + Acting) pattern:
+### ReAct Agent Engine
+
+JaguarClaw implements the ReAct (Reasoning + Acting) loop with full streaming output:
 
 ```
-Think → What should I do next?
-  ↓
-Act → Execute a tool (read file, run command, etc.)
-  ↓
-Observe → What was the result?
-  ↓
-Repeat until task is complete
+User: "Analyze the error logs from today and create a summary report"
+
+  Think  → I need to find today's log files first
+  Act    → read_file("/var/log/app/2026-02-27.log")
+  Observe → [2546 lines of log content...]
+  Think  → I see 3 recurring errors. Let me categorize them
+  Act    → write_file("report.md", "# Error Summary\n...")
+  Done   → "I've created report.md with 3 error categories..."
 ```
 
-### Quick Start
+- Multi-step reasoning with configurable max steps and timeouts
+- Streaming token output via WebSocket
+- Human-in-the-loop confirmation for dangerous operations
+- Cancellation support at any step
 
-**Requirements**
+### Built-in Tools
 
-- Java 24+
-- Node.js 20+
-- PostgreSQL 16+
-- LLM API key (OpenAI / DeepSeek / Qwen / Ollama)
+| Tool | Description | Safety |
+|------|-------------|--------|
+| `read_file` | Read file contents from workspace | Safe |
+| `write_file` | Create or modify files | Safe |
+| `shell` | Execute shell commands | Confirmation required for dangerous commands |
+| `web_search` | Search the web with configurable providers | Safe |
+| `memory_search` | Semantic search over long-term memory | Safe |
+| `memory_save` | Save important information for future recall | Safe |
+| `sessions_spawn` | Spawn parallel subagents for complex tasks | Safe |
+| `data_query` | Natural language to SQL over connected databases | Safe |
+| `use_skill` | Activate a specific skill by name | Safe |
 
-**Installation**
+Shell safety is intelligent — `ls`, `git status`, `npm install` run freely, while `rm -rf`, `git push --force`, and `DROP TABLE` require explicit user confirmation.
+
+### Skill System
+
+Skills are modular expert behaviors defined as Markdown files. When a task matches a skill, the agent loads specialized instructions and tool restrictions.
+
+```yaml
+---
+name: code-review
+description: Review code for bugs, security issues, and style
+allowed-tools:
+  - read_file
+  - web_search
+metadata:
+  jaguarclaw:
+    requires:
+      bins: [git]
+---
+
+# Code Review Instructions
+When reviewing code, focus on...
+```
+
+- Compatible with Claude Skills format
+- Hot-reload — add a skill file, it's available immediately
+- Tool restriction per skill for safety
+- Automatic skill selection based on task context
+
+### Long-Term Memory
+
+JaguarClaw remembers across sessions. It uses Markdown files as the source of truth and builds searchable indexes automatically.
+
+- **Markdown-based storage** — human-readable, version-controllable
+- **Full-text search** with PostgreSQL tsvector
+- **Semantic search** with pgvector embeddings (optional)
+- **Time-decay ranking** — recent memories surface first
+- **Pre-compaction flush** — saves important context before token limits hit
+
+### Subagent Parallel Execution
+
+For complex tasks, the main agent can spawn child agents that work in parallel:
+
+```
+User: "Compare the performance of our 3 API endpoints"
+
+  Main Agent → spawns 3 subagents, one per endpoint
+    Subagent 1 → benchmarks /api/users
+    Subagent 2 → benchmarks /api/orders
+    Subagent 3 → benchmarks /api/products
+  Main Agent → aggregates results into comparison table
+```
+
+- Configurable concurrency limits (main lane + subagent lane)
+- Automatic result aggregation
+- Isolated sessions per subagent
+
+### MCP Protocol Support
+
+Connect to any [Model Context Protocol](https://modelcontextprotocol.io/) server to extend capabilities:
+
+- **Transport**: STDIO, SSE, Streamable HTTP
+- **Official servers**: filesystem, fetch, git, postgres, and more
+- **Third-party**: GitHub, Slack, AWS, Kubernetes
+- **Custom**: Build your own MCP server in Python or Node.js
+- **UI management**: Add, configure, and monitor servers from the settings panel
+
+### Scheduled Automation
+
+Set up recurring tasks with cron expressions:
+
+- **Cron scheduling** with persistent job storage
+- **Delivery channels**: Email (SMTP), Webhook (HTTP POST)
+- **Missed job handling**: Configurable catch-up policies
+- **Isolated sessions**: Each scheduled run gets its own session context
+
+### Desktop Application
+
+JaguarClaw ships as an Electron desktop app with a bundled JRE — no Java installation required.
+
+- **Windows** (.exe installer) and **macOS** (.dmg)
+- Auto-updates via GitHub Releases
+- Embedded backend — just install and run
+- SQLite mode for zero-configuration local use
+
+---
+
+## Quick Start
+
+### Option 1: Desktop App (Recommended)
+
+Download the latest release from [GitHub Releases](https://github.com/jaguarliuu/jaguarclaw/releases), install, configure your LLM API key in Settings, and start chatting.
+
+### Option 2: Docker Compose
 
 ```bash
-# 1. Clone the repository
 git clone https://github.com/jaguarliuu/jaguarclaw.git
 cd jaguarclaw
 
-# 2. Start PostgreSQL with Docker
-docker-compose up -d
+# Configure your LLM
+cp .env.example .env
+# Edit .env — set LLM_ENDPOINT, LLM_API_KEY, LLM_MODEL
 
-# 3. Configure your LLM
-cat > src/main/resources/application-local.yml << EOF
+docker-compose up -d
+```
+
+Open http://localhost to access the UI.
+
+### Option 3: Development Setup
+
+**Prerequisites**: Java 24+, Node.js 20+, Maven 3.9+
+
+```bash
+git clone https://github.com/jaguarliuu/jaguarclaw.git
+cd jaguarclaw
+
+# Backend (uses embedded SQLite by default)
+cat > src/main/resources/application-local.yml << 'EOF'
 llm:
   endpoint: https://api.deepseek.com
   api-key: your-api-key-here
   model: deepseek-chat
 EOF
 
-# 4. Build and run the backend
 mvn clean package -DskipTests
 java -jar target/jaguarclaw-*.jar --spring.profiles.active=local
 
-# 5. Run the frontend
+# Frontend (in another terminal)
 cd jaguarclaw-ui
 npm install
 npm run dev
@@ -73,300 +197,135 @@ npm run dev
 
 Open http://localhost:5173 and start chatting.
 
-### Architecture
+### Supported LLM Providers
+
+| Provider | Endpoint | Recommended Models |
+|----------|----------|--------------------|
+| DeepSeek | `https://api.deepseek.com` | deepseek-chat, deepseek-reasoner |
+| Qwen (Alibaba) | `https://dashscope.aliyuncs.com/compatible-mode` | qwen-plus, qwen-max |
+| OpenAI | `https://api.openai.com` | gpt-4o, gpt-4o-mini |
+| Ollama (Local) | `http://localhost:11434` | llama3, qwen2.5, deepseek-r1 |
+| GLM (Zhipu) | `https://open.bigmodel.cn/api/paas/v4` | glm-4-plus |
+
+Any OpenAI-compatible API endpoint works out of the box.
+
+---
+
+## Architecture
 
 ```
-┌─────────────────────────────────────────┐
-│  Frontend (Vue 3)                       │
-│  Chat UI • Settings • Artifact Preview  │
-└─────────────────────────────────────────┘
-                    │
-                    ▼ WebSocket
-┌─────────────────────────────────────────┐
-│  Gateway                                │
-│  RPC Router • EventBus • WebSocket      │
-└─────────────────────────────────────────┘
-                    │
-                    ▼
-┌─────────────────────────────────────────┐
-│  Runtime Engine                         │
-│  ReAct Loop • HITL • Context Builder    │
-└─────────────────────────────────────────┘
-                    │
-                    ▼
-┌─────────────────────────────────────────┐
-│  Extensions                             │
-│  Tools • Skills • Memory • Subagents    │
-└─────────────────────────────────────────┘
-                    │
-                    ▼
-┌─────────────────────────────────────────┐
-│  Storage                                │
-│  PostgreSQL • pgvector • Workspace      │
-└─────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────┐
+│  Client Layer                                        │
+│  Desktop App (Electron) / Web UI (Vue 3)             │
+└──────────────────────────┬───────────────────────────┘
+                           │ WebSocket
+┌──────────────────────────▼───────────────────────────┐
+│  Control Plane                                       │
+│  RPC Router · Event Bus · Connection Manager         │
+└──────────────────────────┬───────────────────────────┘
+                           │
+┌──────────────────────────▼───────────────────────────┐
+│  Execution Plane                                     │
+│  ReAct Loop · HITL Gate · Context Builder            │
+│  Lane Queue (session-serial + concurrency control)   │
+│  Subagent Orchestration                              │
+└──────────┬───────────────────────────┬───────────────┘
+           │                           │
+┌──────────▼──────────┐  ┌─────────────▼───────────────┐
+│  Extension Plane    │  │  Automation Plane            │
+│  Tools · Skills     │  │  Cron Scheduler              │
+│  Memory · MCP       │  │  Email / Webhook Delivery    │
+└──────────┬──────────┘  └─────────────┬───────────────┘
+           │                           │
+┌──────────▼───────────────────────────▼───────────────┐
+│  State Plane                                         │
+│  PostgreSQL / SQLite · pgvector · Workspace FS       │
+└──────────────────────────────────────────────────────┘
 ```
 
-### Features
-
-**ReAct Loop Engine**
-
-AI doesn't respond once - it iterates until the task is done. It thinks about what to do, executes tools, observes results, and repeats.
-
-**Tool System**
-
-| Tool | Description | Safety |
-|------|-------------|--------|
-| read_file | Read file contents | Safe |
-| write_file | Create or modify files | Safe |
-| shell | Execute shell commands | Smart detection |
-| web_search | Search the web | Safe |
-| memory_search | Search past conversations | Safe |
-| sessions_spawn | Spawn parallel subagents | Safe |
-
-Dangerous commands (rm -rf, git push --force) require confirmation.
-
-**Skill System**
-
-Skills are modular capabilities that activate based on context. Compatible with Claude Skills format.
-
-**Memory System**
-
-- Markdown-based storage in `workspace/memory/`
-- Semantic search with pgvector
-- Time-decay ranking for relevance
-
-**Scheduling**
-
-Cron-based task automation with delivery via:
-- Email (SMTP)
-- Webhook (HTTP POST)
-
-**Subagents**
-
-Main agent can spawn child agents for parallel task execution. Results are aggregated automatically.
-
-**MCP Protocol**
-
-Connect to MCP servers for extended capabilities:
-- Official: filesystem, fetch, git, postgres
-- Third-party: GitHub, AWS, Kubernetes
-- Custom: Build your own in Python/Node.js
-
-### Tech Stack
+## Tech Stack
 
 | Layer | Technology |
 |-------|------------|
-| Backend | Java 24, Spring Boot 3.4, WebFlux |
+| Backend | Java 24, Spring Boot 3.4, WebFlux, Spring Data JPA |
 | Frontend | Vue 3, Vite, TypeScript |
-| Database | PostgreSQL 16, pgvector |
-| Desktop | Electron |
-| AI | OpenAI-compatible API |
+| Database | PostgreSQL 16 + pgvector / SQLite (embedded) |
+| Desktop | Electron, electron-builder |
+| Migrations | Flyway |
+| AI | OpenAI-compatible API (any provider) |
+| Protocol | Model Context Protocol (MCP) |
 
-### Project Structure
+## Project Structure
 
 ```
 jaguarclaw/
 ├── src/main/java/com/jaguarliu/ai/
-│   ├── runtime/       # ReAct engine, HITL, context
-│   ├── tools/         # Built-in tools
-│   ├── skills/        # Skill management
-│   ├── memory/        # Long-term memory
-│   ├── subagent/      # Subagent orchestration
-│   ├── llm/           # LLM client
-│   ├── mcp/           # MCP protocol client
-│   ├── schedule/      # Cron scheduling
-│   └── channel/       # Email/webhook delivery
-├── jaguarclaw-ui/     # Vue 3 frontend
-├── electron/          # Desktop application
-├── workspace/         # Working directory
-│   ├── .jaguarclaw/   # Skills directory
-│   └── memory/        # Memory files
-└── docs/              # Documentation
+│   ├── gateway/         # WebSocket, RPC router, event bus
+│   ├── runtime/         # ReAct loop, HITL, context builder
+│   ├── agents/          # Agent profiles, lane management
+│   ├── llm/             # LLM client (OpenAI-compatible)
+│   ├── tools/           # Built-in tools, tool registry
+│   ├── skills/          # Skill parser, registry, hot-reload
+│   ├── memory/          # Long-term memory, search, flush
+│   ├── subagent/        # Subagent orchestration
+│   ├── mcp/             # MCP client (STDIO/SSE/HTTP)
+│   ├── schedule/        # Cron scheduling
+│   ├── channel/         # Email & webhook delivery
+│   ├── soul/            # System prompt configuration
+│   └── datasource/      # Data source & NL-to-SQL
+├── jaguarclaw-ui/       # Vue 3 frontend
+├── electron/            # Desktop application
+├── .jaguarclaw/skills/  # Built-in skills
+├── docs/                # Design docs & plans
+└── data/                # Runtime data (gitignored)
 ```
-
-### Roadmap
-
-**v1.0 (Current)**
-- [x] ReAct loop engine
-- [x] Tool system (10+ tools)
-- [x] Skill system (Claude compatible)
-- [x] Global memory with semantic search
-- [x] Subagent parallel execution
-- [x] Scheduled tasks with delivery
-- [x] Remote node management (SSH/K8s)
-- [x] MCP protocol support
-- [x] Desktop app (Electron)
-
-**v1.1 (Planned)**
-- [ ] Sandbox code execution
-- [ ] External verification (Ralph Loop)
-- [ ] Plugin system
-- [ ] Multi-language UI
-
-### Contributing
-
-Contributions welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
-
-### License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ---
 
-## 中文
+## Roadmap
 
-**面向开发者的桌面 AI 助手**
+### v1.0 — Current
 
-JaguarClaw 是一款生产就绪的 AI 助手，运行在你的桌面上。它帮助开发者和知识工作者通过自然语言完成各种任务。
+- [x] ReAct agent loop with streaming output
+- [x] 10+ built-in tools with safety policies
+- [x] Skill system (Claude Skills compatible, hot-reload)
+- [x] Long-term memory with semantic search
+- [x] Subagent parallel execution
+- [x] Scheduled tasks with email/webhook delivery
+- [x] MCP protocol support (STDIO/SSE/HTTP)
+- [x] Desktop app (Windows & macOS)
+- [x] Multi-agent profiles with sandbox isolation
+- [x] Natural language data query (NL-to-SQL)
+- [x] Bilingual UI (English & Chinese)
 
-### 能做什么
+### v1.1 — Planned
 
-- **文件操作** - 读取、创建、修改工作区中的文件
-- **命令执行** - 运行 shell 命令，带智能安全检测
-- **网络搜索** - 搜索互联网获取最新信息
-- **长期记忆** - 跨会话记住偏好和上下文
-- **任务调度** - 用 cron 表达式自动化周期性任务
-- **并行执行** - 同时运行多个子任务
-- **MCP 协议** - 连接外部工具和服务
+- [ ] Sandboxed code execution environment
+- [ ] External verification loop (Ralph Loop)
+- [ ] Plugin marketplace
+- [ ] RAG over uploaded documents
+- [ ] Voice input/output
 
-### 工作原理
+---
 
-JaguarClaw 使用 ReAct（推理 + 行动）模式：
+## Contributing
 
-```
-思考 → 下一步该做什么？
-  ↓
-行动 → 执行工具（读文件、运行命令等）
-  ↓
-观察 → 结果是什么？
-  ↓
-重复直到任务完成
-```
+Contributions are welcome! Whether it's bug fixes, new tools, skills, or documentation improvements — all PRs are appreciated.
 
-### 快速开始
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
 
-**环境要求**
+---
 
-- Java 24+
-- Node.js 20+
-- PostgreSQL 16+
-- LLM API Key（OpenAI / DeepSeek / 通义千问 / Ollama）
+## License
 
-**安装步骤**
-
-```bash
-# 1. 克隆仓库
-git clone https://github.com/jaguarliuu/jaguarclaw.git
-cd jaguarclaw
-
-# 2. 用 Docker 启动 PostgreSQL
-docker-compose up -d
-
-# 3. 配置 LLM
-cat > src/main/resources/application-local.yml << EOF
-llm:
-  endpoint: https://api.deepseek.com
-  api-key: 你的-api-key
-  model: deepseek-chat
-EOF
-
-# 4. 构建并运行后端
-mvn clean package -DskipTests
-java -jar target/jaguarclaw-*.jar --spring.profiles.active=local
-
-# 5. 运行前端
-cd jaguarclaw-ui
-npm install
-npm run dev
-```
-
-打开 http://localhost:5173 开始对话。
-
-### 核心功能
-
-**ReAct 循环引擎**
-
-AI 不会一次性回答——它会迭代直到任务完成。思考要做什么，执行工具，观察结果，然后重复。
-
-**工具系统**
-
-| 工具 | 描述 | 安全性 |
-|-----|------|--------|
-| read_file | 读取文件内容 | 安全 |
-| write_file | 创建或修改文件 | 安全 |
-| shell | 执行 shell 命令 | 智能检测 |
-| web_search | 网络搜索 | 安全 |
-| memory_search | 搜索历史对话 | 安全 |
-| sessions_spawn | 派生并行子代理 | 安全 |
-
-危险命令（rm -rf、git push --force）需要确认。
-
-**技能系统**
-
-技能是基于上下文激活的模块化能力。兼容 Claude Skills 格式。
-
-**记忆系统**
-
-- 基于 Markdown 存储在 `workspace/memory/`
-- 使用 pgvector 进行语义搜索
-- 时间衰减排序提高相关性
-
-**任务调度**
-
-基于 cron 的任务自动化，支持以下方式推送结果：
-- 邮件（SMTP）
-- Webhook（HTTP POST）
-
-**子代理**
-
-主代理可以派生子代理并行执行任务。结果自动汇总。
-
-**MCP 协议**
-
-连接 MCP 服务器获取扩展能力：
-- 官方：filesystem、fetch、git、postgres
-- 第三方：GitHub、AWS、Kubernetes
-- 自定义：用 Python/Node.js 构建你自己的
-
-### 技术栈
-
-| 层级 | 技术 |
-|-----|------|
-| 后端 | Java 24, Spring Boot 3.4, WebFlux |
-| 前端 | Vue 3, Vite, TypeScript |
-| 数据库 | PostgreSQL 16, pgvector |
-| 桌面 | Electron |
-| AI | OpenAI 兼容 API |
-
-### 路线图
-
-**v1.0（当前版本）**
-- [x] ReAct 循环引擎
-- [x] 工具系统（10+ 工具）
-- [x] 技能系统（兼容 Claude）
-- [x] 全局记忆与语义搜索
-- [x] 子代理并行执行
-- [x] 定时任务与推送
-- [x] 远程节点管理（SSH/K8s）
-- [x] MCP 协议支持
-- [x] 桌面应用（Electron）
-
-**v1.1（计划中）**
-- [ ] 沙箱代码执行
-- [ ] 外部验证（Ralph Loop）
-- [ ] 插件系统
-- [ ] 多语言界面
-
-### 贡献
-
-欢迎贡献。请阅读 [CONTRIBUTING.md](CONTRIBUTING.md) 了解指南。
-
-### 许可证
-
-本项目采用 MIT 许可证 - 详情见 [LICENSE](LICENSE) 文件。
+This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
 
 ---
 
 <p align="center">
-Made with coffee and code.
+  <sub>Built with Java, Vue, and a lot of coffee.</sub>
 </p>
