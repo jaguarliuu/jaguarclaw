@@ -1,281 +1,372 @@
-<div align="center">
+# JaguarClaw
 
-# MiniClaw
-
-**强大的桌面 AI 助手**
-
-*让 AI 成为你的超级工作伙伴*
-
-[![Java](https://img.shields.io/badge/Java-24-ED8B00?style=flat-square&logo=openjdk)](https://openjdk.org/)
-[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.4-6DB33F?style=flat-square&logo=springboot)](https://spring.io/projects/spring-boot)
-[![Vue 3](https://img.shields.io/badge/Vue-3.5-4FC08D?style=flat-square&logo=vuedotjs)](https://vuejs.org/)
-[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?style=flat-square&logo=postgresql)](https://www.postgresql.org/)
-[![License](https://img.shields.io/badge/License-MIT-blue?style=flat-square)](LICENSE)
-
-[English](#) | [中文文档](#) | [快速开始](#-快速开始) | [功能特性](#-核心特性)
-
-</div>
+[English](#english) | [中文](#中文)
 
 ---
 
-## ✨ MiniClaw 是什么？
+## English
 
-MiniClaw 是一款**生产就绪**的桌面 AI 助手，专为开发者和知识工作者打造。
+**Desktop AI Assistant for Developers**
 
-它不只是聊天机器人，而是真正的**工作伙伴**：
-- 📁 读取、创建、修改你的文件
-- 🖥️ 执行命令行操作
-- 🌐 搜索网络获取最新信息
-- 🧠 记住你的偏好和历史对话
-- 🎯 自动选择合适的技能完成任务
-- ⏰ 定时执行任务并推送结果
+JaguarClaw is a production-ready AI assistant that runs on your desktop. It helps developers and knowledge workers complete tasks through natural language interaction.
 
-**核心优势**：
-- ⚡ **高性能**：Java 24 + Virtual Threads，流畅响应
-- 🔒 **安全可控**：智能危险操作检测，敏感操作需确认
-- 🎨 **极简美学**：黑白极简设计，专注内容
-- 🔌 **开放生态**：支持 MCP 协议，无限扩展
+### What can it do
 
----
+- **File Operations** - Read, create, modify files in your workspace
+- **Shell Execution** - Run commands with intelligent safety checks
+- **Web Search** - Search the internet for up-to-date information
+- **Long-term Memory** - Remember preferences and context across sessions
+- **Task Scheduling** - Automate recurring tasks with cron expressions
+- **Parallel Execution** - Run multiple subtasks simultaneously
+- **MCP Protocol** - Connect to external tools and services
 
-## 🎬 30 秒演示
+### How it works
+
+JaguarClaw uses the ReAct (Reasoning + Acting) pattern:
 
 ```
-你: 帮我分析这个项目的依赖关系，生成一个 Mermaid 图
-
-AI: 好的，我来分析项目依赖...
-
-   🔧 [执行] 读取 package.json
-   🔧 [执行] 分析依赖树
-   🔧 [执行] 生成 Mermaid 代码
-   📄 [创建] dependency-graph.md
-
-   我已经生成了依赖关系图，右侧面板可以预览渲染效果。
-   
-   [右侧面板实时显示 Mermaid 图表]
+Think → What should I do next?
+  ↓
+Act → Execute a tool (read file, run command, etc.)
+  ↓
+Observe → What was the result?
+  ↓
+Repeat until task is complete
 ```
 
----
+### Quick Start
 
-## 🚀 核心特性
-
-### 🔄 智能循环执行 (ReAct)
-
-AI 不会一次性回答，而是**循环执行**直到任务完成：
-
-```
-🧠 Think  → 分析当前状态，决定下一步
-🔧 Act    → 执行工具（读文件、运行命令、写代码...）
-👀 Observe → 获取结果，更新认知
-```
-
-### 🛠️ 丰富的工具集
-
-| 工具 | 功能 | 示例 |
-|-----|------|------|
-| `read_file` | 读取文件 | 读取代码、文档、配置 |
-| `write_file` | 写入文件 | 创建代码、生成文档 |
-| `shell` | 执行命令 | npm install、git status |
-| `web_search` | 网络搜索 | 获取最新信息、查文档 |
-| `memory_search` | 搜索记忆 | "我上次问过什么来着？" |
-| `sessions_spawn` | 派生子代理 | 并行执行多个任务 |
-
-**智能确认**：危险操作（`rm -rf`、`git push --force`）会弹窗让你确认。
-
-### 🎯 技能系统
-
-兼容 Claude Skills 格式，按需加载：
-
-```markdown
-# skills/git-helper/SKILL.md
----
-name: git-helper
-description: Git 操作助手
-allowed-tools: [shell, read_file]
----
-
-你是一个 Git 专家，帮助用户管理代码仓库。
-```
-
-技能会根据你的请求**自动激活**，也可以手动 `/skill-name` 触发。
-
-### 🧠 长期记忆
-
-跨会话记住你的偏好和重要信息：
-
-- 📝 **Markdown 存储**：`workspace/memory/` 目录
-- 🔍 **语义检索**：向量搜索 + 全文检索
-- ⏰ **时间衰减**：近期记忆权重更高
-
-### ⏰ 定时任务
-
-让 AI 定期帮你干活：
-
-```yaml
-# 每天早上 8 点汇总 Git 提交
-name: daily-git-report
-cron: "0 8 * * *"
-prompt: "帮我汇总昨天的 Git 提交记录"
-```
-
-结果可以推送到邮件或 Webhook。
-
-### 🔀 并行子代理
-
-主 Agent 可以派生子任务并行执行：
-
-```
-你: 同时 ping baidu.com 和 google.com
-
-AI: 
-   🚀 [子代理 A] ping baidu.com
-   🚀 [子代理 B] ping google.com
-   ⏳ 等待完成...
-   ✅ 汇总结果：baidu 12ms, google 45ms
-```
-
-### 🔌 MCP 协议支持
-
-连接 MCP 服务器，扩展无限可能：
-
-- **官方服务器**：filesystem、fetch、git、postgres...
-- **第三方服务器**：GitHub、AWS、Kubernetes...
-- **自定义服务器**：用 Python/Node.js 开发
-
-### 🖥️ 远程节点管理
-
-通过 SSH / Kubernetes 连接远程服务器：
-
-- 安全执行远程命令
-- 完整审计日志
-- 凭据加密存储
-
----
-
-## 📦 快速开始
-
-### 环境要求
+**Requirements**
 
 - Java 24+
 - Node.js 20+
 - PostgreSQL 16+
-- LLM API Key（OpenAI / DeepSeek / 通义千问 / Ollama...）
+- LLM API key (OpenAI / DeepSeek / Qwen / Ollama)
 
-### 1️⃣ 克隆项目
-
-```bash
-git clone https://github.com/jaguarliuu/miniclaw.git
-cd miniclaw
-```
-
-### 2️⃣ 启动数据库
+**Installation**
 
 ```bash
+# 1. Clone the repository
+git clone https://github.com/jaguarliuu/jaguarclaw.git
+cd jaguarclaw
+
+# 2. Start PostgreSQL with Docker
 docker-compose up -d
-```
 
-### 3️⃣ 配置 LLM
-
-创建 `src/main/resources/application-local.yml`：
-
-```yaml
+# 3. Configure your LLM
+cat > src/main/resources/application-local.yml << EOF
 llm:
   endpoint: https://api.deepseek.com
-  api-key: sk-your-api-key
+  api-key: your-api-key-here
   model: deepseek-chat
-```
+EOF
 
-### 4️⃣ 启动后端
-
-```bash
+# 4. Build and run the backend
 mvn clean package -DskipTests
-java -jar target/miniclaw-*.jar --spring.profiles.active=local
-```
+java -jar target/jaguarclaw-*.jar --spring.profiles.active=local
 
-### 5️⃣ 启动前端
-
-```bash
+# 5. Run the frontend
 cd miniclaw-ui
 npm install
 npm run dev
 ```
 
-打开 http://localhost:5173，开始对话！
+Open http://localhost:5173 and start chatting.
 
----
-
-## 📚 文档
-
-- [架构设计](docs/architecture.md)
-- [工具开发指南](docs/tool-development.md)
-- [技能编写指南](docs/skill-development.md)
-- [MCP 集成](docs/mcp-integration.md)
-- [API 文档](docs/api.md)
-
----
-
-## 🏗️ 项目结构
+### Architecture
 
 ```
-miniclaw/
+┌─────────────────────────────────────────┐
+│  Frontend (Vue 3)                       │
+│  Chat UI • Settings • Artifact Preview  │
+└─────────────────────────────────────────┘
+                    │
+                    ▼ WebSocket
+┌─────────────────────────────────────────┐
+│  Gateway                                │
+│  RPC Router • EventBus • WebSocket      │
+└─────────────────────────────────────────┘
+                    │
+                    ▼
+┌─────────────────────────────────────────┐
+│  Runtime Engine                         │
+│  ReAct Loop • HITL • Context Builder    │
+└─────────────────────────────────────────┘
+                    │
+                    ▼
+┌─────────────────────────────────────────┐
+│  Extensions                             │
+│  Tools • Skills • Memory • Subagents    │
+└─────────────────────────────────────────┘
+                    │
+                    ▼
+┌─────────────────────────────────────────┐
+│  Storage                                │
+│  PostgreSQL • pgvector • Workspace      │
+└─────────────────────────────────────────┘
+```
+
+### Features
+
+**ReAct Loop Engine**
+
+AI doesn't respond once - it iterates until the task is done. It thinks about what to do, executes tools, observes results, and repeats.
+
+**Tool System**
+
+| Tool | Description | Safety |
+|------|-------------|--------|
+| read_file | Read file contents | Safe |
+| write_file | Create or modify files | Safe |
+| shell | Execute shell commands | Smart detection |
+| web_search | Search the web | Safe |
+| memory_search | Search past conversations | Safe |
+| sessions_spawn | Spawn parallel subagents | Safe |
+
+Dangerous commands (rm -rf, git push --force) require confirmation.
+
+**Skill System**
+
+Skills are modular capabilities that activate based on context. Compatible with Claude Skills format.
+
+**Memory System**
+
+- Markdown-based storage in `workspace/memory/`
+- Semantic search with pgvector
+- Time-decay ranking for relevance
+
+**Scheduling**
+
+Cron-based task automation with delivery via:
+- Email (SMTP)
+- Webhook (HTTP POST)
+
+**Subagents**
+
+Main agent can spawn child agents for parallel task execution. Results are aggregated automatically.
+
+**MCP Protocol**
+
+Connect to MCP servers for extended capabilities:
+- Official: filesystem, fetch, git, postgres
+- Third-party: GitHub, AWS, Kubernetes
+- Custom: Build your own in Python/Node.js
+
+### Tech Stack
+
+| Layer | Technology |
+|-------|------------|
+| Backend | Java 24, Spring Boot 3.4, WebFlux |
+| Frontend | Vue 3, Vite, TypeScript |
+| Database | PostgreSQL 16, pgvector |
+| Desktop | Electron |
+| AI | OpenAI-compatible API |
+
+### Project Structure
+
+```
+jaguarclaw/
 ├── src/main/java/com/jaguarliu/ai/
-│   ├── runtime/          # ReAct 循环引擎
-│   ├── tools/            # 工具系统
-│   ├── skills/           # 技能系统
-│   ├── memory/           # 记忆系统
-│   ├── subagent/         # 子代理系统
-│   ├── llm/              # LLM 客户端
-│   ├── mcp/              # MCP 协议
-│   └── ...               # 更多模块
-├── miniclaw-ui/          # Vue 3 前端
-├── electron/             # 桌面应用
-├── workspace/            # 工作目录
-│   ├── .miniclaw/skills/ # 技能文件
-│   └── memory/           # 记忆文件
-└── docs/                 # 文档
+│   ├── runtime/       # ReAct engine, HITL, context
+│   ├── tools/         # Built-in tools
+│   ├── skills/        # Skill management
+│   ├── memory/        # Long-term memory
+│   ├── subagent/      # Subagent orchestration
+│   ├── llm/           # LLM client
+│   ├── mcp/           # MCP protocol client
+│   ├── schedule/      # Cron scheduling
+│   └── channel/       # Email/webhook delivery
+├── miniclaw-ui/       # Vue 3 frontend
+├── electron/          # Desktop application
+├── workspace/         # Working directory
+│   ├── .miniclaw/     # Skills directory
+│   └── memory/        # Memory files
+└── docs/              # Documentation
 ```
+
+### Roadmap
+
+**v1.0 (Current)**
+- [x] ReAct loop engine
+- [x] Tool system (10+ tools)
+- [x] Skill system (Claude compatible)
+- [x] Global memory with semantic search
+- [x] Subagent parallel execution
+- [x] Scheduled tasks with delivery
+- [x] Remote node management (SSH/K8s)
+- [x] MCP protocol support
+- [x] Desktop app (Electron)
+
+**v1.1 (Planned)**
+- [ ] Sandbox code execution
+- [ ] External verification (Ralph Loop)
+- [ ] Plugin system
+- [ ] Multi-language UI
+
+### Contributing
+
+Contributions welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+### License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ---
 
-## 🗺️ Roadmap
+## 中文
 
-### v1.0 (当前版本)
+**面向开发者的桌面 AI 助手**
 
+JaguarClaw 是一款生产就绪的 AI 助手，运行在你的桌面上。它帮助开发者和知识工作者通过自然语言完成各种任务。
+
+### 能做什么
+
+- **文件操作** - 读取、创建、修改工作区中的文件
+- **命令执行** - 运行 shell 命令，带智能安全检测
+- **网络搜索** - 搜索互联网获取最新信息
+- **长期记忆** - 跨会话记住偏好和上下文
+- **任务调度** - 用 cron 表达式自动化周期性任务
+- **并行执行** - 同时运行多个子任务
+- **MCP 协议** - 连接外部工具和服务
+
+### 工作原理
+
+JaguarClaw 使用 ReAct（推理 + 行动）模式：
+
+```
+思考 → 下一步该做什么？
+  ↓
+行动 → 执行工具（读文件、运行命令等）
+  ↓
+观察 → 结果是什么？
+  ↓
+重复直到任务完成
+```
+
+### 快速开始
+
+**环境要求**
+
+- Java 24+
+- Node.js 20+
+- PostgreSQL 16+
+- LLM API Key（OpenAI / DeepSeek / 通义千问 / Ollama）
+
+**安装步骤**
+
+```bash
+# 1. 克隆仓库
+git clone https://github.com/jaguarliuu/jaguarclaw.git
+cd jaguarclaw
+
+# 2. 用 Docker 启动 PostgreSQL
+docker-compose up -d
+
+# 3. 配置 LLM
+cat > src/main/resources/application-local.yml << EOF
+llm:
+  endpoint: https://api.deepseek.com
+  api-key: 你的-api-key
+  model: deepseek-chat
+EOF
+
+# 4. 构建并运行后端
+mvn clean package -DskipTests
+java -jar target/jaguarclaw-*.jar --spring.profiles.active=local
+
+# 5. 运行前端
+cd miniclaw-ui
+npm install
+npm run dev
+```
+
+打开 http://localhost:5173 开始对话。
+
+### 核心功能
+
+**ReAct 循环引擎**
+
+AI 不会一次性回答——它会迭代直到任务完成。思考要做什么，执行工具，观察结果，然后重复。
+
+**工具系统**
+
+| 工具 | 描述 | 安全性 |
+|-----|------|--------|
+| read_file | 读取文件内容 | 安全 |
+| write_file | 创建或修改文件 | 安全 |
+| shell | 执行 shell 命令 | 智能检测 |
+| web_search | 网络搜索 | 安全 |
+| memory_search | 搜索历史对话 | 安全 |
+| sessions_spawn | 派生并行子代理 | 安全 |
+
+危险命令（rm -rf、git push --force）需要确认。
+
+**技能系统**
+
+技能是基于上下文激活的模块化能力。兼容 Claude Skills 格式。
+
+**记忆系统**
+
+- 基于 Markdown 存储在 `workspace/memory/`
+- 使用 pgvector 进行语义搜索
+- 时间衰减排序提高相关性
+
+**任务调度**
+
+基于 cron 的任务自动化，支持以下方式推送结果：
+- 邮件（SMTP）
+- Webhook（HTTP POST）
+
+**子代理**
+
+主代理可以派生子代理并行执行任务。结果自动汇总。
+
+**MCP 协议**
+
+连接 MCP 服务器获取扩展能力：
+- 官方：filesystem、fetch、git、postgres
+- 第三方：GitHub、AWS、Kubernetes
+- 自定义：用 Python/Node.js 构建你自己的
+
+### 技术栈
+
+| 层级 | 技术 |
+|-----|------|
+| 后端 | Java 24, Spring Boot 3.4, WebFlux |
+| 前端 | Vue 3, Vite, TypeScript |
+| 数据库 | PostgreSQL 16, pgvector |
+| 桌面 | Electron |
+| AI | OpenAI 兼容 API |
+
+### 路线图
+
+**v1.0（当前版本）**
 - [x] ReAct 循环引擎
-- [x] 工具系统（10+ 内置工具）
-- [x] 技能系统（Claude Skills 兼容）
-- [x] 全局记忆（向量检索）
+- [x] 工具系统（10+ 工具）
+- [x] 技能系统（兼容 Claude）
+- [x] 全局记忆与语义搜索
 - [x] 子代理并行执行
-- [x] 定时任务 + 渠道推送
-- [x] 远程节点管理
+- [x] 定时任务与推送
+- [x] 远程节点管理（SSH/K8s）
 - [x] MCP 协议支持
 - [x] 桌面应用（Electron）
 
-### v1.1 (计划中)
-
-- [ ] Sandbox 安全代码执行
-- [ ] Ralph Loop（外部验证）
-- [ ] 更多内置技能
+**v1.1（计划中）**
+- [ ] 沙箱代码执行
+- [ ] 外部验证（Ralph Loop）
 - [ ] 插件系统
+- [ ] 多语言界面
+
+### 贡献
+
+欢迎贡献。请阅读 [CONTRIBUTING.md](CONTRIBUTING.md) 了解指南。
+
+### 许可证
+
+本项目采用 MIT 许可证 - 详情见 [LICENSE](LICENSE) 文件。
 
 ---
 
-## 🤝 贡献
-
-欢迎贡献！查看 [贡献指南](CONTRIBUTING.md)
-
----
-
-## 📄 License
-
-[MIT](LICENSE)
-
----
-
-<div align="center">
-
-**[⬆ 回到顶部](#miniclaw)**
-
-Made with ☕ and ❤️
-
-</div>
+<p align="center">
+Made with coffee and code.
+</p>
