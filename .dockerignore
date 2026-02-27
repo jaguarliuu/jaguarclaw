@@ -1,7 +1,7 @@
 # Build outputs
 target/
-miniclaw-ui/dist/
-miniclaw-ui/node_modules/
+jaguarclaw-ui/dist/
+jaguarclaw-ui/node_modules/
 
 # IDE
 .idea/

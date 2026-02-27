@@ -76,10 +76,10 @@ public class SkillRegistry {
         // 使用配置值（非空时），否则使用默认目录
         projectSkillsDir = configProjectDir != null && !configProjectDir.isBlank()
                 ? Paths.get(configProjectDir)
-                : Paths.get(System.getProperty("user.dir"), ".miniclaw", "skills");
+                : Paths.get(System.getProperty("user.dir"), ".jaguarclaw", "skills");
         userSkillsDir = configUserDir != null && !configUserDir.isBlank()
                 ? Paths.get(configUserDir)
-                : Paths.get(System.getProperty("user.home"), ".miniclaw", "skills");
+                : Paths.get(System.getProperty("user.home"), ".jaguarclaw", "skills");
         builtinSkillsDir = configBuiltinDir != null && !configBuiltinDir.isBlank()
                 ? Paths.get(configBuiltinDir)
                 : Paths.get(System.getProperty("user.dir"), "skills");

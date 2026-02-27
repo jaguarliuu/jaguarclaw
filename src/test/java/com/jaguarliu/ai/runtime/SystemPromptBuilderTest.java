@@ -74,7 +74,7 @@ class SystemPromptBuilderTest {
         void returnsMinimalIdentity() {
             String result = builder.build(SystemPromptBuilder.PromptMode.NONE);
 
-            assertEquals("You are MiniClaw, an AI coding assistant.", result);
+            assertEquals("You are JaguarClaw, an AI coding assistant.", result);
         }
     }
 
@@ -92,7 +92,7 @@ class SystemPromptBuilderTest {
 
             String result = builder.build(SystemPromptBuilder.PromptMode.MINIMAL);
 
-            assertTrue(result.contains("You are MiniClaw"));
+            assertTrue(result.contains("You are JaguarClaw"));
         }
 
         @Test
@@ -167,7 +167,7 @@ class SystemPromptBuilderTest {
 
             String result = builder.build(SystemPromptBuilder.PromptMode.FULL);
 
-            assertTrue(result.contains("You are MiniClaw"));
+            assertTrue(result.contains("You are JaguarClaw"));
         }
 
         @Test
@@ -562,7 +562,7 @@ class SystemPromptBuilderTest {
 
             String result = builder.build(SystemPromptBuilder.PromptMode.FULL);
 
-            int identityIdx = result.indexOf("You are MiniClaw");
+            int identityIdx = result.indexOf("You are JaguarClaw");
             int toolsIdx = result.indexOf("## Available Tools");
             int safetyIdx = result.indexOf("## Safety Guidelines");
             int memoryIdx = result.indexOf("## Memory");

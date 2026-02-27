@@ -1,5 +1,5 @@
 -- V1__init_schema.sql
--- MiniClaw 初始化数据库表结构
+-- JaguarClaw 初始化数据库表结构
 
 -- 启用 pgvector 扩展（用于后续向量检索）
 CREATE EXTENSION IF NOT EXISTS vector;

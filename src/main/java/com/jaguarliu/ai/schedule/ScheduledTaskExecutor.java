@@ -97,8 +97,8 @@ public class ScheduledTaskExecutor {
         try {
             if ("email".equals(task.getChannelType())) {
                 String subject = success
-                        ? "[MiniClaw] " + task.getName() + " - 执行完成"
-                        : "[MiniClaw] " + task.getName() + " - 执行失败";
+                        ? "[JaguarClaw] " + task.getName() + " - 执行完成"
+                        : "[JaguarClaw] " + task.getName() + " - 执行失败";
                 String body = success ? result : "任务执行失败：\n" + error;
                 channelService.sendEmailById(task.getChannelId(), task.getEmailTo(), subject, body, task.getEmailCc());
             } else if ("webhook".equals(task.getChannelType())) {

@@ -56,7 +56,7 @@ public class SystemPromptBuilder {
 
     // 身份段落
     private static final String IDENTITY_SECTION = """
-        You are MiniClaw, an AI coding assistant. You help users with software engineering tasks including:
+        You are JaguarClaw, an AI coding assistant. You help users with software engineering tasks including:
         - Writing, reviewing, and debugging code
         - Explaining technical concepts
         - File operations and shell commands
@@ -175,7 +175,7 @@ public class SystemPromptBuilder {
      */
     public String build(PromptMode mode, Set<String> allowedTools, Set<String> excludedMcpServers, String dataSourceId) {
         if (mode == PromptMode.NONE) {
-            return "You are MiniClaw, an AI coding assistant.";
+            return "You are JaguarClaw, an AI coding assistant.";
         }
 
         StringBuilder sb = new StringBuilder();

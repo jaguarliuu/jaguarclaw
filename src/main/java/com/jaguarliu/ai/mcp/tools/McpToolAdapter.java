@@ -14,7 +14,7 @@ import java.util.Map;
 
 /**
  * MCP Tool Adapter
- * Adapts MCP Tool to miniclaw's Tool interface
+ * Adapts MCP Tool to jaguarclaw's Tool interface
  */
 @Slf4j
 @RequiredArgsConstructor

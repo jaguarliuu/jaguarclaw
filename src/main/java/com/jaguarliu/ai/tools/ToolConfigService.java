@@ -29,7 +29,7 @@ public class ToolConfigService {
         this.searchProviderRegistry = searchProviderRegistry;
     }
 
-    @Value("${miniclaw.config-dir:./data}")
+    @Value("${jaguarclaw.config-dir:./data}")
     private String configDir;
 
     @PostConstruct

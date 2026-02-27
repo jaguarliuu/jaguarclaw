@@ -2,9 +2,9 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** Integrate Model Context Protocol (MCP) support into miniclaw as an **MCP Client**, enabling users to connect to any MCP Server (official, third-party, or custom-built) and dynamically use their tools, resources, and prompts.
+**Goal:** Integrate Model Context Protocol (MCP) support into jaguarclaw as an **MCP Client**, enabling users to connect to any MCP Server (official, third-party, or custom-built) and dynamically use their tools, resources, and prompts.
 
-**Architecture:** Implement an adapter layer that bridges MCP Java SDK (v0.17.2) with miniclaw's existing Tool system. Users configure MCP servers in application.yml (or environment variables), and miniclaw connects to them via three transport types: STDIO (process pipes), SSE (Server-Sent Events), and Streamable HTTP. The McpClientManager handles lifecycle, health checks, and reconnection. Each MCP tool is wrapped in McpToolAdapter implementing the Tool interface. **Users can connect to unlimited MCP servers simultaneously**, each with its own tool prefix to avoid naming conflicts.
+**Architecture:** Implement an adapter layer that bridges MCP Java SDK (v0.17.2) with jaguarclaw's existing Tool system. Users configure MCP servers in application.yml (or environment variables), and jaguarclaw connects to them via three transport types: STDIO (process pipes), SSE (Server-Sent Events), and Streamable HTTP. The McpClientManager handles lifecycle, health checks, and reconnection. Each MCP tool is wrapped in McpToolAdapter implementing the Tool interface. **Users can connect to unlimited MCP servers simultaneously**, each with its own tool prefix to avoid naming conflicts.
 
 **Tech Stack:**
 - MCP Java SDK v0.17.2 (`io.modelcontextprotocol.sdk:mcp`)
@@ -1894,7 +1894,7 @@ import java.util.Map;
 
 /**
  * MCP 工具适配器
- * 将 MCP Tool 适配为 miniclaw 的 Tool 接口
+ * 将 MCP Tool 适配为 jaguarclaw 的 Tool 接口
  */
 @Slf4j
 @RequiredArgsConstructor
@@ -2741,7 +2741,7 @@ Create `docs/mcp-integration.md` with:
 - **How to develop a custom MCP Server:**
   - Quick start with MCP Python/Node.js SDK
   - Implementing tools, resources, prompts
-  - Testing locally with miniclaw
+  - Testing locally with jaguarclaw
   - Deployment options (Docker, systemd, cloud)
 - **Troubleshooting guide**
   - Connection issues
@@ -3105,7 +3105,7 @@ Create `docs/frontend-mcp-integration.md`:
 
 ## Overview
 
-This guide describes how to integrate MCP server management into the miniclaw frontend.
+This guide describes how to integrate MCP server management into the jaguarclaw frontend.
 
 ## RPC Methods
 
@@ -3457,7 +3457,7 @@ Create `docs/custom-mcp-server-guide.md` with:
 2. Choosing an SDK (Python, Node.js, Java, Go, etc.)
 3. Basic server structure and concepts
 4. Implementing tools, resources, and prompts
-5. Testing locally with miniclaw
+5. Testing locally with jaguarclaw
 6. Deployment strategies (STDIO, SSE, HTTP)
 7. Best practices and security considerations
 
@@ -3469,7 +3469,7 @@ Create `examples/custom-mcp-server/python/simple_server.py`:
 #!/usr/bin/env python3
 """
 Simple MCP Server Example in Python
-Demonstrates how to create a custom MCP server that can be used with miniclaw
+Demonstrates how to create a custom MCP server that can be used with jaguarclaw
 """
 
 from mcp.server import MCPServer
@@ -3525,7 +3525,7 @@ Create `examples/custom-mcp-server/nodejs/simple-server.js`:
 #!/usr/bin/env node
 /**
  * Simple MCP Server Example in Node.js
- * Demonstrates how to create a custom MCP server that can be used with miniclaw
+ * Demonstrates how to create a custom MCP server that can be used with jaguarclaw
  */
 
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
@@ -3636,7 +3636,7 @@ Create `examples/custom-mcp-server/README.md`:
 ```markdown
 # Custom MCP Server Examples
 
-This directory contains examples of custom MCP servers that can be integrated with miniclaw.
+This directory contains examples of custom MCP servers that can be integrated with jaguarclaw.
 
 ## Python Example
 
@@ -3650,7 +3650,7 @@ pip install mcp-server
 python python/simple_server.py
 ```
 
-### Configure in miniclaw
+### Configure in jaguarclaw
 ```yaml
 mcp:
   servers:
@@ -3675,7 +3675,7 @@ npm install @modelcontextprotocol/sdk
 node nodejs/simple-server.js
 ```
 
-### Configure in miniclaw
+### Configure in jaguarclaw
 ```yaml
 mcp:
   servers:
@@ -3690,7 +3690,7 @@ mcp:
 
 ## Testing
 
-1. Start miniclaw with the custom server configured
+1. Start jaguarclaw with the custom server configured
 2. The tools will be automatically discovered: `custom_greet`, `custom_calculate`
 3. Use them in conversation with the AI agent
 
@@ -3784,7 +3784,7 @@ git commit -m "docs: add MCP testing guide for official, third-party, and custom
 
 ## Summary
 
-This implementation plan provides a complete, test-driven approach to integrating MCP v0.17.2 into miniclaw **as an MCP Client** with **full frontend integration**:
+This implementation plan provides a complete, test-driven approach to integrating MCP v0.17.2 into jaguarclaw **as an MCP Client** with **full frontend integration**:
 
 **What this enables:**
 - ✅ Connect to **unlimited MCP Servers simultaneously**

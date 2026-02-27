@@ -1,6 +1,6 @@
 #!/bin/bash
 # ========================================
-# MiniClaw ARM64 跨平台构建脚本
+# JaguarClaw ARM64 跨平台构建脚本
 # 在 x86 机器上构建 ARM64 镜像
 # ========================================
 
@@ -16,7 +16,7 @@ NC='\033[0m'
 # 参数
 VERSION=${1:-latest}
 OUTPUT_DIR=${2:-.}
-OUTPUT_FILE="miniclaw-arm64-${VERSION}.tar.gz"
+OUTPUT_FILE="jaguarclaw-arm64-${VERSION}.tar.gz"
 PLATFORM="linux/arm64"
 
 echo -e "${BLUE}"
@@ -53,7 +53,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
 # 创建/使用 buildx builder
-BUILDER_NAME="miniclaw-arm64-builder"
+BUILDER_NAME="jaguarclaw-arm64-builder"
 if ! docker buildx inspect $BUILDER_NAME &> /dev/null; then
     echo -e "${YELLOW}Creating buildx builder for cross-platform build...${NC}"
     docker buildx create --name $BUILDER_NAME --use --platform linux/arm64,linux/amd64
@@ -66,7 +66,7 @@ docker buildx use $BUILDER_NAME
 echo -e "${YELLOW}[1/4] Building backend image for ARM64...${NC}"
 docker buildx build \
     --platform ${PLATFORM} \
-    --tag miniclaw/backend:${VERSION}-arm64 \
+    --tag jaguarclaw/backend:${VERSION}-arm64 \
     --file Dockerfile.arm64 \
     --load \
     .
@@ -76,10 +76,10 @@ echo -e "${GREEN}✓ Backend image built (ARM64)${NC}"
 echo -e "${YELLOW}[2/4] Building frontend image for ARM64...${NC}"
 docker buildx build \
     --platform ${PLATFORM} \
-    --tag miniclaw/frontend:${VERSION}-arm64 \
-    --file miniclaw-ui/Dockerfile.arm64 \
+    --tag jaguarclaw/frontend:${VERSION}-arm64 \
+    --file jaguarclaw-ui/Dockerfile.arm64 \
     --load \
-    miniclaw-ui/
+    jaguarclaw-ui/
 echo -e "${GREEN}✓ Frontend image built (ARM64)${NC}"
 
 # Step 3: 拉取 PostgreSQL ARM64 镜像
@@ -96,9 +96,9 @@ trap "rm -rf $TEMP_DIR" EXIT
 
 # 导出镜像
 echo "  Exporting backend..."
-docker save miniclaw/backend:${VERSION}-arm64 -o ${TEMP_DIR}/backend.tar
+docker save jaguarclaw/backend:${VERSION}-arm64 -o ${TEMP_DIR}/backend.tar
 echo "  Exporting frontend..."
-docker save miniclaw/frontend:${VERSION}-arm64 -o ${TEMP_DIR}/frontend.tar
+docker save jaguarclaw/frontend:${VERSION}-arm64 -o ${TEMP_DIR}/frontend.tar
 echo "  Exporting postgres..."
 docker save pgvector/pgvector:pg16 -o ${TEMP_DIR}/postgres.tar
 
@@ -108,7 +108,7 @@ cp .env.example ${TEMP_DIR}/.env.example
 
 # 创建麒麟系统部署说明
 cat > ${TEMP_DIR}/README.md << 'EOF'
-# MiniClaw 麒麟 V10 / ARM64 部署指南
+# JaguarClaw 麒麟 V10 / ARM64 部署指南
 
 ## 系统要求
 
@@ -121,8 +121,8 @@ cat > ${TEMP_DIR}/README.md << 'EOF'
 ### 1. 解压并导入镜像
 
 ```bash
-tar -xzf miniclaw-arm64-*.tar.gz
-cd miniclaw-deploy
+tar -xzf jaguarclaw-arm64-*.tar.gz
+cd jaguarclaw-deploy
 
 # 导入所有镜像
 ./deploy.sh
@@ -242,10 +242,10 @@ ARM 设备内存可能有限，调整 JVM 参数：
 
 ```bash
 # 备份数据库
-docker-compose exec postgres pg_dump -U miniclaw miniclaw > backup.sql
+docker-compose exec postgres pg_dump -U jaguarclaw jaguarclaw > backup.sql
 
 # 备份 workspace
-docker cp miniclaw-backend:/app/workspace ./workspace-backup
+docker cp jaguarclaw-backend:/app/workspace ./workspace-backup
 ```
 EOF
 
@@ -255,7 +255,7 @@ cat > ${TEMP_DIR}/deploy.sh << 'EOF'
 set -e
 
 echo "=========================================="
-echo "MiniClaw ARM64 Image Loader"
+echo "JaguarClaw ARM64 Image Loader"
 echo "=========================================="
 echo ""
 

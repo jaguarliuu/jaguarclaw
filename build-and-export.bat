@@ -1,6 +1,6 @@
 @echo off
 REM ========================================
-REM MiniClaw 一键打包脚本 (Windows)
+REM JaguarClaw 一键打包脚本 (Windows)
 REM 构建所有镜像并导出为 tar 包
 REM ========================================
 
@@ -10,7 +10,7 @@ REM 版本号
 set VERSION=%1
 if "%VERSION%"=="" set VERSION=latest
 
-set OUTPUT_FILE=miniclaw-%VERSION%.tar.gz
+set OUTPUT_FILE=jaguarclaw-%VERSION%.tar.gz
 
 echo.
 echo   __  __ _       _  _____ _
@@ -34,7 +34,7 @@ if errorlevel 1 (
 
 REM Step 1: 构建后端镜像
 echo [1/4] Building backend image...
-docker build -t miniclaw/backend:%VERSION% -f Dockerfile .
+docker build -t jaguarclaw/backend:%VERSION% -f Dockerfile .
 if errorlevel 1 (
     echo Error: Failed to build backend image
     exit /b 1
@@ -43,7 +43,7 @@ echo Backend image built
 
 REM Step 2: 构建前端镜像
 echo [2/4] Building frontend image...
-docker build -t miniclaw/frontend:%VERSION% -f miniclaw-ui/Dockerfile miniclaw-ui/
+docker build -t jaguarclaw/frontend:%VERSION% -f jaguarclaw-ui/Dockerfile jaguarclaw-ui/
 if errorlevel 1 (
     echo Error: Failed to build frontend image
     exit /b 1
@@ -59,12 +59,12 @@ REM Step 4: 打包所有镜像
 echo [4/4] Exporting images...
 
 REM 创建临时目录
-set TEMP_DIR=%TEMP%\miniclaw-build-%RANDOM%
+set TEMP_DIR=%TEMP%\jaguarclaw-build-%RANDOM%
 mkdir "%TEMP_DIR%"
 
 REM 导出镜像
-docker save miniclaw/backend:%VERSION% -o "%TEMP_DIR%\backend.tar"
-docker save miniclaw/frontend:%VERSION% -o "%TEMP_DIR%\frontend.tar"
+docker save jaguarclaw/backend:%VERSION% -o "%TEMP_DIR%\backend.tar"
+docker save jaguarclaw/frontend:%VERSION% -o "%TEMP_DIR%\frontend.tar"
 docker save pgvector/pgvector:pg16 -o "%TEMP_DIR%\postgres.tar"
 
 REM 复制部署文件
@@ -73,7 +73,7 @@ copy .env.example "%TEMP_DIR%\.env.example"
 
 REM 创建部署说明
 (
-echo # MiniClaw Deploy Guide
+echo # JaguarClaw Deploy Guide
 echo.
 echo ## Quick Start
 echo.

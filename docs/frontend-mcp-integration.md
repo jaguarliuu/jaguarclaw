@@ -2,7 +2,7 @@
 
 ## Overview
 
-This guide describes how to integrate MCP server management into the miniclaw frontend. All backend APIs are ready - the frontend just needs to call the RPC methods and build the UI.
+This guide describes how to integrate MCP server management into the jaguarclaw frontend. All backend APIs are ready - the frontend just needs to call the RPC methods and build the UI.
 
 ## RPC Methods
 
@@ -239,7 +239,7 @@ This guide describes how to integrate MCP server management into the miniclaw fr
      - Status (Connected/Disconnected indicator with color)
      - Tools Count (number of tools registered)
      - Actions (Edit, Delete, Enable/Disable toggle)
-   - Empty State: "No MCP servers configured. Add one to extend MiniClaw's capabilities."
+   - Empty State: "No MCP servers configured. Add one to extend JaguarClaw's capabilities."
 
 2. **Add Button**
    - Primary button: "+ Add MCP Server"
@@ -446,7 +446,7 @@ This guide describes how to integrate MCP server management into the miniclaw fr
 
     <div v-else class="empty-state">
       <p>No MCP servers configured.</p>
-      <p>Add one to extend MiniClaw's capabilities.</p>
+      <p>Add one to extend JaguarClaw's capabilities.</p>
     </div>
 
     <!-- Modal Component -->
@@ -749,7 +749,7 @@ watch(config, () => {
 
 1. **Clone and setup**:
    ```bash
-   cd miniclaw-ui
+   cd jaguarclaw-ui
    npm install
    npm run dev
    ```

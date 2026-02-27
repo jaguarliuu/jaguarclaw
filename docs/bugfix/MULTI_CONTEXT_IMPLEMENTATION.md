@@ -8,7 +8,7 @@
 
 ### 1. 类型系统定义 ✅
 
-**文件**: `miniclaw-ui/src/types/index.ts`
+**文件**: `jaguarclaw-ui/src/types/index.ts`
 
 - 定义了 `ContextType` 类型，支持 8 种上下文类型
 - 创建了统一的 `AttachedContext` 接口，包含所有类型的字段

@@ -1,7 +1,7 @@
 {
-  "name": "miniclaw-desktop",
+  "name": "jaguarclaw-desktop",
   "version": "1.0.0",
-  "description": "MiniClaw Desktop - AI Agent Platform",
+  "description": "JaguarClaw Desktop - AI Agent Platform",
   "main": "main.js",
   "private": true,
   "scripts": {
@@ -21,8 +21,8 @@
     "electron-builder": "^26.0.12"
   },
   "build": {
-    "appId": "com.jaguarliu.miniclaw",
-    "productName": "MiniClaw",
+    "appId": "com.jaguarliu.jaguarclaw",
+    "productName": "JaguarClaw",
     "directories": {
       "output": "release"
     },
@@ -65,7 +65,7 @@
     "publish": {
       "provider": "github",
       "owner": "jaguarliuu",
-      "repo": "miniclaw"
+      "repo": "jaguarclaw"
     }
   }
 }

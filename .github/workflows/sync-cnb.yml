@@ -15,7 +15,7 @@ jobs:
       - name: Sync to CNB Repository
         uses: docker://tencentcom/git-sync
         env:
-          PLUGIN_TARGET_URL: "https://cnb.cool/jaguarliu.cool/llm_repo/miniclaw.git"
+          PLUGIN_TARGET_URL: "https://cnb.cool/jaguarliu.cool/llm_repo/jaguarclaw.git"
           PLUGIN_AUTH_TYPE: "https"
           PLUGIN_USERNAME: "cnb"
           PLUGIN_PASSWORD: ${{ secrets.CNB_TOKEN }}

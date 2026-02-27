@@ -34,7 +34,7 @@ jobs:
         run: mvn clean package -DskipTests
 
       - name: Build Vue frontend
-        working-directory: miniclaw-ui
+        working-directory: jaguarclaw-ui
         run: |
           npm ci
           npm run build
@@ -50,14 +50,14 @@ jobs:
         shell: bash
         run: |
           rm -rf electron/resources/webapp
-          cp -r miniclaw-ui/dist electron/resources/webapp
+          cp -r jaguarclaw-ui/dist electron/resources/webapp
 
       - name: Copy built-in skills to Electron resources
         shell: bash
         run: |
-          if [ -d .miniclaw/skills ]; then
+          if [ -d .jaguarclaw/skills ]; then
             rm -rf electron/resources/skills
-            cp -r .miniclaw/skills electron/resources/skills
+            cp -r .jaguarclaw/skills electron/resources/skills
           fi
 
       - name: Download JRE

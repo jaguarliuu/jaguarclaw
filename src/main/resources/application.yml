@@ -1,6 +1,6 @@
 spring:
   application:
-    name: miniclaw
+    name: jaguarclaw
   profiles:
     default: sqlite
 
@@ -19,7 +19,7 @@ spring:
 # 日志配置
 logging:
   file:
-    name: ${MINICLAW_CONFIG_DIR:./data}/logs/miniclaw.log
+    name: ${JAGUARCLAW_CONFIG_DIR:./data}/logs/jaguarclaw.log
   logback:
     rollingpolicy:
       max-file-size: 10MB
@@ -56,10 +56,10 @@ llm:
   max-tokens: 8192
   timeout: 300
 
-# MiniClaw 配置
-miniclaw:
-  config-dir: ${MINICLAW_CONFIG_DIR:./data}
-  webapp-dir: ${MINICLAW_WEBAPP_DIR:}
+# JaguarClaw 配置
+jaguarclaw:
+  config-dir: ${JAGUARCLAW_CONFIG_DIR:./data}
+  webapp-dir: ${JAGUARCLAW_WEBAPP_DIR:}
 
 # Agent 配置
 agent:
@@ -96,7 +96,7 @@ agents:
         allow: []  # 空表示允许所有
         deny: []
       workspace: ./workspace
-      auth-dir: ./.miniclaw/auth/main
+      auth-dir: ./.jaguarclaw/auth/main
       can-spawn: true
     restricted:
       sandbox: restricted
@@ -104,7 +104,7 @@ agents:
         allow: [read_file, http_get, memory_search]
         deny: [shell, shell_start, write_file, sessions_spawn]
       workspace: ./workspace/restricted
-      auth-dir: ./.miniclaw/auth/restricted
+      auth-dir: ./.jaguarclaw/auth/restricted
       can-spawn: false
   lane:
     main-max-concurrency: 4

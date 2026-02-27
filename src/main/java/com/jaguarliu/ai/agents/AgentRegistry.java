@@ -158,7 +158,7 @@ public class AgentRegistry {
         profile.setId("main");
         profile.setSandbox("trusted");
         profile.setWorkspace("./workspace");
-        profile.setAuthDir("./.miniclaw/auth/main");
+        profile.setAuthDir("./.jaguarclaw/auth/main");
         profile.setCanSpawn(true);
         // tools 保持默认（允许所有）
         return profile;

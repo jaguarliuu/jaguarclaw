@@ -31,7 +31,7 @@ const API_URL =
 function httpsGet(url) {
   return new Promise((resolve, reject) => {
     const request = (url) => {
-      https.get(url, { headers: { 'User-Agent': 'MiniClaw-Build' } }, (res) => {
+      https.get(url, { headers: { 'User-Agent': 'JaguarClaw-Build' } }, (res) => {
         if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
           // Follow redirect
           request(res.headers.location);
@@ -51,7 +51,7 @@ function downloadFile(url, destPath) {
   return new Promise((resolve, reject) => {
     const file = fs.createWriteStream(destPath);
     const request = (url) => {
-      https.get(url, { headers: { 'User-Agent': 'MiniClaw-Build' } }, (res) => {
+      https.get(url, { headers: { 'User-Agent': 'JaguarClaw-Build' } }, (res) => {
         if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
           request(res.headers.location);
           return;

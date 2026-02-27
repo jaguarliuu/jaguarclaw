@@ -9,7 +9,7 @@ import java.util.List;
 
 /**
  * Skill 可用性条件
- * 对应 SKILL.md 中的 metadata.miniclaw.requires
+ * 对应 SKILL.md 中的 metadata.jaguarclaw.requires
  *
  * 在 load-time 做 gating 检查：
  * - 全部条件满足 → skill 可用

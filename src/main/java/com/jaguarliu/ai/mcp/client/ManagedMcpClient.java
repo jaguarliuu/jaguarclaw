@@ -74,7 +74,7 @@ public class ManagedMcpClient {
         try {
             McpSyncClient syncClient = McpClient.sync(transport)
                     .requestTimeout(timeout)
-                    .clientInfo(new McpSchema.Implementation("miniclaw", "1.0.0"))
+                    .clientInfo(new McpSchema.Implementation("jaguarclaw", "1.0.0"))
                     .capabilities(new McpSchema.ClientCapabilities(
                             null, // experimental capabilities
                             null, // roots

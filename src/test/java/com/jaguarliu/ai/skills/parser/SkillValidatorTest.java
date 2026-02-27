@@ -283,7 +283,7 @@ class SkillValidatorTest {
             frontmatter.put("name", "test-skill");
             frontmatter.put("description", "Test");
             frontmatter.put("metadata", Map.of(
-                    "miniclaw", Map.of(
+                    "jaguarclaw", Map.of(
                             "requires", Map.of(
                                     "env", List.of("API_KEY"),
                                     "bins", List.of("git"),
@@ -305,7 +305,7 @@ class SkillValidatorTest {
             frontmatter.put("name", "test-skill");
             frontmatter.put("description", "Test");
             frontmatter.put("metadata", Map.of(
-                    "miniclaw", Map.of(
+                    "jaguarclaw", Map.of(
                             "requires", Map.of(
                                     "os", List.of("windows")  // 应该是 win32
                             )
@@ -340,7 +340,7 @@ class SkillValidatorTest {
             frontmatter.put("name", "test-skill");
             frontmatter.put("description", "Test");
             frontmatter.put("metadata", Map.of(
-                    "miniclaw", Map.of(
+                    "jaguarclaw", Map.of(
                             "primaryEnv", 123
                     )
             ));

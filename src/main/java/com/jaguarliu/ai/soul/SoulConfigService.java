@@ -168,7 +168,7 @@ public class SoulConfigService {
 
     private Map<String, Object> getDefaultConfig() {
         Map<String, Object> config = new LinkedHashMap<>();
-        config.put("agentName", "MiniClaw");
+        config.put("agentName", "JaguarClaw");
         config.put("personality", "A helpful and professional AI assistant");
         config.put("traits", Collections.emptyList());
         config.put("responseStyle", "balanced");

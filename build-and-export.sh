@@ -1,6 +1,6 @@
 #!/bin/bash
 # ========================================
-# MiniClaw 一键打包脚本
+# JaguarClaw 一键打包脚本
 # 构建所有镜像并导出为 tar 包
 # ========================================
 
@@ -16,7 +16,7 @@ NC='\033[0m' # No Color
 # 版本号（可通过参数覆盖）
 VERSION=${1:-latest}
 OUTPUT_DIR=${2:-.}
-OUTPUT_FILE="miniclaw-${VERSION}.tar.gz"
+OUTPUT_FILE="jaguarclaw-${VERSION}.tar.gz"
 
 echo -e "${BLUE}"
 echo "  __  __ _       _  _____ _                 "
@@ -43,12 +43,12 @@ cd "$SCRIPT_DIR"
 
 # Step 1: 构建后端镜像
 echo -e "${YELLOW}[1/4] Building backend image...${NC}"
-docker build -t miniclaw/backend:${VERSION} -f Dockerfile .
+docker build -t jaguarclaw/backend:${VERSION} -f Dockerfile .
 echo -e "${GREEN}✓ Backend image built${NC}"
 
 # Step 2: 构建前端镜像
 echo -e "${YELLOW}[2/4] Building frontend image...${NC}"
-docker build -t miniclaw/frontend:${VERSION} -f miniclaw-ui/Dockerfile miniclaw-ui/
+docker build -t jaguarclaw/frontend:${VERSION} -f jaguarclaw-ui/Dockerfile jaguarclaw-ui/
 echo -e "${GREEN}✓ Frontend image built${NC}"
 
 # Step 3: 拉取依赖镜像（如果本地没有）
@@ -64,14 +64,14 @@ TEMP_DIR=$(mktemp -d)
 trap "rm -rf $TEMP_DIR" EXIT
 
 # 导出镜像
-docker save miniclaw/backend:${VERSION} -o ${TEMP_DIR}/backend.tar
-docker save miniclaw/frontend:${VERSION} -o ${TEMP_DIR}/frontend.tar
+docker save jaguarclaw/backend:${VERSION} -o ${TEMP_DIR}/backend.tar
+docker save jaguarclaw/frontend:${VERSION} -o ${TEMP_DIR}/frontend.tar
 docker save pgvector/pgvector:pg16 -o ${TEMP_DIR}/postgres.tar
 
 # 复制部署文件
 cp docker-compose.prod.yml ${TEMP_DIR}/docker-compose.yml
 cp .env.example ${TEMP_DIR}/.env.example 2>/dev/null || cat > ${TEMP_DIR}/.env.example << 'EOF'
-# MiniClaw 环境配置
+# JaguarClaw 环境配置
 
 # LLM 配置（必填）
 LLM_ENDPOINT=https://api.deepseek.com
@@ -79,9 +79,9 @@ LLM_API_KEY=sk-xxx
 LLM_MODEL=deepseek-chat
 
 # 数据库配置（可选，使用默认值）
-POSTGRES_USER=miniclaw
-POSTGRES_PASSWORD=miniclaw
-POSTGRES_DB=miniclaw
+POSTGRES_USER=jaguarclaw
+POSTGRES_PASSWORD=jaguarclaw
+POSTGRES_DB=jaguarclaw
 
 # 端口配置
 PORT=80
@@ -89,7 +89,7 @@ EOF
 
 # 创建部署说明
 cat > ${TEMP_DIR}/README.md << 'EOF'
-# MiniClaw 内网部署指南
+# JaguarClaw 内网部署指南
 
 ## 快速开始
 
@@ -97,8 +97,8 @@ cat > ${TEMP_DIR}/README.md << 'EOF'
 
 ```bash
 # 解压
-tar -xzf miniclaw-*.tar.gz
-cd miniclaw-deploy
+tar -xzf jaguarclaw-*.tar.gz
+cd jaguarclaw-deploy
 
 # 导入所有镜像
 docker load -i backend.tar
@@ -144,8 +144,8 @@ docker-compose down -v
 
 ## 数据目录
 
-- PostgreSQL 数据: Docker volume `miniclaw_postgres_data`
-- Workspace 目录: Docker volume `miniclaw_workspace_data`
+- PostgreSQL 数据: Docker volume `jaguarclaw_postgres_data`
+- Workspace 目录: Docker volume `jaguarclaw_workspace_data`
 
 ## 故障排查
 
@@ -189,7 +189,7 @@ echo -e "Size: ${BLUE}${SIZE}${NC}"
 echo ""
 echo -e "${YELLOW}Deploy on target machine:${NC}"
 echo "  tar -xzf ${OUTPUT_FILE}"
-echo "  cd miniclaw-deploy"
+echo "  cd jaguarclaw-deploy"
 echo "  ./deploy.sh"
 echo "  cp .env.example .env && vim .env"
 echo "  docker-compose up -d"

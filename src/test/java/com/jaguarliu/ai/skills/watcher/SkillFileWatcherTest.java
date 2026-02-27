@@ -47,7 +47,7 @@ class SkillFileWatcherTest {
         registry = new SkillRegistry(parser, gatingService);
 
         // 创建测试 skills 目录
-        skillsDir = tempDir.resolve(".miniclaw/skills");
+        skillsDir = tempDir.resolve(".jaguarclaw/skills");
         Files.createDirectories(skillsDir);
 
         // 配置 registry 使用测试目录

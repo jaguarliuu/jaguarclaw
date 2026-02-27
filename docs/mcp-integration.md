@@ -2,7 +2,7 @@
 
 ## Overview
 
-MiniClaw integrates with the **Model Context Protocol (MCP)** as a **client**, enabling dynamic connection to various MCP servers to extend its capabilities. This integration allows MiniClaw to:
+JaguarClaw integrates with the **Model Context Protocol (MCP)** as a **client**, enabling dynamic connection to various MCP servers to extend its capabilities. This integration allows JaguarClaw to:
 
 - **Discover and execute tools** provided by MCP servers
 - **Access resources** (files, data, API responses) through standardized interfaces
@@ -11,7 +11,7 @@ MiniClaw integrates with the **Model Context Protocol (MCP)** as a **client**, e
 
 ## What MCP Servers Can Be Connected?
 
-MiniClaw can connect to any MCP-compliant server, including:
+JaguarClaw can connect to any MCP-compliant server, including:
 
 ### 1. Official MCP Servers
 
@@ -57,7 +57,7 @@ You can build your own MCP servers in:
 
 ## Transport Types
 
-MiniClaw supports three transport mechanisms for connecting to MCP servers:
+JaguarClaw supports three transport mechanisms for connecting to MCP servers:
 
 ### 1. STDIO (Standard Input/Output)
 
@@ -66,7 +66,7 @@ MiniClaw supports three transport mechanisms for connecting to MCP servers:
 **How it works:**
 - Spawns a child process
 - Communicates via stdin/stdout using JSON-RPC
-- Process lifecycle managed by MiniClaw
+- Process lifecycle managed by JaguarClaw
 
 **Example:**
 ```yaml
@@ -246,7 +246,7 @@ See `docs/examples/mcp-config-example.yml` for a complete configuration example.
 
 ### Automatic Tool Discovery
 
-When MiniClaw connects to an MCP server:
+When JaguarClaw connects to an MCP server:
 
 1. **Server Connection:** Establishes connection via configured transport
 2. **Capability Discovery:** Calls `listTools()` to discover available tools
@@ -263,7 +263,7 @@ Example:
 Tools from MCP servers are executed like built-in tools:
 
 1. LLM requests tool execution (e.g., `fs_read_file`)
-2. MiniClaw routes to McpToolAdapter
+2. JaguarClaw routes to McpToolAdapter
 3. Adapter forwards request to MCP server
 4. Server executes tool and returns result
 5. Result passed back to LLM
@@ -292,7 +292,7 @@ MCP servers can expose **resources** - structured data like files, database reco
 
 ### How Resources Work
 
-1. **Discovery:** MiniClaw calls `listResources()` when connecting to server
+1. **Discovery:** JaguarClaw calls `listResources()` when connecting to server
 2. **Registration:** If resources are available, registers `<prefix>resource_read` tool
 3. **Access:** LLM can read resources by URI
 
@@ -316,7 +316,7 @@ MCP servers can provide **prompts** - predefined prompt templates for specialize
 
 ### How Prompts Work
 
-1. **Discovery:** MiniClaw calls `listPrompts()` when connecting to server
+1. **Discovery:** JaguarClaw calls `listPrompts()` when connecting to server
 2. **System Prompt Integration:** Prompts are added to the system prompt in FULL mode
 3. **Visibility:** LLM sees available prompts and their descriptions
 
@@ -341,7 +341,7 @@ The LLM can then use these prompts when appropriate.
 
 ## Health Checking and Auto-Reconnect
 
-MiniClaw includes automatic health checking for MCP servers:
+JaguarClaw includes automatic health checking for MCP servers:
 
 ### Health Check Configuration
 
@@ -435,7 +435,7 @@ if __name__ == "__main__":
     asyncio.run(stdio_server(server))
 ```
 
-3. **Test with MiniClaw:**
+3. **Test with JaguarClaw:**
 ```yaml
 mcp:
   servers:
@@ -515,7 +515,7 @@ const transport = new StdioServerTransport();
 await server.connect(transport);
 ```
 
-3. **Test with MiniClaw:**
+3. **Test with JaguarClaw:**
 ```yaml
 mcp:
   servers:
@@ -653,8 +653,8 @@ server.setRequestHandler("prompts/get", async (request) => {
 ### Testing Locally
 
 1. **Start your MCP server** (ensure it's working standalone)
-2. **Configure in MiniClaw** (use `application-dev.yml` or environment-specific config)
-3. **Start MiniClaw** and check logs for connection success
+2. **Configure in JaguarClaw** (use `application-dev.yml` or environment-specific config)
+3. **Start JaguarClaw** and check logs for connection success
 4. **Test tool discovery:**
    ```bash
    # Via RPC if you have the frontend
@@ -675,7 +675,7 @@ COPY . .
 CMD ["python", "mcp_server.py"]
 ```
 
-Configure in MiniClaw:
+Configure in JaguarClaw:
 ```yaml
 mcp:
   servers:
@@ -736,13 +736,13 @@ curl -X POST http://localhost:8080/mcp \
 
 ### Tool Discovery Failures
 
-**Problem:** Tools not appearing in MiniClaw
+**Problem:** Tools not appearing in JaguarClaw
 
 **Solutions:**
 1. Check server implements `listTools()` correctly
 2. Verify server is connected (check logs)
 3. Check for naming conflicts (use unique `tool-prefix`)
-4. Restart MiniClaw to force re-discovery
+4. Restart JaguarClaw to force re-discovery
 5. Check health check logs for connection status
 
 ### Transport-Specific Problems
@@ -814,7 +814,7 @@ A: Yes! Use `tool-prefix` to avoid naming conflicts between servers.
 A: Yes, set `enabled: false` in the configuration.
 
 **Q: How do I update server configuration?**
-A: Modify configuration file and restart MiniClaw. (Note: Future versions will support hot-reload)
+A: Modify configuration file and restart JaguarClaw. (Note: Future versions will support hot-reload)
 
 **Q: Can I build an MCP server in Java?**
 A: Yes! Use the `mcp-java-sdk` library. The integration process is the same.

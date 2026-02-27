@@ -26,7 +26,7 @@ public class LlmConfigService {
     private final LlmProperties properties;
     private final OpenAiCompatibleLlmClient llmClient;
 
-    @Value("${miniclaw.config-dir:./data}")
+    @Value("${jaguarclaw.config-dir:./data}")
     private String configDir;
 
     /**

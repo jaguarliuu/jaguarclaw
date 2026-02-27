@@ -1,9 +1,9 @@
 /**
- * MiniClaw Desktop Build Script
+ * JaguarClaw Desktop Build Script
  *
  * Orchestrates the full build:
  * 1. mvn clean package -DskipTests
- * 2. npm run build (miniclaw-ui)
+ * 2. npm run build (jaguarclaw-ui)
  * 3. Copy JAR → electron/resources/app.jar
  * 4. Copy dist/ → electron/resources/webapp/
  * 5. Check JRE exists
@@ -17,7 +17,7 @@ const path = require('path');
 const ROOT = path.resolve(__dirname, '..', '..');
 const ELECTRON_DIR = path.resolve(__dirname, '..');
 const RESOURCES_DIR = path.join(ELECTRON_DIR, 'resources');
-const UI_DIR = path.join(ROOT, 'miniclaw-ui');
+const UI_DIR = path.join(ROOT, 'jaguarclaw-ui');
 
 function run(cmd, cwd = ROOT) {
   console.log(`\n> ${cmd}`);
@@ -74,20 +74,20 @@ try {
     fs.rmSync(webappDir, { recursive: true });
   }
   copyDir(distDir, webappDir);
-  console.log(`Copied miniclaw-ui/dist/ → resources/webapp/`);
+  console.log(`Copied jaguarclaw-ui/dist/ → resources/webapp/`);
 
   // Step 4.5: Copy built-in skills
   console.log('\n=== Step 4.5: Copying built-in skills ===');
-  const srcSkillsDir = path.join(ROOT, '.miniclaw', 'skills');
+  const srcSkillsDir = path.join(ROOT, '.jaguarclaw', 'skills');
   const destSkillsDir = path.join(RESOURCES_DIR, 'skills');
   if (fs.existsSync(srcSkillsDir)) {
     if (fs.existsSync(destSkillsDir)) {
       fs.rmSync(destSkillsDir, { recursive: true });
     }
     copyDir(srcSkillsDir, destSkillsDir);
-    console.log(`Copied .miniclaw/skills/ → resources/skills/`);
+    console.log(`Copied .jaguarclaw/skills/ → resources/skills/`);
   } else {
-    console.log('No .miniclaw/skills/ found, skipping');
+    console.log('No .jaguarclaw/skills/ found, skipping');
   }
 
   // Step 5: Check JRE

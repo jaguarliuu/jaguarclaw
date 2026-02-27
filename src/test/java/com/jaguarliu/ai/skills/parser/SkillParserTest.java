@@ -81,7 +81,7 @@ class SkillParserTest {
                     confirm-before:
                       - shell
                     metadata:
-                      miniclaw:
+                      jaguarclaw:
                         requires:
                           env:
                             - OPENAI_API_KEY
@@ -437,7 +437,7 @@ class SkillParserTest {
                     name: test-skill
                     description: Test
                     metadata:
-                      miniclaw:
+                      jaguarclaw:
                         requires:
                           os:
                             - windows

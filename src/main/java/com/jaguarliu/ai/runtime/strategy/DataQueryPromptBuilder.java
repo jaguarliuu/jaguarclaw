@@ -68,7 +68,7 @@ public class DataQueryPromptBuilder {
 
     private String buildIdentity() {
         return """
-                You are MiniClaw DataQuery Agent, specialized in data analysis and database querying.
+                You are JaguarClaw DataQuery Agent, specialized in data analysis and database querying.
                 You help users query, analyze, and visualize data from connected databases.
                 You must follow the mandatory workflow below for every query request.
                 Respond in Chinese when the user writes in Chinese.

@@ -1,6 +1,6 @@
 #!/bin/bash
 # ========================================
-# MiniClaw ARM64 离线包构建脚本（M1/ARM64 -> 内网 ARM64 部署）
+# JaguarClaw ARM64 离线包构建脚本（M1/ARM64 -> 内网 ARM64 部署）
 # 重点：不使用 buildx；构建时 --pull=false；打包包含所有 base 镜像
 # ========================================
 
@@ -14,11 +14,11 @@ NC='\033[0m'
 
 VERSION=${1:-latest}
 OUTPUT_DIR=${2:-.}
-OUTPUT_FILE="miniclaw-arm64-${VERSION}.tar.gz"
+OUTPUT_FILE="jaguarclaw-arm64-${VERSION}.tar.gz"
 PLATFORM="linux/arm64"
 
-BACKEND_IMAGE="miniclaw/backend:${VERSION}-arm64"
-FRONTEND_IMAGE="miniclaw/frontend:${VERSION}-arm64"
+BACKEND_IMAGE="jaguarclaw/backend:${VERSION}-arm64"
+FRONTEND_IMAGE="jaguarclaw/frontend:${VERSION}-arm64"
 
 # 后端 Dockerfile 相关 base
 BASE_MAVEN_IMAGE="maven:3.9-eclipse-temurin-21-alpine"
@@ -31,7 +31,7 @@ BASE_NGINX_IMAGE="nginx:alpine"
 # 运行依赖
 POSTGRES_IMAGE="pgvector/pgvector:pg16"
 
-echo -e "${GREEN}MiniClaw ARM64 Offline Package Builder${NC}"
+echo -e "${GREEN}JaguarClaw ARM64 Offline Package Builder${NC}"
 echo -e "${YELLOW}Platform: ${PLATFORM}${NC}"
 echo "Version: ${VERSION}"
 echo "Output: ${OUTPUT_DIR}/${OUTPUT_FILE}"
@@ -85,8 +85,8 @@ DOCKER_BUILDKIT=1 docker build \
   --platform "${PLATFORM}" \
   --pull=false \
   --tag "${FRONTEND_IMAGE}" \
-  --file miniclaw-ui/Dockerfile.arm64 \
-  miniclaw-ui/
+  --file jaguarclaw-ui/Dockerfile.arm64 \
+  jaguarclaw-ui/
 echo -e "${GREEN}✓ Frontend built: ${FRONTEND_IMAGE}${NC}"
 echo ""
 
@@ -137,11 +137,11 @@ fi
 
 # README
 cat > "${TEMP_DIR}/README.md" << 'EOF'
-MiniClaw ARM64 离线部署包
+JaguarClaw ARM64 离线部署包
 
 1) 解压
-tar -xzf miniclaw-arm64-*.tar.gz
-cd miniclaw-deploy
+tar -xzf jaguarclaw-arm64-*.tar.gz
+cd jaguarclaw-deploy
 
 2) 导入镜像
 ./deploy.sh
@@ -161,7 +161,7 @@ cat > "${TEMP_DIR}/deploy.sh" << 'EOF'
 set -euo pipefail
 
 echo "=========================================="
-echo "MiniClaw ARM64 Offline Image Loader"
+echo "JaguarClaw ARM64 Offline Image Loader"
 echo "=========================================="
 echo ""
 
@@ -201,10 +201,10 @@ echo ""
 EOF
 chmod +x "${TEMP_DIR}/deploy.sh"
 
-# -------- Step 5: 打包成 tar.gz（确保解压后有 miniclaw-deploy 目录） --------
+# -------- Step 5: 打包成 tar.gz（确保解压后有 jaguarclaw-deploy 目录） --------
 echo -e "${YELLOW}[5/5] Creating ${OUTPUT_FILE}...${NC}"
 
-DEPLOY_DIR_NAME="miniclaw-deploy"
+DEPLOY_DIR_NAME="jaguarclaw-deploy"
 FINAL_DIR="${TEMP_DIR}_final"
 mkdir -p "${FINAL_DIR}/${DEPLOY_DIR_NAME}"
 cp -a "${TEMP_DIR}/." "${FINAL_DIR}/${DEPLOY_DIR_NAME}/"

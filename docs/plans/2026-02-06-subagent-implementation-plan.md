@@ -2,7 +2,7 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** 在 MiniClaw 中实现可生产可教学的 SubAgent 派生执行能力（spawn / 异步执行 / announce / 运维接口 / 并发隔离）。
+**Goal:** 在 JaguarClaw 中实现可生产可教学的 SubAgent 派生执行能力（spawn / 异步执行 / announce / 运维接口 / 并发隔离）。
 
 **Architecture:** 基于现有 `AgentRuntime + SessionLaneManager + ToolDispatcher + Session/Run/Message` 增量演进。核心链路为：主 run 调用 `sessions_spawn` → 创建子 session/run → 入 `subagent lane` 异步执行 → 完成后 announce 回父 session。通过 `runKind + lane + parentRunId` 建立父子关系，默认禁止嵌套 spawn，确保安全与稳定。
 

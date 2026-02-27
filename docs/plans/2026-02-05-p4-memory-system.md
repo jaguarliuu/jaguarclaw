@@ -20,7 +20,7 @@
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│                    MiniClaw = 个人 AI 助手                           │
+│                    JaguarClaw = 个人 AI 助手                           │
 │                                                                      │
 │  记忆是全局的、跨会话的：                                              │
 │  - 会话 A 中保存的用户偏好 → 会话 B/C/D 都能检索到                     │
@@ -2255,8 +2255,8 @@ git commit -m "feat(memory): [P4-14] memory.rebuild RPC"
 ### Task P4-15: 前端 Memory 状态展示
 
 **Files:**
-- Create: `miniclaw-ui/src/composables/useMemory.ts`
-- Modify: `miniclaw-ui/src/views/SettingsView.vue`
+- Create: `jaguarclaw-ui/src/composables/useMemory.ts`
+- Modify: `jaguarclaw-ui/src/views/SettingsView.vue`
 
 **目标：**
 - 在设置页面添加 Memory 状态面板
@@ -2267,7 +2267,7 @@ git commit -m "feat(memory): [P4-14] memory.rebuild RPC"
 **Step: Commit**
 
 ```bash
-git add miniclaw-ui/
+git add jaguarclaw-ui/
 git commit -m "feat(memory): [P4-15] 前端 Memory 状态面板"
 ```
 
@@ -2300,7 +2300,7 @@ git commit -m "feat(memory): [P4-15] 前端 Memory 状态面板"
 | Modify | `src/main/resources/application.yml` |
 | Modify | `src/main/java/com/jaguarliu/ai/runtime/AgentRuntime.java` |
 | Modify | `src/main/java/com/jaguarliu/ai/runtime/SystemPromptBuilder.java` |
-| Modify | `miniclaw-ui/src/views/SettingsView.vue` |
+| Modify | `jaguarclaw-ui/src/views/SettingsView.vue` |
 
 ---
 

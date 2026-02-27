@@ -194,31 +194,31 @@ public class SkillValidator {
 
         Map<String, Object> metadata = (Map<String, Object>) metadataObj;
 
-        // 检查 miniclaw 子对象
-        if (metadata.containsKey("miniclaw")) {
-            Object miniclawObj = metadata.get("miniclaw");
-            if (!(miniclawObj instanceof Map)) {
-                errors.add(SkillParseError.invalidFieldType("metadata.miniclaw", "object", getTypeName(miniclawObj)));
+        // 检查 jaguarclaw 子对象
+        if (metadata.containsKey("jaguarclaw")) {
+            Object jaguarclawObj = metadata.get("jaguarclaw");
+            if (!(jaguarclawObj instanceof Map)) {
+                errors.add(SkillParseError.invalidFieldType("metadata.jaguarclaw", "object", getTypeName(jaguarclawObj)));
                 return;
             }
 
-            Map<String, Object> miniclaw = (Map<String, Object>) miniclawObj;
+            Map<String, Object> jaguarclaw = (Map<String, Object>) jaguarclawObj;
 
             // 检查 requires 子对象
-            if (miniclaw.containsKey("requires")) {
-                Object requiresObj = miniclaw.get("requires");
+            if (jaguarclaw.containsKey("requires")) {
+                Object requiresObj = jaguarclaw.get("requires");
                 if (!(requiresObj instanceof Map)) {
-                    errors.add(SkillParseError.invalidFieldType("metadata.miniclaw.requires", "object", getTypeName(requiresObj)));
+                    errors.add(SkillParseError.invalidFieldType("metadata.jaguarclaw.requires", "object", getTypeName(requiresObj)));
                 } else {
                     validateRequires((Map<String, Object>) requiresObj, errors);
                 }
             }
 
             // 检查 primaryEnv
-            if (miniclaw.containsKey("primaryEnv")) {
-                Object primaryEnv = miniclaw.get("primaryEnv");
+            if (jaguarclaw.containsKey("primaryEnv")) {
+                Object primaryEnv = jaguarclaw.get("primaryEnv");
                 if (primaryEnv != null && !(primaryEnv instanceof String)) {
-                    errors.add(SkillParseError.invalidFieldType("metadata.miniclaw.primaryEnv", "string", getTypeName(primaryEnv)));
+                    errors.add(SkillParseError.invalidFieldType("metadata.jaguarclaw.primaryEnv", "string", getTypeName(primaryEnv)));
                 }
             }
         }
@@ -228,7 +228,7 @@ public class SkillValidator {
      * 验证 requires 结构
      */
     private void validateRequires(Map<String, Object> requires, List<SkillParseError> errors) {
-        String prefix = "metadata.miniclaw.requires.";
+        String prefix = "metadata.jaguarclaw.requires.";
 
         // 验证各个字段是 List<String> 类型
         String[] listFields = {"env", "bins", "anyBins", "config", "os"};

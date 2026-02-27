@@ -3,17 +3,17 @@ version: '3.8'
 services:
   postgres:
     image: pgvector/pgvector:pg16
-    container_name: miniclaw-postgres
+    container_name: jaguarclaw-postgres
     environment:
-      POSTGRES_USER: miniclaw
-      POSTGRES_PASSWORD: miniclaw
-      POSTGRES_DB: miniclaw
+      POSTGRES_USER: jaguarclaw
+      POSTGRES_PASSWORD: jaguarclaw
+      POSTGRES_DB: jaguarclaw
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U miniclaw"]
+      test: ["CMD-SHELL", "pg_isready -U jaguarclaw"]
       interval: 10s
       timeout: 5s
       retries: 5

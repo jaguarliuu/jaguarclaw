@@ -66,7 +66,7 @@ ipcMain.handle('dialog:selectFolder', async () => {
 
 ### 3. TypeScript 类型定义
 
-**文件**: `miniclaw-ui/env.d.ts`
+**文件**: `jaguarclaw-ui/env.d.ts`
 
 为 `window.electron` 添加类型定义：
 
@@ -86,7 +86,7 @@ interface Window {
 
 ### 4. ContextInputModal 组件改造
 
-**文件**: `miniclaw-ui/src/components/ContextInputModal.vue`
+**文件**: `jaguarclaw-ui/src/components/ContextInputModal.vue`
 
 #### 环境检测
 ```typescript
@@ -358,8 +358,8 @@ Web 环境中：
 |------|---------|------|
 | `electron/preload.js` | 修改 | 暴露文件夹选择 API |
 | `electron/main.js` | 修改 | 添加 IPC handler 处理文件夹选择 |
-| `miniclaw-ui/env.d.ts` | 修改 | 添加 window.electron 类型定义 |
-| `miniclaw-ui/src/components/ContextInputModal.vue` | 修改 | 添加文件夹选择按钮和逻辑 |
+| `jaguarclaw-ui/env.d.ts` | 修改 | 添加 window.electron 类型定义 |
+| `jaguarclaw-ui/src/components/ContextInputModal.vue` | 修改 | 添加文件夹选择按钮和逻辑 |
 
 ## 验证结果
 

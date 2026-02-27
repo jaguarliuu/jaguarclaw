@@ -39,7 +39,7 @@ record StopDecision(boolean stop, String reason, StopTrigger trigger) {}
 
 ---
 
-## 二、当前 MiniClaw 实现分析
+## 二、当前 JaguarClaw 实现分析
 
 ### 2.1 已有能力
 

@@ -1,5 +1,5 @@
 # ========================================
-# MiniClaw Backend Dockerfile (ARM64)
+# JaguarClaw Backend Dockerfile (ARM64)
 # 针对麒麟/ARM Linux 优化
 # ========================================
 
@@ -25,8 +25,8 @@ RUN mvn clean package -DskipTests -B \
 # Stage 2: Runtime（使用 Java 21 LTS，ARM 更稳定）
 FROM --platform=$TARGETPLATFORM eclipse-temurin:21-jre-alpine
 
-LABEL maintainer="MiniClaw"
-LABEL description="MiniClaw Backend - ARM64"
+LABEL maintainer="JaguarClaw"
+LABEL description="JaguarClaw Backend - ARM64"
 LABEL architecture="arm64"
 
 WORKDIR /app
@@ -39,17 +39,17 @@ RUN apk add --no-cache \
     && echo "Asia/Shanghai" > /etc/timezone
 
 # 创建非 root 用户
-RUN addgroup -g 1000 miniclaw && \
-    adduser -u 1000 -G miniclaw -D miniclaw
+RUN addgroup -g 1000 jaguarclaw && \
+    adduser -u 1000 -G jaguarclaw -D jaguarclaw
 
 # 从构建阶段复制 jar
 COPY --from=builder /app/target/*.jar app.jar
 
 # 创建工作目录
 RUN mkdir -p /app/workspace && \
-    chown -R miniclaw:miniclaw /app
+    chown -R jaguarclaw:jaguarclaw /app
 
-USER miniclaw
+USER jaguarclaw
 
 # 健康检查（使用 curl，更可靠）
 HEALTHCHECK --interval=30s --timeout=10s --start-period=90s --retries=3 \

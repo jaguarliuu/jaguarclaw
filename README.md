@@ -66,7 +66,7 @@ mvn clean package -DskipTests
 java -jar target/jaguarclaw-*.jar --spring.profiles.active=local
 
 # 5. Run the frontend
-cd miniclaw-ui
+cd jaguarclaw-ui
 npm install
 npm run dev
 ```
@@ -176,10 +176,10 @@ jaguarclaw/
 │   ├── mcp/           # MCP protocol client
 │   ├── schedule/      # Cron scheduling
 │   └── channel/       # Email/webhook delivery
-├── miniclaw-ui/       # Vue 3 frontend
+├── jaguarclaw-ui/     # Vue 3 frontend
 ├── electron/          # Desktop application
 ├── workspace/         # Working directory
-│   ├── .miniclaw/     # Skills directory
+│   ├── .jaguarclaw/   # Skills directory
 │   └── memory/        # Memory files
 └── docs/              # Documentation
 ```
@@ -275,7 +275,7 @@ mvn clean package -DskipTests
 java -jar target/jaguarclaw-*.jar --spring.profiles.active=local
 
 # 5. 运行前端
-cd miniclaw-ui
+cd jaguarclaw-ui
 npm install
 npm run dev
 ```

@@ -7,7 +7,7 @@
 **核心理念：** 不内置依赖，通过智能检测 + 自动引导的方式管理外部工具依赖
 
 **优势：**
-- ✅ 保持 miniclaw 核心轻量（不包含 200-300MB 浏览器二进制）
+- ✅ 保持 jaguarclaw 核心轻量（不包含 200-300MB 浏览器二进制）
 - ✅ 跨平台兼容（Windows/macOS/Linux 各自管理依赖）
 - ✅ 易于更新（用户独立更新 agent-browser）
 - ✅ 灵活性高（支持用户已有的安装）
@@ -19,7 +19,7 @@
 
 ### 🔹 第一层：Skill Gating（自动检测）
 
-**文件：** `.miniclaw/skills/agent-browser/SKILL.md`
+**文件：** `.jaguarclaw/skills/agent-browser/SKILL.md`
 
 **实现：** 在 frontmatter 中添加 `requires` 配置
 
@@ -28,7 +28,7 @@
 name: agent-browser
 description: ...
 metadata:
-  miniclaw:
+  jaguarclaw:
     requires:
       anyBins: ["agent-browser", "agent-browser.cmd"]
 ---
@@ -47,7 +47,7 @@ metadata:
 
 ### 🔹 第二层：文档引导（降低门槛）
 
-**文件：** `.miniclaw/skills/agent-browser/SKILL.md`
+**文件：** `.jaguarclaw/skills/agent-browser/SKILL.md`
 
 **实现：** 在文档开头添加安装说明
 
@@ -115,7 +115,7 @@ if (commandNotFound("agent-browser")) {
     String installGuide =
         "agent-browser not found. Install with:\n" +
         "  npm install -g @agent-tools/browser\n" +
-        "Or run: bash .miniclaw/skills/agent-browser/scripts/install-agent-browser.sh";
+        "Or run: bash .jaguarclaw/skills/agent-browser/scripts/install-agent-browser.sh";
     throw new ToolExecutionException(installGuide);
 }
 ```
@@ -127,7 +127,7 @@ if (commandNotFound("agent-browser")) {
 ### 场景 1：首次使用（未安装）
 
 ```
-1. 用户启动 miniclaw
+1. 用户启动 jaguarclaw
    ↓
 2. SkillRegistry 扫描 agent-browser skill
    ↓
@@ -141,7 +141,7 @@ if (commandNotFound("agent-browser")) {
    ↓
 7. 脚本自动安装 → npm install -g @agent-tools/browser
    ↓
-8. 用户重启 miniclaw 或刷新 skill registry
+8. 用户重启 jaguarclaw 或刷新 skill registry
    ↓
 9. Skill 现在标记为 available ✅
 ```
@@ -149,7 +149,7 @@ if (commandNotFound("agent-browser")) {
 ### 场景 2：已安装
 
 ```
-1. 用户启动 miniclaw
+1. 用户启动 jaguarclaw
    ↓
 2. SkillRegistry 扫描 agent-browser skill
    ↓
@@ -165,7 +165,7 @@ if (commandNotFound("agent-browser")) {
 ## 文件清单
 
 ```
-.miniclaw/skills/agent-browser/
+.jaguarclaw/skills/agent-browser/
 ├── SKILL.md                              # 主文档（包含安装引导）
 ├── scripts/
 │   ├── install-agent-browser.sh          # Unix 安装脚本
@@ -183,7 +183,7 @@ if (commandNotFound("agent-browser")) {
 
 ```bash
 # 测试当前安装状态
-bash .miniclaw/skills/agent-browser/scripts/test-installation.sh
+bash .jaguarclaw/skills/agent-browser/scripts/test-installation.sh
 ```
 
 **预期输出：**
@@ -199,7 +199,7 @@ bash .miniclaw/skills/agent-browser/scripts/test-installation.sh
 npm uninstall -g @agent-tools/browser
 
 # 运行安装脚本
-bash .miniclaw/skills/agent-browser/scripts/install-agent-browser.sh
+bash .jaguarclaw/skills/agent-browser/scripts/install-agent-browser.sh
 
 # 验证
 agent-browser --version
@@ -260,7 +260,7 @@ fi
 name: data-analysis
 description: ...
 metadata:
-  miniclaw:
+  jaguarclaw:
     requires:
       bins: ["python3", "jupyter"]
       env: ["PYTHON_PATH"]
@@ -274,7 +274,7 @@ metadata:
 name: container-deploy
 description: ...
 metadata:
-  miniclaw:
+  jaguarclaw:
     requires:
       bins: ["docker"]
       anyBins: ["docker-compose", "docker compose"]

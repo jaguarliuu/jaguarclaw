@@ -48,8 +48,8 @@ class SkillRegistryTest {
         when(gatingService.evaluate(any())).thenReturn(GatingResult.PASSED);
 
         // 创建测试目录
-        projectSkillsDir = tempDir.resolve("project/.miniclaw/skills");
-        userSkillsDir = tempDir.resolve("user/.miniclaw/skills");
+        projectSkillsDir = tempDir.resolve("project/.jaguarclaw/skills");
+        userSkillsDir = tempDir.resolve("user/.jaguarclaw/skills");
         builtinSkillsDir = tempDir.resolve("builtin/skills");
 
         registry = new SkillRegistry(parser, gatingService);

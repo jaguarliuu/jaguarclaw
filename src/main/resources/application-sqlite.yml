@@ -1,6 +1,6 @@
 spring:
   datasource:
-    url: jdbc:sqlite:${MINICLAW_DB_PATH:./miniclaw.db}
+    url: jdbc:sqlite:${JAGUARCLAW_DB_PATH:./jaguarclaw.db}
     driver-class-name: org.sqlite.JDBC
     hikari:
       maximum-pool-size: 1

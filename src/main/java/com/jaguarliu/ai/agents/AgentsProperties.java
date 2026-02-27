@@ -23,7 +23,7 @@ import java.util.Map;
  *         allow: [read_file, write_file, shell, ...]
  *         deny: []
  *       workspace: ./workspace
- *       auth-dir: ./.miniclaw/auth/main
+ *       auth-dir: ./.jaguarclaw/auth/main
  *     public:
  *       sandbox: restricted
  *       tools:

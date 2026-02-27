@@ -4,7 +4,7 @@
 
 Phase 3 已完成 MCP 工具集成，包括：
 
-1. **McpToolAdapter**: 将 MCP 工具适配为 miniclaw Tool 接口
+1. **McpToolAdapter**: 将 MCP 工具适配为 jaguarclaw Tool 接口
 2. **McpToolRegistry**: 自动发现并注册 MCP 工具
 3. **McpClientManager**: 完整的连接生命周期管理
 
@@ -26,7 +26,7 @@ npm install -g @modelcontextprotocol/server-filesystem
 #### 方式 A: 直接通过 SQL 添加
 
 ```bash
-sqlite3 ./miniclaw.db <<EOF
+sqlite3 ./jaguarclaw.db <<EOF
 INSERT INTO mcp_servers (
     name,
     transport_type,
@@ -199,10 +199,10 @@ WHERE name = 'your-server';
 
 ```bash
 # 删除所有 MCP 服务器配置
-sqlite3 ./miniclaw.db "DELETE FROM mcp_servers;"
+sqlite3 ./jaguarclaw.db "DELETE FROM mcp_servers;"
 
 # 或删除特定服务器
-sqlite3 ./miniclaw.db "DELETE FROM mcp_servers WHERE name = 'filesystem';"
+sqlite3 ./jaguarclaw.db "DELETE FROM mcp_servers WHERE name = 'filesystem';"
 ```
 
 ## 下一步
@@ -218,15 +218,15 @@ Phase 3 完成后，接下来的开发阶段：
 
 ```bash
 # 查看当前配置的 MCP 服务器
-sqlite3 ./miniclaw.db "SELECT * FROM mcp_servers;"
+sqlite3 ./jaguarclaw.db "SELECT * FROM mcp_servers;"
 
 # 启用/禁用服务器
-sqlite3 ./miniclaw.db "UPDATE mcp_servers SET enabled = 0 WHERE name = 'filesystem';"
-sqlite3 ./miniclaw.db "UPDATE mcp_servers SET enabled = 1 WHERE name = 'filesystem';"
+sqlite3 ./jaguarclaw.db "UPDATE mcp_servers SET enabled = 0 WHERE name = 'filesystem';"
+sqlite3 ./jaguarclaw.db "UPDATE mcp_servers SET enabled = 1 WHERE name = 'filesystem';"
 
 # 查看工具前缀
-sqlite3 ./miniclaw.db "SELECT name, tool_prefix FROM mcp_servers;"
+sqlite3 ./jaguarclaw.db "SELECT name, tool_prefix FROM mcp_servers;"
 
 # 查看所有配置
-sqlite3 ./miniclaw.db ".schema mcp_servers"
+sqlite3 ./jaguarclaw.db ".schema mcp_servers"
 ```

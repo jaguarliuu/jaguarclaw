@@ -24,7 +24,7 @@ Skill = 教 Agent 怎么用工具的 SOP（标准操作流程）
 ┌─────────────────────────────────────────────────────────────────────┐
 │  1. Discovery（发现）                                                │
 │     扫描多个位置，按优先级合并                                        │
-│     <workspace>/.miniclaw/skills → ~/.miniclaw/skills → bundled     │
+│     <workspace>/.jaguarclaw/skills → ~/.jaguarclaw/skills → bundled     │
 └───────────────────────────────────┬─────────────────────────────────┘
                                     ↓
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -74,7 +74,7 @@ allowed-tools:                              # 工具白名单（可选）
   - memory_search
 confirm-before: []                          # 覆盖 HITL 设置（可选）
 metadata:
-  miniclaw:
+  jaguarclaw:
     requires:                               # 可用性条件（可选）
       env:                                  # 需要的环境变量
         - OPENAI_API_KEY
@@ -115,7 +115,7 @@ metadata:
 ### 目录结构
 
 ```
-.miniclaw/
+.jaguarclaw/
   skills/
     code-review/
       SKILL.md              # 核心：技能说明书
@@ -131,8 +131,8 @@ metadata:
 
 ```
 优先级从高到低：
-1. <workspace>/.miniclaw/skills/   （项目级，最高优先级）
-2. ~/.miniclaw/skills/             （用户级）
+1. <workspace>/.jaguarclaw/skills/   （项目级，最高优先级）
+2. ~/.jaguarclaw/skills/             （用户级）
 3. bundled skills                   （内置，最低优先级）
 
 同名 skill：高优先级覆盖低优先级
@@ -256,7 +256,7 @@ import java.util.List;
 
 /**
  * Skill 可用性条件
- * 对应 SKILL.md 中的 metadata.miniclaw.requires
+ * 对应 SKILL.md 中的 metadata.jaguarclaw.requires
  */
 @Data
 @Builder
@@ -573,7 +573,7 @@ public class SkillParser {
             @SuppressWarnings("unchecked")
             List<String> confirmBefore = (List<String>) frontmatter.get("confirm-before");
 
-            // 解析 metadata.miniclaw
+            // 解析 metadata.jaguarclaw
             SkillRequires requires = parseRequires(frontmatter);
             String primaryEnv = parsePrimaryEnv(frontmatter);
 
@@ -607,10 +607,10 @@ public class SkillParser {
         Map<String, Object> metadata = (Map<String, Object>) frontmatter.get("metadata");
         if (metadata == null) return null;
 
-        Map<String, Object> miniclaw = (Map<String, Object>) metadata.get("miniclaw");
-        if (miniclaw == null) return null;
+        Map<String, Object> jaguarclaw = (Map<String, Object>) metadata.get("jaguarclaw");
+        if (jaguarclaw == null) return null;
 
-        Map<String, Object> requires = (Map<String, Object>) miniclaw.get("requires");
+        Map<String, Object> requires = (Map<String, Object>) jaguarclaw.get("requires");
         if (requires == null) return null;
 
         return SkillRequires.builder()
@@ -627,10 +627,10 @@ public class SkillParser {
         Map<String, Object> metadata = (Map<String, Object>) frontmatter.get("metadata");
         if (metadata == null) return null;
 
-        Map<String, Object> miniclaw = (Map<String, Object>) metadata.get("miniclaw");
-        if (miniclaw == null) return null;
+        Map<String, Object> jaguarclaw = (Map<String, Object>) metadata.get("jaguarclaw");
+        if (jaguarclaw == null) return null;
 
-        return (String) miniclaw.get("primaryEnv");
+        return (String) jaguarclaw.get("primaryEnv");
     }
 
     private String getString(Map<String, Object> map, String key) {
@@ -919,8 +919,8 @@ public class SkillsProperties {
      * 索引越小优先级越高
      */
     private List<String> paths = List.of(
-            ".miniclaw/skills",      // 项目级（最高）
-            "~/.miniclaw/skills"     // 用户级
+            ".jaguarclaw/skills",      // 项目级（最高）
+            "~/.jaguarclaw/skills"     // 用户级
     );
 
     /**
@@ -1252,8 +1252,8 @@ public class SkillRegistry {
 # Skills 配置
 skills:
   paths:
-    - .miniclaw/skills
-    - ~/.miniclaw/skills
+    - .jaguarclaw/skills
+    - ~/.jaguarclaw/skills
   watch-enabled: true
   auto-select-enabled: true
   index-token-budget: 2000
@@ -1909,14 +1909,14 @@ git commit -m "feat(skills): [P3-10] add skill permission checks"
 ### Task P3-11: 示例 Skills
 
 **Files:**
-- Create: `.miniclaw/skills/code-review/SKILL.md`
-- Create: `.miniclaw/skills/git-commit/SKILL.md`
-- Create: `.miniclaw/skills/explain-code/SKILL.md`
+- Create: `.jaguarclaw/skills/code-review/SKILL.md`
+- Create: `.jaguarclaw/skills/git-commit/SKILL.md`
+- Create: `.jaguarclaw/skills/explain-code/SKILL.md`
 
 **Commit:**
 
 ```bash
-git add .miniclaw/skills/
+git add .jaguarclaw/skills/
 git commit -m "feat(skills): [P3-11] add example skills"
 ```
 
@@ -2110,10 +2110,10 @@ git commit -m "feat(skills): [P3-12] add skill events and RPC handlers"
 - `/skill-name` 输入时的自动补全
 
 **Files:**
-- Modify: `miniclaw-ui/src/App.vue` 或相关组件
-- Create: `miniclaw-ui/src/components/SkillBadge.vue`
-- Create: `miniclaw-ui/src/components/SkillPanel.vue`
-- Modify: `miniclaw-ui/src/composables/useChat.ts` - 处理 skill.activated 事件
+- Modify: `jaguarclaw-ui/src/App.vue` 或相关组件
+- Create: `jaguarclaw-ui/src/components/SkillBadge.vue`
+- Create: `jaguarclaw-ui/src/components/SkillPanel.vue`
+- Modify: `jaguarclaw-ui/src/composables/useChat.ts` - 处理 skill.activated 事件
 
 **Step 1: 处理 skill.activated 事件**
 
@@ -2156,7 +2156,7 @@ Skill 管理面板：
 **Commit:**
 
 ```bash
-git add miniclaw-ui/
+git add jaguarclaw-ui/
 git commit -m "feat(skills): [P3-13] add skill UI components"
 ```
 
@@ -2211,7 +2211,7 @@ git commit -m "feat(skills): [P3-13] add skill UI components"
 
 ## 设计对比
 
-| OpenClaw 特性 | MiniClaw 实现 |
+| OpenClaw 特性 | JaguarClaw 实现 |
 |--------------|---------------|
 | Discovery (多位置扫描) | ✅ 项目级 > 用户级 > 内置 |
 | Gating (env/bins/config/os) | ✅ SkillGatingService |

@@ -39,7 +39,7 @@ public class AgentProfile {
     /**
      * 认证目录（存放该 Agent 的凭据）
      */
-    private String authDir = "./.miniclaw/auth/main";
+    private String authDir = "./.jaguarclaw/auth/main";
 
     /**
      * 是否允许派生子代理

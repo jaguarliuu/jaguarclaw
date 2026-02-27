@@ -186,18 +186,18 @@ public class SkillParser {
         List<String> allowedTools = (List<String>) frontmatter.get("allowed-tools");
         List<String> confirmBefore = (List<String>) frontmatter.get("confirm-before");
 
-        // 提取 metadata.miniclaw
+        // 提取 metadata.jaguarclaw
         SkillRequires requires = null;
         String primaryEnv = null;
 
         Object metadataObj = frontmatter.get("metadata");
         if (metadataObj instanceof Map) {
             Map<String, Object> metadata = (Map<String, Object>) metadataObj;
-            Object miniclawObj = metadata.get("miniclaw");
-            if (miniclawObj instanceof Map) {
-                Map<String, Object> miniclaw = (Map<String, Object>) miniclawObj;
-                requires = buildRequires(miniclaw);
-                primaryEnv = (String) miniclaw.get("primaryEnv");
+            Object jaguarclawObj = metadata.get("jaguarclaw");
+            if (jaguarclawObj instanceof Map) {
+                Map<String, Object> jaguarclaw = (Map<String, Object>) jaguarclawObj;
+                requires = buildRequires(jaguarclaw);
+                primaryEnv = (String) jaguarclaw.get("primaryEnv");
             }
         }
 
@@ -217,8 +217,8 @@ public class SkillParser {
      * 构建 SkillRequires
      */
     @SuppressWarnings("unchecked")
-    private SkillRequires buildRequires(Map<String, Object> miniclaw) {
-        Object requiresObj = miniclaw.get("requires");
+    private SkillRequires buildRequires(Map<String, Object> jaguarclaw) {
+        Object requiresObj = jaguarclaw.get("requires");
         if (!(requiresObj instanceof Map)) {
             return null;
         }

@@ -1,4 +1,4 @@
-# MiniClaw（Java 版）实施计划
+# JaguarClaw（Java 版）实施计划
 
 ## 0) 项目目标与范围
 
@@ -301,7 +301,7 @@ Client/CLI/Web → Gateway WS RPC
 ## 4) 项目目录结构建议（Java）
 
 ```text
-miniclaw/
+jaguarclaw/
   app/                    # Spring Boot 启动
   gateway/
     ws/                   # WebSocket handler

@@ -1,4 +1,4 @@
-# MiniClaw SubAgent 系统设计（2026-02-06）
+# JaguarClaw SubAgent 系统设计（2026-02-06）
 
 > 状态：Design Ready（可进入实现分解）
 > 关联范围：后端优先；`cron` 与前端 UI 暂时后置
@@ -7,7 +7,7 @@
 
 ## 1. 背景与目标
 
-当前 MiniClaw 由单主 Agent 承担所有执行工作，面对以下任务时会出现瓶颈：
+当前 JaguarClaw 由单主 Agent 承担所有执行工作，面对以下任务时会出现瓶颈：
 
 - 长耗时任务（如大规模检索、长链路分析）阻塞主会话响应
 - 可并行任务（多源新闻采集、舆情多维分析、机器巡检）无法并发展开
@@ -60,7 +60,7 @@
 
 ```mermaid
 graph TD
-    User --> UI[miniclaw-ui]
+    User --> UI[jaguarclaw-ui]
     UI --> WS[GatewayWebSocketHandler]
     WS --> Router[RpcRouter]
 
@@ -106,14 +106,14 @@ agents:
         allow: [read_file, write_file, shell, shell_start, shell_status, shell_kill, http_get, memory_search, memory_write, sessions_spawn]
         deny: []
       workspace: ./workspace
-      auth-dir: ./.miniclaw/auth/main
+      auth-dir: ./.jaguarclaw/auth/main
     public:
       sandbox: restricted
       tools:
         allow: [read_file, http_get, memory_search]
         deny: [shell, write_file, sessions_spawn]
       workspace: ./workspace/public
-      auth-dir: ./.miniclaw/auth/public
+      auth-dir: ./.jaguarclaw/auth/public
 ```
 
 核心要求：

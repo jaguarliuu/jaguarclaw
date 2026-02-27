@@ -1,5 +1,5 @@
 # ========================================
-# MiniClaw Backend Dockerfile
+# JaguarClaw Backend Dockerfile
 # Multi-stage build: Maven + JRE
 # ========================================
 
@@ -19,23 +19,23 @@ RUN mvn clean package -DskipTests -B
 # Stage 2: Runtime
 FROM eclipse-temurin:24-jre-alpine
 
-LABEL maintainer="MiniClaw"
-LABEL description="MiniClaw - Java AI Agent System"
+LABEL maintainer="JaguarClaw"
+LABEL description="JaguarClaw - Java AI Agent System"
 
 WORKDIR /app
 
 # 创建非 root 用户
-RUN addgroup -g 1000 miniclaw && \
-    adduser -u 1000 -G miniclaw -D miniclaw
+RUN addgroup -g 1000 jaguarclaw && \
+    adduser -u 1000 -G jaguarclaw -D jaguarclaw
 
 # 从构建阶段复制 jar
 COPY --from=builder /app/target/*.jar app.jar
 
 # 创建工作目录
 RUN mkdir -p /app/workspace && \
-    chown -R miniclaw:miniclaw /app
+    chown -R jaguarclaw:jaguarclaw /app
 
-USER miniclaw
+USER jaguarclaw
 
 # 健康检查
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \

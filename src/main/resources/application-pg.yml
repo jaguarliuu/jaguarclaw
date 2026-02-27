@@ -1,8 +1,8 @@
 spring:
   datasource:
-    url: jdbc:postgresql://localhost:5432/miniclaw
-    username: miniclaw
-    password: miniclaw
+    url: jdbc:postgresql://localhost:5432/jaguarclaw
+    username: jaguarclaw
+    password: jaguarclaw
     driver-class-name: org.postgresql.Driver
     hikari:
       minimum-idle: 5

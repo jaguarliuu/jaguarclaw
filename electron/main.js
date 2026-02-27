@@ -22,10 +22,10 @@ const resourcesPath = isPackaged
 const jrePath = path.join(resourcesPath, 'jre');
 const jarPath = path.join(resourcesPath, 'app.jar');
 const webappPath = path.join(resourcesPath, 'webapp');
-const appDataPath = path.join(app.getPath('appData'), 'MiniClaw');
+const appDataPath = path.join(app.getPath('appData'), 'JaguarClaw');
 
 const dataDir = path.join(appDataPath, 'data');
-const dbPath = path.join(appDataPath, 'miniclaw.db');
+const dbPath = path.join(appDataPath, 'jaguarclaw.db');
 const workspacePath = path.join(appDataPath, 'workspace');
 const skillsDir = path.join(appDataPath, 'skills');
 const builtinSkillsDir = path.join(resourcesPath, 'skills');
@@ -121,7 +121,7 @@ function createSplashWindow() {
       </style>
     </head>
     <body>
-      <h1>MiniClaw</h1>
+      <h1>JaguarClaw</h1>
       <div class="spinner"></div>
       <p>Starting backend server...</p>
     </body>
@@ -137,8 +137,8 @@ function startJavaBackend(port, encryptionKey) {
     '-jar', jarPath,
     `--spring.profiles.active=sqlite`,
     `--server.port=${port}`,
-    `--miniclaw.config-dir=${dataDir}`,
-    `--miniclaw.webapp-dir=${webappPath}`,
+    `--jaguarclaw.config-dir=${dataDir}`,
+    `--jaguarclaw.webapp-dir=${webappPath}`,
     `--spring.datasource.url=jdbc:sqlite:${dbPath}`,
     `--tools.workspace=${workspacePath}`,
     `--skills.user-dir=${skillsDir}`,
@@ -308,7 +308,7 @@ function createMainWindow(port) {
     height: 800,
     minWidth: 800,
     minHeight: 600,
-    title: 'MiniClaw',
+    title: 'JaguarClaw',
     icon: path.join(resourcesPath, 'icon.png'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -457,7 +457,7 @@ app.whenReady().then(async () => {
       // 健康检查超时，显示详细日志
       showStartupError(
         'Backend Failed to Start',
-        'The MiniClaw backend service failed to start properly.',
+        'The JaguarClaw backend service failed to start properly.',
         err.message
       );
     } else if (err.message && err.message.includes('EADDRINUSE')) {
@@ -471,7 +471,7 @@ app.whenReady().then(async () => {
       // 其他错误
       showStartupError(
         'Startup Error',
-        'Failed to start MiniClaw. Please check the logs for more details.',
+        'Failed to start JaguarClaw. Please check the logs for more details.',
         err.message || 'Unknown error'
       );
     }

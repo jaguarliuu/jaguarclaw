@@ -1,5 +1,5 @@
 -- V1__init_schema.sql
--- MiniClaw SQLite 初始化数据库表结构
+-- JaguarClaw SQLite 初始化数据库表结构
 
 -- sessions 表：会话管理
 CREATE TABLE sessions (

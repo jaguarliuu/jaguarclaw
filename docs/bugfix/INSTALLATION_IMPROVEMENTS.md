@@ -1,8 +1,8 @@
-# MiniClaw 安装体验改进总结
+# JaguarClaw 安装体验改进总结
 
 ## 问题描述
 
-用户在安装 MiniClaw 后遇到两个主要问题：
+用户在安装 JaguarClaw 后遇到两个主要问题：
 
 1. **密钥环境变量缺失**：链接 node 需要一个 `NODE_CONSOLE_ENCRYPTION_KEY` 环境变量，但默认没有配置，用户也不知道需要设置，导致应用启动失败。
 
@@ -17,7 +17,7 @@
 **新增功能**:
 - 添加了 `getOrCreateEncryptionKey()` 函数，在应用启动时自动检查或生成加密密钥
 - 密钥规格：64 字符的 hex 字符串（32 字节，符合 AES-256 要求）
-- 密钥存储位置：`~/AppData/Roaming/MiniClaw/config.json` (Windows) 或 `~/Library/Application Support/MiniClaw/config.json` (Mac)
+- 密钥存储位置：`~/AppData/Roaming/JaguarClaw/config.json` (Windows) 或 `~/Library/Application Support/JaguarClaw/config.json` (Mac)
 - 如果配置文件已存在密钥，则复用；否则自动生成新密钥
 
 **代码实现**:
@@ -187,7 +187,7 @@ catch (err) {
     // 健康检查超时，显示详细日志
     showStartupError(
       'Backend Failed to Start',
-      'The MiniClaw backend service failed to start properly.',
+      'The JaguarClaw backend service failed to start properly.',
       err.message
     );
   } else if (err.message && err.message.includes('EADDRINUSE')) {
@@ -201,7 +201,7 @@ catch (err) {
     // 其他错误
     showStartupError(
       'Startup Error',
-      'Failed to start MiniClaw. Please check the logs for more details.',
+      'Failed to start JaguarClaw. Please check the logs for more details.',
       err.message || 'Unknown error'
     );
   }
@@ -282,27 +282,27 @@ javaProcess.on('exit', (code) => {
 ## 测试建议
 
 ### 场景 1：首次启动（正常）
-1. 删除 `~/AppData/Roaming/MiniClaw/config.json` (Windows) 或 `~/Library/Application Support/MiniClaw/config.json` (Mac)
-2. 启动 MiniClaw
+1. 删除 `~/AppData/Roaming/JaguarClaw/config.json` (Windows) 或 `~/Library/Application Support/JaguarClaw/config.json` (Mac)
+2. 启动 JaguarClaw
 3. 预期结果：自动生成密钥，应用正常启动
 
 ### 场景 2：已有配置（正常）
 1. 确保 `config.json` 存在且包含有效密钥
-2. 启动 MiniClaw
+2. 启动 JaguarClaw
 3. 预期结果：复用现有密钥，应用正常启动
 
 ### 场景 3：端口被占用（错误）
 1. 先启动一个应用占用 18080 端口
-2. 启动 MiniClaw
+2. 启动 JaguarClaw
 3. 预期结果：显示"Port Already in Use"错误对话框
 
 ### 场景 4：后端启动失败（错误）
 1. 模拟后端启动失败（例如删除 JRE 或 jar 文件）
-2. 启动 MiniClaw
+2. 启动 JaguarClaw
 3. 预期结果：显示"Backend Failed to Start"错误对话框，包含详细日志
 
 ### 场景 5：运行时崩溃（错误）
-1. 正常启动 MiniClaw
+1. 正常启动 JaguarClaw
 2. 手动杀死 Java 进程（模拟崩溃）
 3. 预期结果：显示"Backend Crashed"错误对话框
 
@@ -328,7 +328,7 @@ javaProcess.on('exit', (code) => {
 
 ## 总结
 
-通过这些改进，MiniClaw 的安装和启动体验得到了显著提升：
+通过这些改进，JaguarClaw 的安装和启动体验得到了显著提升：
 1. **零配置启动**：用户无需手动设置任何环境变量
 2. **友好的错误提示**：启动失败时提供清晰的错误信息和解决建议
 3. **便捷的日志访问**：一键打开日志目录，方便诊断问题

@@ -17,7 +17,7 @@ import java.nio.file.Path;
 
 /**
  * WebFlux 静态资源配置。
- * 当 miniclaw.webapp-dir 非空时启用，从指定目录提供前端静态文件，
+ * 当 jaguarclaw.webapp-dir 非空时启用，从指定目录提供前端静态文件，
  * 并为 SPA 路由提供 index.html fallback。
  *
  * 注意：必须使用 RequestPredicates 排除 /api/、/ws、/actuator 路径，
@@ -25,10 +25,10 @@ import java.nio.file.Path;
  * 拦截这些路径导致 @RestController 端点无法被访问。
  */
 @Configuration
-@ConditionalOnExpression("!'${miniclaw.webapp-dir:}'.isEmpty()")
+@ConditionalOnExpression("!'${jaguarclaw.webapp-dir:}'.isEmpty()")
 public class StaticResourceConfig {
 
-    @Value("${miniclaw.webapp-dir}")
+    @Value("${jaguarclaw.webapp-dir}")
     private String webappDir;
 
     @Bean

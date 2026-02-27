@@ -39,7 +39,7 @@ nul
 
 *.tar.gz
 
-miniclaw.db
+jaguarclaw.db
 
 data/uploads/
 data/llm-config.yml

@@ -29,7 +29,7 @@ public class GithubSearchProvider implements SearchProvider {
         this.objectMapper = objectMapper;
         this.webClient = WebClient.builder()
                 .defaultHeader("Accept", "application/vnd.github.v3+json")
-                .defaultHeader("User-Agent", "MiniClaw-Agent")
+                .defaultHeader("User-Agent", "JaguarClaw-Agent")
                 .codecs(configurer -> configurer.defaultCodecs().maxInMemorySize(2 * 1024 * 1024))
                 .build();
     }

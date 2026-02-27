@@ -63,7 +63,7 @@ public class LlmProperties {
     private Integer maxRetries = 3;
 
 
-    @Value("${miniclaw.config-dir:./data}")
+    @Value("${jaguarclaw.config-dir:./data}")
     private String configDir;
 
     // ==================== Multi-Provider Fields ====================

@@ -1,5 +1,5 @@
 # ========================================
-# MiniClaw ARM64 部署 docker-compose
+# JaguarClaw ARM64 部署 docker-compose
 # 针对麒麟 V10 / ARM Linux 优化
 # ========================================
 
@@ -9,24 +9,24 @@ services:
   # PostgreSQL + pgvector (ARM64)
   postgres:
     image: pgvector/pgvector:pg16
-    container_name: miniclaw-postgres
+    container_name: jaguarclaw-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-miniclaw}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-miniclaw}
-      POSTGRES_DB: ${POSTGRES_DB:-miniclaw}
+      POSTGRES_USER: ${POSTGRES_USER:-jaguarclaw}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-jaguarclaw}
+      POSTGRES_DB: ${POSTGRES_DB:-jaguarclaw}
       # 时区设置
       TZ: Asia/Shanghai
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U miniclaw"]
+      test: ["CMD-SHELL", "pg_isready -U jaguarclaw"]
       interval: 10s
       timeout: 5s
       retries: 10
       start_period: 30s
     networks:
-      - miniclaw-network
+      - jaguarclaw-network
     # ARM 设备可能内存有限，限制资源
     deploy:
       resources:
@@ -35,17 +35,17 @@ services:
 
   # Backend (Java + Spring Boot) - ARM64
   backend:
-    image: miniclaw/backend:latest-arm64
-    container_name: miniclaw-backend
+    image: jaguarclaw/backend:latest-arm64
+    container_name: jaguarclaw-backend
     restart: unless-stopped
     depends_on:
       postgres:
         condition: service_healthy
     environment:
       # 数据库配置
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/miniclaw
-      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-miniclaw}
-      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-miniclaw}
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/jaguarclaw
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-jaguarclaw}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-jaguarclaw}
       # LLM 配置（必须提供）
       LLM_ENDPOINT: ${LLM_ENDPOINT}
       LLM_API_KEY: ${LLM_API_KEY}
@@ -70,7 +70,7 @@ services:
       start_period: 120s  # ARM 启动可能较慢
       retries: 5
     networks:
-      - miniclaw-network
+      - jaguarclaw-network
     deploy:
       resources:
         limits:
@@ -78,8 +78,8 @@ services:
 
   # Frontend (Vue 3 + Nginx) - ARM64
   frontend:
-    image: miniclaw/frontend:latest-arm64
-    container_name: miniclaw-frontend
+    image: jaguarclaw/frontend:latest-arm64
+    container_name: jaguarclaw-frontend
     restart: unless-stopped
     depends_on:
       - backend
@@ -88,7 +88,7 @@ services:
     environment:
       TZ: Asia/Shanghai
     networks:
-      - miniclaw-network
+      - jaguarclaw-network
     deploy:
       resources:
         limits:
@@ -99,5 +99,5 @@ volumes:
   workspace_data:
 
 networks:
-  miniclaw-network:
+  jaguarclaw-network:
     driver: bridge

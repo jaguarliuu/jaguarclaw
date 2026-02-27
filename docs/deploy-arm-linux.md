@@ -1,4 +1,4 @@
-# MiniClaw ARM Linux 内网部署指南
+# JaguarClaw ARM Linux 内网部署指南
 
 ## 1. 环境要求
 
@@ -34,9 +34,9 @@ docker save pgvector/pgvector:pg16 -o pgvector-pg16-arm64.tar
 ### 2.3 构建后端 JAR
 
 ```bash
-cd miniclaw
+cd jaguarclaw
 mvn clean package -DskipTests
-# 产物：target/miniclaw.jar
+# 产物：target/jaguarclaw.jar
 ```
 
 ### 2.4 构建前端
@@ -44,7 +44,7 @@ mvn clean package -DskipTests
 生产构建时 WebSocket 地址自动使用 `window.location.host`，无需手动修改。
 
 ```bash
-cd miniclaw-ui
+cd jaguarclaw-ui
 npm install
 npm run build
 # 产物：dist/ 目录
@@ -53,12 +53,12 @@ npm run build
 ### 2.5 打包传输清单
 
 ```
-miniclaw-deploy/
+jaguarclaw-deploy/
 ├── jdk-24-aarch64.tar.gz
 ├── pgvector-pg16-arm64.tar          # 或 rpm/deb
-├── miniclaw.jar
-├── miniclaw-ui-dist/                # dist/ 目录内容
-├── skills/                          # .miniclaw/skills 完整拷贝
+├── jaguarclaw.jar
+├── jaguarclaw-ui-dist/              # dist/ 目录内容
+├── skills/                          # .jaguarclaw/skills 完整拷贝
 │   ├── agent-browser/
 │   │   └── SKILL.md
 │   ├── frontend-design/
@@ -104,15 +104,15 @@ version: '3.8'
 services:
   postgres:
     image: pgvector/pgvector:pg16
-    container_name: miniclaw-postgres
+    container_name: jaguarclaw-postgres
     environment:
-      POSTGRES_USER: miniclaw
-      POSTGRES_PASSWORD: miniclaw        # 生产环境请改强密码
-      POSTGRES_DB: miniclaw
+      POSTGRES_USER: jaguarclaw
+      POSTGRES_PASSWORD: jaguarclaw        # 生产环境请改强密码
+      POSTGRES_DB: jaguarclaw
     ports:
       - "5432:5432"
     volumes:
-      - /data/miniclaw/pgdata:/var/lib/postgresql/data
+      - /data/jaguarclaw/pgdata:/var/lib/postgresql/data
     restart: always
 ```
 
@@ -125,35 +125,35 @@ docker-compose up -d
 ```bash
 # 安装 PostgreSQL 16（离线 rpm/deb）
 # 安装 pgvector 扩展
-sudo -u postgres psql -c "CREATE USER miniclaw WITH PASSWORD 'miniclaw';"
-sudo -u postgres psql -c "CREATE DATABASE miniclaw OWNER miniclaw;"
-sudo -u postgres psql -d miniclaw -c "CREATE EXTENSION IF NOT EXISTS vector;"
+sudo -u postgres psql -c "CREATE USER jaguarclaw WITH PASSWORD 'jaguarclaw';"
+sudo -u postgres psql -c "CREATE DATABASE jaguarclaw OWNER jaguarclaw;"
+sudo -u postgres psql -d jaguarclaw -c "CREATE EXTENSION IF NOT EXISTS vector;"
 ```
 
 ### 3.3 部署目录结构
 
 ```bash
-mkdir -p /opt/miniclaw/.miniclaw/skills
-mkdir -p /opt/miniclaw/workspace
-mkdir -p /opt/miniclaw/www
+mkdir -p /opt/jaguarclaw/.jaguarclaw/skills
+mkdir -p /opt/jaguarclaw/workspace
+mkdir -p /opt/jaguarclaw/www
 
-cp miniclaw.jar /opt/miniclaw/
-cp application-prod.yml /opt/miniclaw/
-cp -r skills/* /opt/miniclaw/.miniclaw/skills/
-cp -r miniclaw-ui-dist/* /opt/miniclaw/www/
+cp jaguarclaw.jar /opt/jaguarclaw/
+cp application-prod.yml /opt/jaguarclaw/
+cp -r skills/* /opt/jaguarclaw/.jaguarclaw/skills/
+cp -r jaguarclaw-ui-dist/* /opt/jaguarclaw/www/
 ```
 
 最终结构：
 
 ```
-/opt/miniclaw/
-├── miniclaw.jar
+/opt/jaguarclaw/
+├── jaguarclaw.jar
 ├── application-prod.yml
 ├── workspace/                      # agent 工具读写目录
 ├── www/                            # 前端静态文件
 │   ├── index.html
 │   └── assets/
-└── .miniclaw/
+└── .jaguarclaw/
     └── skills/                     # 技能目录
         ├── agent-browser/
         │   └── SKILL.md
@@ -172,11 +172,11 @@ cp -r miniclaw-ui-dist/* /opt/miniclaw/www/
 
 | 优先级 | 路径 | 说明 |
 |--------|------|------|
-| 0（最高） | `{user.dir}/.miniclaw/skills` | 项目级 |
-| 1 | `{user.home}/.miniclaw/skills` | 用户级 |
+| 0（最高） | `{user.dir}/.jaguarclaw/skills` | 项目级 |
+| 1 | `{user.home}/.jaguarclaw/skills` | 用户级 |
 | 2 | `{user.dir}/skills` | 内置 |
 
-`user.dir` 是 `java -jar` 执行时的工作目录。**必须在 `/opt/miniclaw` 下启动 JAR**。
+`user.dir` 是 `java -jar` 执行时的工作目录。**必须在 `/opt/jaguarclaw` 下启动 JAR**。
 
 ### 3.4 生产配置文件
 
@@ -185,9 +185,9 @@ cp -r miniclaw-ui-dist/* /opt/miniclaw/www/
 ```yaml
 spring:
   datasource:
-    url: jdbc:postgresql://localhost:5432/miniclaw
-    username: miniclaw
-    password: miniclaw                    # 改为实际密码
+    url: jdbc:postgresql://localhost:5432/jaguarclaw
+    username: jaguarclaw
+    password: jaguarclaw                    # 改为实际密码
   jpa:
     show-sql: false
   flyway:
@@ -223,7 +223,7 @@ agent:
     timeout-seconds: 300
 
 tools:
-  workspace: /opt/miniclaw/workspace
+  workspace: /opt/jaguarclaw/workspace
   max-file-size: 1048576
 
 skills:
@@ -234,23 +234,23 @@ skills:
 ### 3.5 启动后端
 
 ```bash
-cd /opt/miniclaw
-java -jar miniclaw.jar --spring.config.additional-location=file:./application-prod.yml
+cd /opt/jaguarclaw
+java -jar jaguarclaw.jar --spring.config.additional-location=file:./application-prod.yml
 ```
 
 ### 3.6 Systemd 服务
 
 ```bash
-cat > /etc/systemd/system/miniclaw.service << 'EOF'
+cat > /etc/systemd/system/jaguarclaw.service << 'EOF'
 [Unit]
-Description=MiniClaw AI Agent
+Description=JaguarClaw AI Agent
 After=network.target postgresql.service
 
 [Service]
 Type=simple
-User=miniclaw
-WorkingDirectory=/opt/miniclaw
-ExecStart=/opt/jdk24/bin/java -jar miniclaw.jar --spring.config.additional-location=file:./application-prod.yml
+User=jaguarclaw
+WorkingDirectory=/opt/jaguarclaw
+ExecStart=/opt/jdk24/bin/java -jar jaguarclaw.jar --spring.config.additional-location=file:./application-prod.yml
 Restart=on-failure
 RestartSec=10
 Environment=JAVA_HOME=/opt/jdk24
@@ -259,17 +259,17 @@ Environment=JAVA_HOME=/opt/jdk24
 WantedBy=multi-user.target
 EOF
 
-useradd -r -s /sbin/nologin miniclaw
-chown -R miniclaw:miniclaw /opt/miniclaw
+useradd -r -s /sbin/nologin jaguarclaw
+chown -R jaguarclaw:jaguarclaw /opt/jaguarclaw
 
 systemctl daemon-reload
-systemctl enable miniclaw
-systemctl start miniclaw
+systemctl enable jaguarclaw
+systemctl start jaguarclaw
 ```
 
 ### 3.7 Nginx 反代
 
-`/etc/nginx/conf.d/miniclaw.conf`：
+`/etc/nginx/conf.d/jaguarclaw.conf`：
 
 ```nginx
 server {
@@ -277,7 +277,7 @@ server {
     server_name _;
 
     # 前端静态文件
-    root /opt/miniclaw/www;
+    root /opt/jaguarclaw/www;
     index index.html;
 
     location / {
@@ -305,11 +305,11 @@ nginx -t && systemctl reload nginx
 
 ```bash
 # 数据库连通
-psql -h localhost -U miniclaw -d miniclaw -c "SELECT 1;"
+psql -h localhost -U jaguarclaw -d jaguarclaw -c "SELECT 1;"
 
 # 后端启动
-journalctl -u miniclaw -f
-# 日志中应有：Loaded N skills from .../.miniclaw/skills
+journalctl -u jaguarclaw -f
+# 日志中应有：Loaded N skills from .../.jaguarclaw/skills
 
 # 前端访问
 # 浏览器打开 http://<机器IP>
@@ -321,13 +321,13 @@ journalctl -u miniclaw -f
 ## 5. 常见问题
 
 **Q: Skills 页面显示空白**
-确认 `java -jar` 的工作目录是 `/opt/miniclaw`。`SkillRegistry` 通过 `System.getProperty("user.dir")` 获取路径。Systemd 中用 `WorkingDirectory` 指定。
+确认 `java -jar` 的工作目录是 `/opt/jaguarclaw`。`SkillRegistry` 通过 `System.getProperty("user.dir")` 获取路径。Systemd 中用 `WorkingDirectory` 指定。
 
 **Q: WebSocket 连接失败**
 检查 Nginx `/ws` 反代配置，确保 `proxy_read_timeout` 足够长（agent 运行可能耗时数分钟）。
 
 **Q: 新增 Skill**
-将 `SKILL.md` 及资源文件放入 `/opt/miniclaw/.miniclaw/skills/<name>/` 目录，重启服务。
+将 `SKILL.md` 及资源文件放入 `/opt/jaguarclaw/.jaguarclaw/skills/<name>/` 目录，重启服务。
 
 **Q: 修改 LLM 模型**
 编辑 `application-prod.yml` 中的 `llm.endpoint` / `llm.model`，重启服务。
