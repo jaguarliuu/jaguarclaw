@@ -3,6 +3,7 @@ package com.jaguarliu.ai.gateway.rpc.handler.session;
 import com.jaguarliu.ai.gateway.rpc.RpcHandler;
 import com.jaguarliu.ai.gateway.rpc.model.RpcRequest;
 import com.jaguarliu.ai.gateway.rpc.model.RpcResponse;
+import com.jaguarliu.ai.gateway.ws.ConnectionManager;
 import com.jaguarliu.ai.session.SessionService;
 import com.jaguarliu.ai.storage.entity.SessionEntity;
 import lombok.RequiredArgsConstructor;
@@ -23,6 +24,7 @@ import java.util.Optional;
 public class SessionGetHandler implements RpcHandler {
 
     private final SessionService sessionService;
+    private final ConnectionManager connectionManager;
 
     @Override
     public String getMethod() {
@@ -32,18 +34,28 @@ public class SessionGetHandler implements RpcHandler {
     @Override
     public Mono<RpcResponse> handle(String connectionId, RpcRequest request) {
         return Mono.fromCallable(() -> {
+            String principalId = resolvePrincipalId(connectionId);
+            if (principalId == null) {
+                return RpcResponse.error(request.getId(), "UNAUTHORIZED", "Missing authenticated principal");
+            }
+
             String sessionId = extractSessionId(request.getPayload());
             if (sessionId == null) {
                 return RpcResponse.error(request.getId(), "INVALID_PARAMS", "Missing sessionId");
             }
 
-            Optional<SessionEntity> session = sessionService.get(sessionId);
+            Optional<SessionEntity> session = sessionService.get(sessionId, principalId);
             if (session.isEmpty()) {
                 return RpcResponse.error(request.getId(), "NOT_FOUND", "Session not found: " + sessionId);
             }
 
             return RpcResponse.success(request.getId(), toSessionDto(session.get()));
         }).subscribeOn(Schedulers.boundedElastic());
+    }
+
+    private String resolvePrincipalId(String connectionId) {
+        var principal = connectionManager.getPrincipal(connectionId);
+        return principal != null ? principal.getPrincipalId() : null;
     }
 
     private String extractSessionId(Object payload) {

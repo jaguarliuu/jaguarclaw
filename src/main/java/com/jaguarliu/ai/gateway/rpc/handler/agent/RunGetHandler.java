@@ -3,6 +3,7 @@ package com.jaguarliu.ai.gateway.rpc.handler.agent;
 import com.jaguarliu.ai.gateway.rpc.RpcHandler;
 import com.jaguarliu.ai.gateway.rpc.model.RpcRequest;
 import com.jaguarliu.ai.gateway.rpc.model.RpcResponse;
+import com.jaguarliu.ai.gateway.ws.ConnectionManager;
 import com.jaguarliu.ai.session.RunService;
 import com.jaguarliu.ai.storage.entity.RunEntity;
 import lombok.RequiredArgsConstructor;
@@ -23,6 +24,7 @@ import java.util.Optional;
 public class RunGetHandler implements RpcHandler {
 
     private final RunService runService;
+    private final ConnectionManager connectionManager;
 
     @Override
     public String getMethod() {
@@ -32,18 +34,28 @@ public class RunGetHandler implements RpcHandler {
     @Override
     public Mono<RpcResponse> handle(String connectionId, RpcRequest request) {
         return Mono.fromCallable(() -> {
+            String principalId = resolvePrincipalId(connectionId);
+            if (principalId == null) {
+                return RpcResponse.error(request.getId(), "UNAUTHORIZED", "Missing authenticated principal");
+            }
+
             String runId = extractRunId(request.getPayload());
             if (runId == null) {
                 return RpcResponse.error(request.getId(), "INVALID_PARAMS", "Missing runId");
             }
 
-            Optional<RunEntity> run = runService.get(runId);
+            Optional<RunEntity> run = runService.get(runId, principalId);
             if (run.isEmpty()) {
                 return RpcResponse.error(request.getId(), "NOT_FOUND", "Run not found: " + runId);
             }
 
             return RpcResponse.success(request.getId(), toRunDto(run.get()));
         }).subscribeOn(Schedulers.boundedElastic());
+    }
+
+    private String resolvePrincipalId(String connectionId) {
+        var principal = connectionManager.getPrincipal(connectionId);
+        return principal != null ? principal.getPrincipalId() : null;
     }
 
     private String extractRunId(Object payload) {

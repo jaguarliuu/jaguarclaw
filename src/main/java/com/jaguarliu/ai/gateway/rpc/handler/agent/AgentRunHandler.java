@@ -5,6 +5,8 @@ import com.jaguarliu.ai.gateway.events.EventBus;
 import com.jaguarliu.ai.gateway.rpc.RpcHandler;
 import com.jaguarliu.ai.gateway.rpc.model.RpcRequest;
 import com.jaguarliu.ai.gateway.rpc.model.RpcResponse;
+import com.jaguarliu.ai.gateway.ws.ConnectionManager;
+import com.jaguarliu.ai.gateway.security.rate.TokenBudgetService;
 import com.jaguarliu.ai.llm.LlmClient;
 import com.jaguarliu.ai.llm.model.LlmRequest;
 import com.jaguarliu.ai.llm.model.LlmResponse;
@@ -62,6 +64,8 @@ public class AgentRunHandler implements RpcHandler {
     private final AgentStrategyResolver strategyResolver;
     private final LoopConfig loopConfig;
     private final CancellationManager cancellationManager;
+    private final ConnectionManager connectionManager;
+    private final TokenBudgetService tokenBudgetService;
 
     /**
      * 历史消息数量限制（避免上下文过长）
@@ -81,6 +85,11 @@ public class AgentRunHandler implements RpcHandler {
 
     @Override
     public Mono<RpcResponse> handle(String connectionId, RpcRequest request) {
+        String principalId = resolvePrincipalId(connectionId);
+        if (principalId == null) {
+            return Mono.just(RpcResponse.error(request.getId(), "UNAUTHORIZED", "Missing authenticated principal"));
+        }
+
         String sessionId = extractSessionId(request.getPayload());
         String prompt = extractPrompt(request.getPayload());
         Set<String> excludedMcpServers = extractExcludedMcpServers(request.getPayload());
@@ -90,9 +99,12 @@ public class AgentRunHandler implements RpcHandler {
         if (prompt == null || prompt.isBlank()) {
             return Mono.just(RpcResponse.error(request.getId(), "INVALID_PARAMS", "Missing prompt"));
         }
+        if (!tokenBudgetService.tryConsume(principalId, tokenBudgetService.estimateTokens(prompt))) {
+            return Mono.just(RpcResponse.error(request.getId(), "TOKEN_BUDGET_EXCEEDED", "Daily token budget exceeded"));
+        }
 
         // 同步创建 run 并获取序号
-        PrepareResult result = prepareRun(sessionId, prompt, request.getId());
+        PrepareResult result = prepareRun(sessionId, prompt, request.getId(), principalId);
         if (result.error != null) {
             return Mono.just(result.error);
         }
@@ -110,7 +122,7 @@ public class AgentRunHandler implements RpcHandler {
                 result.run.getId(),
                 result.sequence,
                 () -> {
-                    executeRun(connectionId, result.run, excludedMcpServers, dataSourceId, modelSelection);
+                    executeRun(connectionId, result.run, excludedMcpServers, dataSourceId, modelSelection, principalId);
                     return null;
                 }
         ).subscribe();
@@ -118,13 +130,13 @@ public class AgentRunHandler implements RpcHandler {
         return Mono.just(response);
     }
 
-    private PrepareResult prepareRun(String sessionId, String prompt, String requestId) {
+    private PrepareResult prepareRun(String sessionId, String prompt, String requestId, String principalId) {
         String resolvedSessionId;
         if (sessionId == null || sessionId.isBlank()) {
-            SessionEntity session = sessionService.create("New Session");
+            SessionEntity session = sessionService.create("New Session", "main", principalId);
             resolvedSessionId = session.getId();
         } else {
-            if (sessionService.get(sessionId).isEmpty()) {
+            if (sessionService.get(sessionId, principalId).isEmpty()) {
                 return new PrepareResult(null, null, 0,
                         RpcResponse.error(requestId, "NOT_FOUND", "Session not found: " + sessionId));
             }
@@ -134,7 +146,7 @@ public class AgentRunHandler implements RpcHandler {
         Object lock = sessionLocks.computeIfAbsent(resolvedSessionId, k -> new Object());
         synchronized (lock) {
             long sequence = sessionLaneManager.nextSequence(resolvedSessionId);
-            RunEntity run = runService.create(resolvedSessionId, prompt);
+            RunEntity run = runService.create(resolvedSessionId, prompt, "main", principalId);
             log.info("Prepared run: sessionId={}, runId={}, seq={}", resolvedSessionId, run.getId(), sequence);
             return new PrepareResult(resolvedSessionId, run, sequence, null);
         }
@@ -143,7 +155,7 @@ public class AgentRunHandler implements RpcHandler {
     /**
      * 执行 run（使用 Agent Strategy 路由到不同策略）
      */
-    private void executeRun(String connectionId, RunEntity run, Set<String> excludedMcpServers, String dataSourceId, String modelSelection) {
+    private void executeRun(String connectionId, RunEntity run, Set<String> excludedMcpServers, String dataSourceId, String modelSelection, String principalId) {
         String runId = run.getId();
         String sessionId = run.getSessionId();
         String prompt = run.getPrompt();
@@ -154,10 +166,10 @@ public class AgentRunHandler implements RpcHandler {
             eventBus.publish(AgentEvent.lifecycleStart(connectionId, runId));
 
             // 2. 保存用户消息
-            messageService.saveUserMessage(sessionId, runId, prompt);
+            messageService.saveUserMessage(sessionId, runId, prompt, principalId);
 
             // 3. 获取历史消息
-            List<MessageEntity> history = messageService.getSessionHistory(sessionId, maxHistoryMessages);
+            List<MessageEntity> history = messageService.getSessionHistory(sessionId, maxHistoryMessages, principalId);
             // 排除刚保存的这条用户消息
             List<LlmRequest.Message> historyMessages = history.stream()
                     .filter(m -> !m.getRunId().equals(runId))
@@ -209,7 +221,8 @@ public class AgentRunHandler implements RpcHandler {
             String response = agentRuntime.executeLoopWithContext(context, messages, prompt);
 
             // 9. 保存助手消息
-            messageService.saveAssistantMessage(sessionId, runId, response);
+            messageService.saveAssistantMessage(sessionId, runId, response, principalId);
+            tokenBudgetService.tryConsume(principalId, tokenBudgetService.estimateTokens(response));
 
             // 10. lifecycle.end
             runService.updateStatus(runId, RunStatus.DONE);
@@ -219,7 +232,7 @@ public class AgentRunHandler implements RpcHandler {
                     runId, plan.getStrategyName(), response.length());
 
             // 11. 自动生成会话标题（首轮对话）
-            tryGenerateSessionTitle(connectionId, runId, sessionId, prompt, response, modelSelection);
+            tryGenerateSessionTitle(connectionId, runId, sessionId, prompt, response, modelSelection, principalId);
 
         } catch (java.util.concurrent.CancellationException e) {
             log.info("Run cancelled: id={}", runId);
@@ -250,9 +263,9 @@ public class AgentRunHandler implements RpcHandler {
      */
     private void tryGenerateSessionTitle(String connectionId, String runId,
                                           String sessionId, String prompt, String response,
-                                          String modelSelection) {
+                                          String modelSelection, String principalId) {
         try {
-            var sessionOpt = sessionService.get(sessionId);
+            var sessionOpt = sessionService.get(sessionId, principalId);
             if (sessionOpt.isEmpty()) return;
             String currentName = sessionOpt.get().getName();
             // 只对默认名称的会话生成标题
@@ -355,6 +368,11 @@ public class AgentRunHandler implements RpcHandler {
             return model != null ? model.toString() : null;
         }
         return null;
+    }
+
+    private String resolvePrincipalId(String connectionId) {
+        var principal = connectionManager.getPrincipal(connectionId);
+        return principal != null ? principal.getPrincipalId() : null;
     }
 
     private record PrepareResult(String sessionId, RunEntity run, long sequence, RpcResponse error) {}

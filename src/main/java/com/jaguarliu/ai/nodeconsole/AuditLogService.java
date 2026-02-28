@@ -87,6 +87,28 @@ public class AuditLogService {
     }
 
     /**
+     * 记录 WebSocket/RPC 安全事件
+     */
+    public void logSecurityEvent(String eventType, String sessionId, String toolName,
+                                 String resultStatus, String resultSummary) {
+        AuditLogEntity entity = AuditLogEntity.builder()
+                .eventType(eventType)
+                .sessionId(sessionId)
+                .toolName(toolName)
+                .resultStatus(resultStatus)
+                .resultSummary(truncate(resultSummary))
+                .hitlRequired(false)
+                .build();
+
+        try {
+            auditLogRepository.save(entity);
+            log.debug("Security audit log recorded: type={}, status={}", eventType, resultStatus);
+        } catch (Exception e) {
+            log.error("Failed to record security audit log: type={}", eventType, e);
+        }
+    }
+
+    /**
      * 分页查询审计日志（支持多种筛选条件，一次只按一个条件筛选）
      */
     public Page<AuditLogEntity> query(String nodeAlias, String eventType, String safetyLevel,

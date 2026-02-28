@@ -31,11 +31,17 @@ public class MessageEntity {
     @Column(nullable = false, columnDefinition = "TEXT")
     private String content;
 
+    @Column(name = "owner_principal_id")
+    private String ownerPrincipalId;
+
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 
     @PrePersist
     protected void onCreate() {
+        if (ownerPrincipalId == null || ownerPrincipalId.isBlank()) {
+            ownerPrincipalId = "local-default";
+        }
         createdAt = LocalDateTime.now();
     }
 }

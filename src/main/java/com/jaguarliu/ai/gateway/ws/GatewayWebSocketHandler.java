@@ -1,9 +1,13 @@
 package com.jaguarliu.ai.gateway.ws;
 
 import com.jaguarliu.ai.gateway.rpc.RpcRouter;
+import com.jaguarliu.ai.gateway.security.rate.ConnectionRateLimiter;
+import com.jaguarliu.ai.gateway.security.rate.MessageRateLimiter;
+import com.jaguarliu.ai.nodeconsole.AuditLogService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
+import org.springframework.web.reactive.socket.CloseStatus;
 import org.springframework.web.reactive.socket.WebSocketHandler;
 import org.springframework.web.reactive.socket.WebSocketMessage;
 import org.springframework.web.reactive.socket.WebSocketSession;
@@ -23,9 +27,25 @@ public class GatewayWebSocketHandler implements WebSocketHandler {
 
     private final ConnectionManager connectionManager;
     private final RpcRouter rpcRouter;
+    private final ConnectionRateLimiter connectionRateLimiter;
+    private final MessageRateLimiter messageRateLimiter;
+    private final AuditLogService auditLogService;
 
     @Override
     public Mono<Void> handle(WebSocketSession session) {
+        String clientIp = extractClientIp(session);
+        if (!connectionRateLimiter.allow(clientIp)) {
+            log.warn("WebSocket connection rejected by rate limit: clientIp={}", clientIp);
+            auditLogService.logSecurityEvent(
+                    "ws.connection.rate_limited",
+                    null,
+                    "ws.connect",
+                    "rejected",
+                    "clientIp=%s".formatted(clientIp)
+            );
+            return session.close(CloseStatus.POLICY_VIOLATION);
+        }
+
         String connectionId = generateConnectionId();
 
         // 注册连接
@@ -37,7 +57,10 @@ public class GatewayWebSocketHandler implements WebSocketHandler {
                 .filter(message -> message.getType() == WebSocketMessage.Type.TEXT)
                 .flatMap(message -> handleMessage(connectionId, session, message))
                 .doOnError(error -> log.error("WebSocket error: connectionId={}", connectionId, error))
-                .doFinally(signalType -> connectionManager.remove(connectionId));
+                .doFinally(signalType -> {
+                    connectionManager.remove(connectionId);
+                    messageRateLimiter.clear(connectionId);
+                });
 
         return session.send(output);
     }
@@ -58,5 +81,12 @@ public class GatewayWebSocketHandler implements WebSocketHandler {
      */
     private String generateConnectionId() {
         return UUID.randomUUID().toString().substring(0, 8);
+    }
+
+    private String extractClientIp(WebSocketSession session) {
+        if (session.getHandshakeInfo() == null || session.getHandshakeInfo().getRemoteAddress() == null) {
+            return "unknown";
+        }
+        return session.getHandshakeInfo().getRemoteAddress().toString();
     }
 }

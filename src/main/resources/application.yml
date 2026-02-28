@@ -41,6 +41,24 @@ management:
     health:
       show-details: never
 
+# WebSocket 安全配置（桌面端本地模式）
+security:
+  mode: local_desktop
+  ws:
+    local-only-bootstrap: true
+    allow-anonymous-methods: [ping, auth.local.bootstrap, auth.refresh]
+  auth:
+    access-token-minutes: 30
+    refresh-token-days: 30
+  rate-limit:
+    connection-per-minute-per-ip: 20
+    message-per-minute-per-connection: 60
+    token-per-day-per-principal: 1000000
+  replay:
+    enabled: true
+    timestamp-window-seconds: 10
+    nonce-ttl-seconds: 60
+
 # LLM 配置
 llm:
   # 使用 OpenAI 兼容接口（可替换为 DeepSeek、通义千问、Ollama、GLM 等）
