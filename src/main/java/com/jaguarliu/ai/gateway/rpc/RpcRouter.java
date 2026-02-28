@@ -60,31 +60,33 @@ public class RpcRouter {
             RpcRequest request = objectMapper.readValue(message, RpcRequest.class);
 
             if (!"request".equals(request.getType())) {
+                auditDeny("ws.rpc.invalid_type", connectionId, null, request.getId(), "Expected type=request");
                 return Mono.just(toJson(RpcResponse.error(
                         request.getId(), "INVALID_TYPE", "Expected type 'request'")));
             }
 
             String method = request.getMethod();
             if (method == null || method.isBlank()) {
+                auditDeny("ws.rpc.invalid_method", connectionId, null, request.getId(), "Missing method");
                 return Mono.just(toJson(RpcResponse.error(
                         request.getId(), "INVALID_METHOD", "Missing method")));
             }
 
             if (!isMethodAllowedForConnection(connectionId, method)) {
-                auditDeny("ws.rpc.unauthorized", connectionId, method, "Authentication required");
+                auditDeny("ws.rpc.unauthorized", connectionId, method, request.getId(), "Authentication required");
                 return Mono.just(toJson(RpcResponse.error(
                         request.getId(), "UNAUTHORIZED", "Authentication required for method: " + method)));
             }
 
             if (!messageRateLimiter.allow(connectionId)) {
-                auditDeny("ws.rpc.rate_limited", connectionId, method, "RPC rate limit exceeded");
+                auditDeny("ws.rpc.rate_limited", connectionId, method, request.getId(), "RPC rate limit exceeded");
                 return Mono.just(toJson(RpcResponse.error(
                         request.getId(), "RATE_LIMITED", "Too many RPC requests, please retry later")));
             }
 
             ConnectionPrincipal principal = connectionManager.getPrincipal(connectionId);
             if (!rpcAuthorizationService.isAuthorized(principal, method)) {
-                auditDeny("ws.rpc.permission_denied", connectionId, method, "Permission denied");
+                auditDeny("ws.rpc.permission_denied", connectionId, method, request.getId(), "Permission denied");
                 return Mono.just(toJson(RpcResponse.error(
                         request.getId(), "PERMISSION_DENIED", "Permission denied for method: " + method)));
             }
@@ -96,7 +98,7 @@ public class RpcRouter {
                     || permission == RpcPermission.ADMIN;
             ReplayGuard.ValidationResult replayCheck = replayGuard.validate(request, strictReplay);
             if (!replayCheck.allowed()) {
-                auditDeny("ws.rpc.replay_blocked", connectionId, method, replayCheck.message());
+                auditDeny("ws.rpc.replay_blocked", connectionId, method, request.getId(), replayCheck.message());
                 return Mono.just(toJson(RpcResponse.error(
                         request.getId(), replayCheck.code(), replayCheck.message())));
             }
@@ -105,6 +107,7 @@ public class RpcRouter {
 
             if (handler == null) {
                 log.warn("Unknown method: {}", method);
+                auditDeny("ws.rpc.method_not_found", connectionId, method, request.getId(), "Unknown method");
                 return Mono.just(toJson(RpcResponse.error(
                         request.getId(), "METHOD_NOT_FOUND", "Unknown method: " + method)));
             }
@@ -114,13 +117,14 @@ public class RpcRouter {
                     .map(this::toJson)
                     .onErrorResume(e -> {
                         log.error("Handler error: method={}", method, e);
+                        auditDeny("ws.rpc.handler_error", connectionId, method, request.getId(), e.getMessage());
                         return Mono.just(toJson(RpcResponse.error(
                                 request.getId(), "INTERNAL_ERROR", e.getMessage())));
                     });
 
         } catch (JsonProcessingException e) {
             log.error("Failed to parse request: {}", message, e);
-            auditDeny("ws.rpc.parse_error", connectionId, null, "Invalid JSON");
+            auditDeny("ws.rpc.parse_error", connectionId, null, null, "Invalid JSON");
             return Mono.just(toJson(RpcResponse.error(null, "PARSE_ERROR", "Invalid JSON")));
         }
     }
@@ -141,13 +145,15 @@ public class RpcRouter {
         }
     }
 
-    private void auditDeny(String eventType, String connectionId, String method, String reason) {
+    private void auditDeny(String eventType, String connectionId, String method, String requestId, String reason) {
         auditLogService.logSecurityEvent(
                 eventType,
                 null,
                 method,
                 "rejected",
-                "connectionId=%s, reason=%s".formatted(connectionId, reason)
+                reason,
+                connectionId,
+                requestId
         );
     }
 }

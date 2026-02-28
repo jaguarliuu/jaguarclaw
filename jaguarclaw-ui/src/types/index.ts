@@ -350,6 +350,8 @@ export interface AuditLogEntry {
   eventType: string
   runId: string | null
   sessionId: string | null
+  connectionId: string | null
+  requestId: string | null
   nodeAlias: string | null
   connectorType: string | null
   toolName: string | null

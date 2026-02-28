@@ -41,13 +41,13 @@ public class AuthLocalBootstrapHandler implements RpcHandler {
         String deviceId = toStringOrNull(payload.get("deviceId"));
 
         if (deviceId == null || deviceId.isBlank()) {
-            auditLogService.logSecurityEvent("ws.auth.bootstrap.invalid_params", null, getMethod(), "rejected", "Missing deviceId");
+            auditLogService.logSecurityEvent("ws.auth.bootstrap.invalid_params", null, getMethod(), "rejected", "Missing deviceId", connectionId, request.getId());
             return Mono.just(RpcResponse.error(request.getId(), "INVALID_PARAMS", "deviceId is required"));
         }
 
         ConnectionContext context = connectionManager.getContext(connectionId);
         if (context == null) {
-            auditLogService.logSecurityEvent("ws.auth.bootstrap.connection_missing", null, getMethod(), "rejected", "Connection not found");
+            auditLogService.logSecurityEvent("ws.auth.bootstrap.connection_missing", null, getMethod(), "rejected", "Connection not found", connectionId, request.getId());
             return Mono.just(RpcResponse.error(request.getId(), "CONNECTION_NOT_FOUND", "Connection not found"));
         }
 
@@ -58,7 +58,9 @@ public class AuthLocalBootstrapHandler implements RpcHandler {
                     null,
                     getMethod(),
                     "rejected",
-                    "connectionId=%s, clientIp=%s".formatted(connectionId, context.getClientIp())
+                    "clientIp=%s".formatted(context.getClientIp()),
+                    connectionId,
+                    request.getId()
             );
             return Mono.just(RpcResponse.error(request.getId(), "BOOTSTRAP_FORBIDDEN", "Bootstrap is allowed only from localhost"));
         }
@@ -76,7 +78,9 @@ public class AuthLocalBootstrapHandler implements RpcHandler {
                 null,
                 getMethod(),
                 "success",
-                "connectionId=%s, principalId=%s".formatted(connectionId, deviceId)
+                "principalId=%s".formatted(deviceId),
+                connectionId,
+                request.getId()
         );
         return Mono.just(RpcResponse.success(request.getId(), Map.of(
                 "principalId", deviceId,

@@ -571,6 +571,8 @@ export default {
       subtitle: '命令执行审计追踪',
       filters: {
         nodePlaceholder: '节点别名',
+        connectionPlaceholder: '连接 ID',
+        requestPlaceholder: '请求 ID',
         allEvents: '所有事件',
         allLevels: '所有级别',
         allStatus: '所有状态',
@@ -595,6 +597,8 @@ export default {
         policy: '策略：',
         runId: 'Run ID：',
         sessionId: 'Session ID：',
+        connectionId: 'Connection ID：',
+        requestId: 'Request ID：',
         connector: '连接器：',
       },
       prevBtn: '上一页',

@@ -35,7 +35,7 @@ public class AuthRefreshHandler implements RpcHandler {
         String refreshToken = toStringOrNull(payload.get("refreshToken"));
 
         if (refreshToken == null || refreshToken.isBlank()) {
-            auditLogService.logSecurityEvent("ws.auth.refresh.invalid_params", null, getMethod(), "rejected", "Missing refreshToken");
+            auditLogService.logSecurityEvent("ws.auth.refresh.invalid_params", null, getMethod(), "rejected", "Missing refreshToken", connectionId, request.getId());
             return Mono.just(RpcResponse.error(request.getId(), "INVALID_PARAMS", "refreshToken is required"));
         }
 
@@ -51,7 +51,9 @@ public class AuthRefreshHandler implements RpcHandler {
                             null,
                             getMethod(),
                             "success",
-                            "connectionId=%s, principalId=%s".formatted(connectionId, tokens.getPrincipalId())
+                            "principalId=%s".formatted(tokens.getPrincipalId()),
+                            connectionId,
+                            request.getId()
                     );
                     return RpcResponse.success(request.getId(), Map.of(
                             "principalId", tokens.getPrincipalId(),
@@ -83,7 +85,9 @@ public class AuthRefreshHandler implements RpcHandler {
                 null,
                 getMethod(),
                 "rejected",
-                "connectionId=%s".formatted(connectionId)
+                "refresh token invalid or expired",
+                connectionId,
+                requestId
         );
         return RpcResponse.error(requestId, "INVALID_REFRESH_TOKEN", "Refresh token is invalid or expired");
     }

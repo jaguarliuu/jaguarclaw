@@ -91,9 +91,20 @@ public class AuditLogService {
      */
     public void logSecurityEvent(String eventType, String sessionId, String toolName,
                                  String resultStatus, String resultSummary) {
+        logSecurityEvent(eventType, sessionId, toolName, resultStatus, resultSummary, null, null);
+    }
+
+    /**
+     * 记录 WebSocket/RPC 安全事件（含连接与请求标识）
+     */
+    public void logSecurityEvent(String eventType, String sessionId, String toolName,
+                                 String resultStatus, String resultSummary,
+                                 String connectionId, String requestId) {
         AuditLogEntity entity = AuditLogEntity.builder()
                 .eventType(eventType)
                 .sessionId(sessionId)
+                .connectionId(connectionId)
+                .requestId(requestId)
                 .toolName(toolName)
                 .resultStatus(resultStatus)
                 .resultSummary(truncate(resultSummary))
@@ -112,7 +123,9 @@ public class AuditLogService {
      * 分页查询审计日志（支持多种筛选条件，一次只按一个条件筛选）
      */
     public Page<AuditLogEntity> query(String nodeAlias, String eventType, String safetyLevel,
-                                       String resultStatus, String sessionId, int page, int size) {
+                                       String resultStatus, String sessionId,
+                                       String connectionId, String requestId,
+                                       int page, int size) {
         var pageable = PageRequest.of(page, size);
 
         if (nodeAlias != null && !nodeAlias.isBlank()) {
@@ -129,6 +142,12 @@ public class AuditLogService {
         }
         if (sessionId != null && !sessionId.isBlank()) {
             return auditLogRepository.findBySessionIdOrderByCreatedAtDesc(sessionId, pageable);
+        }
+        if (connectionId != null && !connectionId.isBlank()) {
+            return auditLogRepository.findByConnectionIdOrderByCreatedAtDesc(connectionId, pageable);
+        }
+        if (requestId != null && !requestId.isBlank()) {
+            return auditLogRepository.findByRequestIdOrderByCreatedAtDesc(requestId, pageable);
         }
 
         return auditLogRepository.findAllByOrderByCreatedAtDesc(pageable);

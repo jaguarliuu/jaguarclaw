@@ -19,6 +19,8 @@ export function useAuditLog() {
     safetyLevel?: string
     resultStatus?: string
     sessionId?: string
+    connectionId?: string
+    requestId?: string
   } = {}, reqPage = 0, reqSize = 50) {
     loading.value = true
     error.value = null

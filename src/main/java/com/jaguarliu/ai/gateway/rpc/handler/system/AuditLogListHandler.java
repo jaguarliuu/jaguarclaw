@@ -38,6 +38,8 @@ public class AuditLogListHandler implements RpcHandler {
             String safetyLevel = extractString(request.getPayload(), "safetyLevel");
             String resultStatus = extractString(request.getPayload(), "resultStatus");
             String sessionId = extractString(request.getPayload(), "sessionId");
+            String filterConnectionId = extractString(request.getPayload(), "connectionId");
+            String requestId = extractString(request.getPayload(), "requestId");
             int page = extractInt(request.getPayload(), "page", 0);
             int size = extractInt(request.getPayload(), "size", 50);
 
@@ -46,7 +48,7 @@ public class AuditLogListHandler implements RpcHandler {
             if (size > 100) size = 100;
 
             Page<AuditLogEntity> result = auditLogService.query(
-                    nodeAlias, eventType, safetyLevel, resultStatus, sessionId, page, size);
+                    nodeAlias, eventType, safetyLevel, resultStatus, sessionId, filterConnectionId, requestId, page, size);
 
             var logs = result.getContent().stream()
                     .map(AuditLogListHandler::toDto)
@@ -69,6 +71,8 @@ public class AuditLogListHandler implements RpcHandler {
         dto.put("eventType", entity.getEventType());
         dto.put("runId", entity.getRunId());
         dto.put("sessionId", entity.getSessionId());
+        dto.put("connectionId", entity.getConnectionId());
+        dto.put("requestId", entity.getRequestId());
         dto.put("nodeAlias", entity.getNodeAlias());
         dto.put("connectorType", entity.getConnectorType());
         dto.put("toolName", entity.getToolName());
