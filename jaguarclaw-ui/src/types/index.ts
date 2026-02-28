@@ -92,6 +92,9 @@ export interface RpcRequest {
   id: string
   method: string
   payload?: unknown
+  timestamp?: number
+  nonce?: string
+  idempotencyKey?: string
 }
 
 // RPC Response

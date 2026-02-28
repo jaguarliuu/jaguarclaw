@@ -2,6 +2,7 @@
 import { onMounted, onUnmounted } from 'vue'
 import { RouterView } from 'vue-router'
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
+import AppToastStack from '@/components/common/AppToastStack.vue'
 import { useConfirm } from '@/composables/useConfirm'
 import { useWebSocket } from '@/composables/useWebSocket'
 import { useChat } from '@/composables/useChat'
@@ -36,6 +37,9 @@ onUnmounted(() => {
     @confirm="handleConfirm"
     @cancel="handleCancel"
   />
+
+  <!-- Global In-App Toasts -->
+  <AppToastStack />
 </template>
 
 <style>
