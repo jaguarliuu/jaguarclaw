@@ -358,8 +358,10 @@ public class OpenAiCompatibleLlmClient implements LlmClient {
                 .map(this::convertMessage)
                 .toList();
 
+        String model = resolveModel(request);
+
         ChatCompletionRequest.ChatCompletionRequestBuilder builder = ChatCompletionRequest.builder()
-                .model(request.getModel() != null ? request.getModel() : properties.getModel())
+                .model(model)
                 .messages(messages)
                 .temperature(request.getTemperature() != null ? request.getTemperature() : properties.getTemperature())
                 .maxTokens(request.getMaxTokens() != null ? request.getMaxTokens() : properties.getMaxTokens())
@@ -372,6 +374,38 @@ public class OpenAiCompatibleLlmClient implements LlmClient {
         }
 
         return builder.build();
+    }
+
+    /**
+     * 解析要使用的模型
+     * 优先级：Request指定 > Provider第一个模型 > 全局默认 > Hardcode
+     */
+    private String resolveModel(LlmRequest request) {
+        // 1. 请求显式指定
+        if (request.getModel() != null && !request.getModel().isBlank()) {
+            return request.getModel();
+        }
+
+        // 2. 根据 Provider 查找默认模型
+        String providerId = request.getProviderId();
+        if (providerId == null || providerId.isBlank()) {
+            providerId = properties.getDefaultProviderId();
+        }
+
+        if (providerId != null && !providerId.isBlank()) {
+            LlmProviderConfig provider = properties.getProvider(providerId);
+            if (provider != null && provider.getModels() != null && !provider.getModels().isEmpty()) {
+                return provider.getModels().get(0);
+            }
+        }
+
+        // 3. 全局默认（兼容旧配置）
+        if (properties.getModel() != null && !properties.getModel().isBlank()) {
+            return properties.getModel();
+        }
+
+        // 4. 兜底
+        return "gpt-3.5-turbo";
     }
 
     /**

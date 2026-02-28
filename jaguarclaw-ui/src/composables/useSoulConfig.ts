@@ -1,4 +1,5 @@
 import { ref } from 'vue'
+import { useWebSocket } from './useWebSocket'
 
 export interface SoulConfig {
   id?: number
@@ -13,6 +14,8 @@ export interface SoulConfig {
   enabled: boolean
 }
 
+const { request, onEvent } = useWebSocket()
+
 export function useSoulConfig() {
   const config = ref<SoulConfig | null>(null)
   const loading = ref(false)
@@ -22,11 +25,8 @@ export function useSoulConfig() {
     loading.value = true
     error.value = null
     try {
-      const response = await fetch('/api/soul/config')
-      if (!response.ok) {
-        throw new Error('Failed to fetch soul config')
-      }
-      config.value = await response.json()
+      const result = await request<SoulConfig>('soul.get')
+      config.value = result
     } catch (e) {
       error.value = e instanceof Error ? e.message : 'Unknown error'
       console.error('Failed to fetch soul config:', e)
@@ -39,16 +39,7 @@ export function useSoulConfig() {
     loading.value = true
     error.value = null
     try {
-      const response = await fetch('/api/soul/config', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(newConfig)
-      })
-      if (!response.ok) {
-        throw new Error('Failed to save soul config')
-      }
+      await request('soul.save', newConfig)
       await fetchConfig()
     } catch (e) {
       error.value = e instanceof Error ? e.message : 'Unknown error'
@@ -59,11 +50,37 @@ export function useSoulConfig() {
     }
   }
 
+  // Refresh config when AI uses update_soul tool
+  function watchSoulUpdates(): () => void {
+    const pendingCallIds = new Set<string>()
+
+    const offCall = onEvent('tool.call', (event) => {
+      if (event.payload.toolName === 'update_soul') {
+        pendingCallIds.add(event.payload.callId)
+      }
+    })
+
+    const offResult = onEvent('tool.result', (event) => {
+      if (pendingCallIds.has(event.payload.callId)) {
+        pendingCallIds.delete(event.payload.callId)
+        if (event.payload.success) {
+          fetchConfig()
+        }
+      }
+    })
+
+    return () => {
+      offCall()
+      offResult()
+    }
+  }
+
   return {
     config,
     loading,
     error,
     fetchConfig,
-    saveConfig
+    saveConfig,
+    watchSoulUpdates
   }
 }

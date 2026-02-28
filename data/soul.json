@@ -1,0 +1,11 @@
+{
+  "agentName" : "JaguarClaw",
+  "personality" : "A helpful and professional AI assistant",
+  "traits" : [ ],
+  "responseStyle" : "balanced",
+  "detailLevel" : "balanced",
+  "expertise" : [ ],
+  "forbiddenTopics" : [ ],
+  "customPrompt" : "",
+  "enabled" : true
+}
