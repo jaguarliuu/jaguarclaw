@@ -1,9 +1,9 @@
 package com.jaguarliu.ai.gateway.rpc.handler.session;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jaguarliu.ai.gateway.rpc.RpcHandler;
 import com.jaguarliu.ai.gateway.rpc.model.RpcRequest;
 import com.jaguarliu.ai.gateway.rpc.model.RpcResponse;
+import com.jaguarliu.ai.gateway.ws.ConnectionManager;
 import com.jaguarliu.ai.session.SessionService;
 import com.jaguarliu.ai.storage.entity.SessionEntity;
 import lombok.RequiredArgsConstructor;
@@ -23,7 +23,7 @@ import java.util.Map;
 public class SessionCreateHandler implements RpcHandler {
 
     private final SessionService sessionService;
-    private final ObjectMapper objectMapper;
+    private final ConnectionManager connectionManager;
 
     @Override
     public String getMethod() {
@@ -33,10 +33,20 @@ public class SessionCreateHandler implements RpcHandler {
     @Override
     public Mono<RpcResponse> handle(String connectionId, RpcRequest request) {
         return Mono.fromCallable(() -> {
+            String principalId = resolvePrincipalId(connectionId);
+            if (principalId == null) {
+                return RpcResponse.error(request.getId(), "UNAUTHORIZED", "Missing authenticated principal");
+            }
+
             String name = extractName(request.getPayload());
-            SessionEntity session = sessionService.create(name);
+            SessionEntity session = sessionService.create(name, "main", principalId);
             return RpcResponse.success(request.getId(), toSessionDto(session));
         }).subscribeOn(Schedulers.boundedElastic());
+    }
+
+    private String resolvePrincipalId(String connectionId) {
+        var principal = connectionManager.getPrincipal(connectionId);
+        return principal != null ? principal.getPrincipalId() : null;
     }
 
     private String extractName(Object payload) {

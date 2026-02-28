@@ -37,6 +37,9 @@ public class SessionEntity {
     @Column(name = "created_by_run_id")
     private String createdByRunId;
 
+    @Column(name = "owner_principal_id")
+    private String ownerPrincipalId;
+
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 
@@ -47,6 +50,9 @@ public class SessionEntity {
     protected void onCreate() {
         if (sessionKind == null || sessionKind.isBlank()) {
             sessionKind = "main";
+        }
+        if (ownerPrincipalId == null || ownerPrincipalId.isBlank()) {
+            ownerPrincipalId = "local-default";
         }
         createdAt = LocalDateTime.now();
         updatedAt = LocalDateTime.now();

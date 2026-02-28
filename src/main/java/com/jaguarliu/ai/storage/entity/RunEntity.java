@@ -40,6 +40,9 @@ public class RunEntity {
     @Column(name = "requester_session_id")
     private String requesterSessionId;
 
+    @Column(name = "owner_principal_id")
+    private String ownerPrincipalId;
+
     @Column(nullable = false)
     private Boolean deliver;
 
@@ -62,6 +65,9 @@ public class RunEntity {
         }
         if (deliver == null) {
             deliver = false;
+        }
+        if (ownerPrincipalId == null || ownerPrincipalId.isBlank()) {
+            ownerPrincipalId = "local-default";
         }
         createdAt = LocalDateTime.now();
         updatedAt = LocalDateTime.now();

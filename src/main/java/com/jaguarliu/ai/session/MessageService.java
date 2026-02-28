@@ -19,6 +19,8 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class MessageService {
 
+    public static final String DEFAULT_PRINCIPAL_ID = "local-default";
+
     private final MessageRepository messageRepository;
 
     /**
@@ -26,7 +28,15 @@ public class MessageService {
      */
     @Transactional
     public MessageEntity saveUserMessage(String sessionId, String runId, String content) {
-        return saveMessage(sessionId, runId, "user", content);
+        return saveUserMessage(sessionId, runId, content, DEFAULT_PRINCIPAL_ID);
+    }
+
+    /**
+     * 保存用户消息（指定 ownerPrincipalId）
+     */
+    @Transactional
+    public MessageEntity saveUserMessage(String sessionId, String runId, String content, String ownerPrincipalId) {
+        return saveMessage(sessionId, runId, "user", content, ownerPrincipalId);
     }
 
     /**
@@ -34,7 +44,15 @@ public class MessageService {
      */
     @Transactional
     public MessageEntity saveAssistantMessage(String sessionId, String runId, String content) {
-        return saveMessage(sessionId, runId, "assistant", content);
+        return saveAssistantMessage(sessionId, runId, content, DEFAULT_PRINCIPAL_ID);
+    }
+
+    /**
+     * 保存助手消息（指定 ownerPrincipalId）
+     */
+    @Transactional
+    public MessageEntity saveAssistantMessage(String sessionId, String runId, String content, String ownerPrincipalId) {
+        return saveMessage(sessionId, runId, "assistant", content, ownerPrincipalId);
     }
 
     /**
@@ -53,6 +71,19 @@ public class MessageService {
                                                String subRunId,
                                                String subSessionId,
                                                String content) {
+        return saveSubagentAnnounce(parentSessionId, parentRunId, subRunId, subSessionId, content, DEFAULT_PRINCIPAL_ID);
+    }
+
+    /**
+     * 保存子代理 announce 消息（指定 ownerPrincipalId）
+     */
+    @Transactional
+    public MessageEntity saveSubagentAnnounce(String parentSessionId,
+                                               String parentRunId,
+                                               String subRunId,
+                                               String subSessionId,
+                                               String content,
+                                               String ownerPrincipalId) {
         // 使用特殊的 role 标记这是 subagent 的 announce 消息
         // 前端可以根据 role 或 content 中的 type 来识别并特殊显示
         MessageEntity message = MessageEntity.builder()
@@ -61,6 +92,7 @@ public class MessageService {
                 .runId(parentRunId)  // 可能为 null
                 .role("assistant")   // 作为 assistant 消息，前端可正常显示
                 .content(content)
+                .ownerPrincipalId(ownerPrincipalId)
                 .build();
 
         message = messageRepository.save(message);
@@ -72,13 +104,14 @@ public class MessageService {
     /**
      * 保存消息
      */
-    private MessageEntity saveMessage(String sessionId, String runId, String role, String content) {
+    private MessageEntity saveMessage(String sessionId, String runId, String role, String content, String ownerPrincipalId) {
         MessageEntity message = MessageEntity.builder()
                 .id(UUID.randomUUID().toString())
                 .sessionId(sessionId)
                 .runId(runId)
                 .role(role)
                 .content(content)
+                .ownerPrincipalId(ownerPrincipalId)
                 .build();
 
         message = messageRepository.save(message);
@@ -94,10 +127,29 @@ public class MessageService {
     }
 
     /**
+     * 获取主体下 session 的历史消息
+     */
+    public List<MessageEntity> getSessionHistory(String sessionId, String ownerPrincipalId) {
+        return messageRepository.findBySessionIdAndOwnerPrincipalIdOrderByCreatedAtAsc(sessionId, ownerPrincipalId);
+    }
+
+    /**
      * 获取 session 的历史消息（限制数量，取最近的 N 条）
      */
     public List<MessageEntity> getSessionHistory(String sessionId, int limit) {
         List<MessageEntity> all = messageRepository.findBySessionIdOrderByCreatedAtAsc(sessionId);
+        if (all.size() <= limit) {
+            return all;
+        }
+        // 取最近的 limit 条
+        return all.subList(all.size() - limit, all.size());
+    }
+
+    /**
+     * 获取主体下 session 的历史消息（限制数量，取最近的 N 条）
+     */
+    public List<MessageEntity> getSessionHistory(String sessionId, int limit, String ownerPrincipalId) {
+        List<MessageEntity> all = messageRepository.findBySessionIdAndOwnerPrincipalIdOrderByCreatedAtAsc(sessionId, ownerPrincipalId);
         if (all.size() <= limit) {
             return all;
         }

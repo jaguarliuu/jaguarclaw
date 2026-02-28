@@ -5,13 +5,18 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface RunRepository extends JpaRepository<RunEntity, String> {
 
     List<RunEntity> findBySessionIdOrderByCreatedAtDesc(String sessionId);
 
+    List<RunEntity> findBySessionIdAndOwnerPrincipalIdOrderByCreatedAtDesc(String sessionId, String ownerPrincipalId);
+
     List<RunEntity> findByStatus(String status);
+
+    Optional<RunEntity> findByIdAndOwnerPrincipalId(String id, String ownerPrincipalId);
 
     void deleteBySessionId(String sessionId);
 

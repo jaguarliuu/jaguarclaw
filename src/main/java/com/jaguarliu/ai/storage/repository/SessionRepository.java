@@ -18,15 +18,23 @@ public interface SessionRepository extends JpaRepository<SessionEntity, String> 
      */
     List<SessionEntity> findBySessionKindOrderByCreatedAtDesc(String sessionKind);
 
+    List<SessionEntity> findBySessionKindAndOwnerPrincipalIdOrderByCreatedAtDesc(String sessionKind, String ownerPrincipalId);
+
     /**
      * 查询指定父会话的所有子代理会话
      */
     List<SessionEntity> findByParentSessionIdOrderByCreatedAtDesc(String parentSessionId);
 
+    List<SessionEntity> findByParentSessionIdAndOwnerPrincipalIdOrderByCreatedAtDesc(String parentSessionId, String ownerPrincipalId);
+
     /**
      * 根据 sessionKey 查询（唯一索引）
      */
     Optional<SessionEntity> findBySessionKey(String sessionKey);
+
+    Optional<SessionEntity> findByIdAndOwnerPrincipalId(String id, String ownerPrincipalId);
+
+    boolean existsByIdAndOwnerPrincipalId(String id, String ownerPrincipalId);
 
     /**
      * 根据创建来源 run 查询

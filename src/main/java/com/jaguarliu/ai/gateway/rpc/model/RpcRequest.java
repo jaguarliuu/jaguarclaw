@@ -36,4 +36,19 @@ public class RpcRequest {
      * 请求参数
      */
     private Object payload;
+
+    /**
+     * 请求时间戳（毫秒）
+     */
+    private Long timestamp;
+
+    /**
+     * 随机 nonce（防重放）
+     */
+    private String nonce;
+
+    /**
+     * 幂等键（写操作可选）
+     */
+    private String idempotencyKey;
 }

@@ -3,6 +3,7 @@ package com.jaguarliu.ai.gateway.rpc.handler.agent;
 import com.jaguarliu.ai.gateway.rpc.RpcHandler;
 import com.jaguarliu.ai.gateway.rpc.model.RpcRequest;
 import com.jaguarliu.ai.gateway.rpc.model.RpcResponse;
+import com.jaguarliu.ai.gateway.ws.ConnectionManager;
 import com.jaguarliu.ai.runtime.CancellationManager;
 import com.jaguarliu.ai.session.RunService;
 import com.jaguarliu.ai.session.RunStatus;
@@ -24,6 +25,7 @@ public class AgentCancelHandler implements RpcHandler {
 
     private final CancellationManager cancellationManager;
     private final RunService runService;
+    private final ConnectionManager connectionManager;
 
     @Override
     public String getMethod() {
@@ -32,6 +34,11 @@ public class AgentCancelHandler implements RpcHandler {
 
     @Override
     public Mono<RpcResponse> handle(String connectionId, RpcRequest request) {
+        String principalId = resolvePrincipalId(connectionId);
+        if (principalId == null) {
+            return Mono.just(RpcResponse.error(request.getId(), "UNAUTHORIZED", "Missing authenticated principal"));
+        }
+
         String runId = extractRunId(request.getPayload());
 
         if (runId == null || runId.isBlank()) {
@@ -39,7 +46,7 @@ public class AgentCancelHandler implements RpcHandler {
         }
 
         // 检查 run 是否存在
-        var runOpt = runService.get(runId);
+        var runOpt = runService.get(runId, principalId);
         if (runOpt.isEmpty()) {
             return Mono.just(RpcResponse.error(request.getId(), "NOT_FOUND", "Run not found: " + runId));
         }
@@ -61,6 +68,11 @@ public class AgentCancelHandler implements RpcHandler {
                 "cancelled", true,
                 "message", "Cancellation requested"
         )));
+    }
+
+    private String resolvePrincipalId(String connectionId) {
+        var principal = connectionManager.getPrincipal(connectionId);
+        return principal != null ? principal.getPrincipalId() : null;
     }
 
     private String extractRunId(Object payload) {

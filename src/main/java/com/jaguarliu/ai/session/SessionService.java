@@ -22,6 +22,8 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class SessionService {
 
+    public static final String DEFAULT_PRINCIPAL_ID = "local-default";
+
     private final SessionRepository sessionRepository;
     private final RunRepository runRepository;
     private final MessageRepository messageRepository;
@@ -32,7 +34,7 @@ public class SessionService {
      */
     @Transactional
     public SessionEntity create(String name) {
-        return create(name, "main");
+        return create(name, "main", DEFAULT_PRINCIPAL_ID);
     }
 
     /**
@@ -40,11 +42,20 @@ public class SessionService {
      */
     @Transactional
     public SessionEntity create(String name, String agentId) {
+        return create(name, agentId, DEFAULT_PRINCIPAL_ID);
+    }
+
+    /**
+     * 创建新 Session（指定 agentId + ownerPrincipalId）
+     */
+    @Transactional
+    public SessionEntity create(String name, String agentId, String ownerPrincipalId) {
         SessionEntity session = SessionEntity.builder()
                 .id(UUID.randomUUID().toString())
                 .name(name != null ? name : "New Session")
                 .agentId(agentId)
                 .sessionKind("main")
+                .ownerPrincipalId(ownerPrincipalId)
                 .build();
 
         session = sessionRepository.save(session);
@@ -66,6 +77,18 @@ public class SessionService {
                                                 String createdByRunId,
                                                 String agentId,
                                                 String taskSummary) {
+        return createSubagentSession(parentSessionId, createdByRunId, agentId, taskSummary, DEFAULT_PRINCIPAL_ID);
+    }
+
+    /**
+     * 创建子代理会话（指定 ownerPrincipalId）
+     */
+    @Transactional
+    public SessionEntity createSubagentSession(String parentSessionId,
+                                                String createdByRunId,
+                                                String agentId,
+                                                String taskSummary,
+                                                String ownerPrincipalId) {
         String sessionId = UUID.randomUUID().toString();
         String sessionKey = String.format("agent:%s:subagent:%s", agentId, sessionId);
         String name = generateSubagentSessionName(taskSummary);
@@ -78,6 +101,7 @@ public class SessionService {
                 .sessionKey(sessionKey)
                 .parentSessionId(parentSessionId)
                 .createdByRunId(createdByRunId)
+                .ownerPrincipalId(ownerPrincipalId)
                 .build();
 
         session = sessionRepository.save(session);
@@ -110,6 +134,7 @@ public class SessionService {
                 .id(UUID.randomUUID().toString())
                 .name(name != null ? name : "Scheduled Task")
                 .sessionKind("scheduled")
+                .ownerPrincipalId(DEFAULT_PRINCIPAL_ID)
                 .build();
 
         session = sessionRepository.save(session);
@@ -132,10 +157,24 @@ public class SessionService {
     }
 
     /**
+     * 获取指定主体的主会话（排除子代理会话）
+     */
+    public List<SessionEntity> listMainSessions(String ownerPrincipalId) {
+        return sessionRepository.findBySessionKindAndOwnerPrincipalIdOrderByCreatedAtDesc("main", ownerPrincipalId);
+    }
+
+    /**
      * 获取指定父会话的所有子代理会话
      */
     public List<SessionEntity> listSubagentSessions(String parentSessionId) {
         return sessionRepository.findByParentSessionIdOrderByCreatedAtDesc(parentSessionId);
+    }
+
+    /**
+     * 获取指定主体的子代理会话
+     */
+    public List<SessionEntity> listSubagentSessions(String parentSessionId, String ownerPrincipalId) {
+        return sessionRepository.findByParentSessionIdAndOwnerPrincipalIdOrderByCreatedAtDesc(parentSessionId, ownerPrincipalId);
     }
 
     /**
@@ -157,6 +196,13 @@ public class SessionService {
     }
 
     /**
+     * 根据 ID 和主体获取 Session
+     */
+    public Optional<SessionEntity> get(String id, String ownerPrincipalId) {
+        return sessionRepository.findByIdAndOwnerPrincipalId(id, ownerPrincipalId);
+    }
+
+    /**
      * 根据 sessionKey 获取 Session
      */
     public Optional<SessionEntity> getBySessionKey(String sessionKey) {
@@ -169,6 +215,24 @@ public class SessionService {
     @Transactional
     public boolean delete(String id) {
         if (!sessionRepository.existsById(id)) {
+            return false;
+        }
+
+        messageRepository.deleteBySessionId(id);
+        sessionFileRepository.deleteBySessionId(id);
+        runRepository.deleteBySessionId(id);
+        sessionRepository.deleteById(id);
+
+        log.info("Deleted session and related data: id={}", id);
+        return true;
+    }
+
+    /**
+     * 删除主体名下的 Session（级联删除关联数据）
+     */
+    @Transactional
+    public boolean delete(String id, String ownerPrincipalId) {
+        if (!sessionRepository.existsByIdAndOwnerPrincipalId(id, ownerPrincipalId)) {
             return false;
         }
 

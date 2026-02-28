@@ -3,7 +3,9 @@ package com.jaguarliu.ai.gateway.rpc.handler.system;
 import com.jaguarliu.ai.gateway.rpc.RpcHandler;
 import com.jaguarliu.ai.gateway.rpc.model.RpcRequest;
 import com.jaguarliu.ai.gateway.rpc.model.RpcResponse;
+import com.jaguarliu.ai.gateway.ws.ConnectionManager;
 import com.jaguarliu.ai.session.MessageService;
+import com.jaguarliu.ai.session.SessionService;
 import com.jaguarliu.ai.session.SessionFileService;
 import com.jaguarliu.ai.storage.entity.MessageEntity;
 import com.jaguarliu.ai.storage.entity.SessionFileEntity;
@@ -28,6 +30,8 @@ public class MessageListHandler implements RpcHandler {
 
     private final MessageService messageService;
     private final SessionFileService sessionFileService;
+    private final SessionService sessionService;
+    private final ConnectionManager connectionManager;
 
     @Override
     public String getMethod() {
@@ -36,6 +40,11 @@ public class MessageListHandler implements RpcHandler {
 
     @Override
     public Mono<RpcResponse> handle(String connectionId, RpcRequest request) {
+        String principalId = resolvePrincipalId(connectionId);
+        if (principalId == null) {
+            return Mono.just(RpcResponse.error(request.getId(), "UNAUTHORIZED", "Missing authenticated principal"));
+        }
+
         String sessionId = extractSessionId(request.getPayload());
 
         if (sessionId == null || sessionId.isBlank()) {
@@ -43,7 +52,11 @@ public class MessageListHandler implements RpcHandler {
         }
 
         return Mono.fromCallable(() -> {
-            List<MessageEntity> messages = messageService.getSessionHistory(sessionId);
+            if (sessionService.get(sessionId, principalId).isEmpty()) {
+                return RpcResponse.error(request.getId(), "NOT_FOUND", "Session not found: " + sessionId);
+            }
+
+            List<MessageEntity> messages = messageService.getSessionHistory(sessionId, principalId);
             List<Map<String, Object>> messageDtos = messages.stream()
                     .map(this::toMessageDto)
                     .toList();
@@ -58,6 +71,11 @@ public class MessageListHandler implements RpcHandler {
             result.put("files", fileDtos);
             return RpcResponse.success(request.getId(), result);
         }).subscribeOn(Schedulers.boundedElastic());
+    }
+
+    private String resolvePrincipalId(String connectionId) {
+        var principal = connectionManager.getPrincipal(connectionId);
+        return principal != null ? principal.getPrincipalId() : null;
     }
 
     private String extractSessionId(Object payload) {

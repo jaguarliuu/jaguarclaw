@@ -19,6 +19,8 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class RunService {
 
+    public static final String DEFAULT_PRINCIPAL_ID = "local-default";
+
     private final RunRepository runRepository;
 
     /**
@@ -26,7 +28,7 @@ public class RunService {
      */
     @Transactional
     public RunEntity create(String sessionId, String prompt) {
-        return create(sessionId, prompt, "main");
+        return create(sessionId, prompt, "main", DEFAULT_PRINCIPAL_ID);
     }
 
     /**
@@ -34,6 +36,14 @@ public class RunService {
      */
     @Transactional
     public RunEntity create(String sessionId, String prompt, String agentId) {
+        return create(sessionId, prompt, agentId, DEFAULT_PRINCIPAL_ID);
+    }
+
+    /**
+     * 创建新 Run（指定 agentId + ownerPrincipalId）
+     */
+    @Transactional
+    public RunEntity create(String sessionId, String prompt, String agentId, String ownerPrincipalId) {
         RunEntity run = RunEntity.builder()
                 .id(UUID.randomUUID().toString())
                 .sessionId(sessionId)
@@ -43,6 +53,7 @@ public class RunService {
                 .runKind("main")
                 .lane("main")
                 .deliver(false)
+                .ownerPrincipalId(ownerPrincipalId)
                 .build();
 
         run = runRepository.save(run);
@@ -69,6 +80,20 @@ public class RunService {
                                         String agentId,
                                         String prompt,
                                         boolean deliver) {
+        return createSubagentRun(sessionId, parentRunId, requesterSessionId, agentId, prompt, deliver, DEFAULT_PRINCIPAL_ID);
+    }
+
+    /**
+     * 创建子代理运行（指定 ownerPrincipalId）
+     */
+    @Transactional
+    public RunEntity createSubagentRun(String sessionId,
+                                        String parentRunId,
+                                        String requesterSessionId,
+                                        String agentId,
+                                        String prompt,
+                                        boolean deliver,
+                                        String ownerPrincipalId) {
         RunEntity run = RunEntity.builder()
                 .id(UUID.randomUUID().toString())
                 .sessionId(sessionId)
@@ -80,6 +105,7 @@ public class RunService {
                 .parentRunId(parentRunId)
                 .requesterSessionId(requesterSessionId)
                 .deliver(deliver)
+                .ownerPrincipalId(ownerPrincipalId)
                 .build();
 
         run = runRepository.save(run);
@@ -117,10 +143,24 @@ public class RunService {
     }
 
     /**
+     * 获取指定主体 Run
+     */
+    public Optional<RunEntity> get(String runId, String ownerPrincipalId) {
+        return runRepository.findByIdAndOwnerPrincipalId(runId, ownerPrincipalId);
+    }
+
+    /**
      * 获取 Session 下的所有 Run
      */
     public List<RunEntity> listBySession(String sessionId) {
         return runRepository.findBySessionIdOrderByCreatedAtDesc(sessionId);
+    }
+
+    /**
+     * 获取主体下 Session 的所有 Run
+     */
+    public List<RunEntity> listBySession(String sessionId, String ownerPrincipalId) {
+        return runRepository.findBySessionIdAndOwnerPrincipalIdOrderByCreatedAtDesc(sessionId, ownerPrincipalId);
     }
 
     /**
