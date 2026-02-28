@@ -1,11 +1,8 @@
 package com.jaguarliu.ai.tools.soul;
 
-import com.jaguarliu.ai.gateway.events.AgentEvent;
-import com.jaguarliu.ai.gateway.events.EventBus;
 import com.jaguarliu.ai.soul.SoulConfigService;
 import com.jaguarliu.ai.tools.Tool;
 import com.jaguarliu.ai.tools.ToolDefinition;
-import com.jaguarliu.ai.tools.ToolExecutionContext;
 import com.jaguarliu.ai.tools.ToolResult;
 import lombok.extern.slf4j.Slf4j;
 import lombok.RequiredArgsConstructor;
@@ -20,7 +17,6 @@ import java.util.Map;
 public class SoulUpdateTool implements Tool {
 
     private final SoulConfigService soulConfigService;
-    private final EventBus eventBus;
 
     @Override
     public ToolDefinition getDefinition() {

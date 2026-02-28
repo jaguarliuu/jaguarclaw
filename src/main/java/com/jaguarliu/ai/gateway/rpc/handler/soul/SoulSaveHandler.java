@@ -1,7 +1,4 @@
 package com.jaguarliu.ai.gateway.rpc.handler.soul;
-
-import com.jaguarliu.ai.gateway.events.AgentEvent;
-import com.jaguarliu.ai.gateway.events.EventBus;
 import com.jaguarliu.ai.gateway.rpc.RpcHandler;
 import com.jaguarliu.ai.gateway.rpc.model.RpcRequest;
 import com.jaguarliu.ai.gateway.rpc.model.RpcResponse;
@@ -20,7 +17,6 @@ import java.util.Map;
 public class SoulSaveHandler implements RpcHandler {
 
     private final SoulConfigService soulConfigService;
-    private final EventBus eventBus;
 
     @Override
     public String getMethod() {
@@ -43,4 +39,3 @@ public class SoulSaveHandler implements RpcHandler {
         }).subscribeOn(Schedulers.boundedElastic());
     }
 }
-
