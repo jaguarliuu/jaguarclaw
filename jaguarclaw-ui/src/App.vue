@@ -2,14 +2,13 @@
 import { onMounted, onUnmounted } from 'vue'
 import { RouterView } from 'vue-router'
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
-import ConnectionStatus from '@/components/ConnectionStatus.vue'
 import { useConfirm } from '@/composables/useConfirm'
 import { useWebSocket } from '@/composables/useWebSocket'
 import { useChat } from '@/composables/useChat'
 import { useNotification } from '@/composables/useNotification'
 
 const { state, handleConfirm, handleCancel } = useConfirm()
-const { connect, disconnect, state: connectionState } = useWebSocket()
+const { connect, disconnect } = useWebSocket()
 const { setupEventListeners } = useChat()
 
 onMounted(() => {
@@ -25,11 +24,6 @@ onUnmounted(() => {
 
 <template>
   <RouterView />
-
-  <!-- Connection status — fixed top-right -->
-  <div class="status-widget">
-    <ConnectionStatus :state="connectionState" />
-  </div>
 
   <!-- Global Confirm Dialog -->
   <ConfirmDialog
@@ -306,11 +300,4 @@ html.theme-switching * {
   background: var(--color-primary-hover) !important;
 }
 
-/* ─── Connection status — fixed top-right ───────────────────────── */
-.status-widget {
-  position: fixed;
-  top: 12px;
-  right: 16px;
-  z-index: 50;
-}
 </style>

@@ -4,10 +4,12 @@ import { ref, watch } from 'vue'
 import { useConfirm } from '@/composables/useConfirm'
 import { useI18n } from '@/i18n'
 import { useHeartbeat } from '@/composables/useHeartbeat'
+import { useWebSocket } from '@/composables/useWebSocket'
 
 const { confirm } = useConfirm()
 const { t } = useI18n()
 const { notifications, unreadCount, markAsRead, markAllAsRead, clearAll, selectNotification } = useHeartbeat()
+const { state: connectionState } = useWebSocket()
 
 defineProps<{
   sessions: Session[]
@@ -68,7 +70,7 @@ async function handleDelete(e: Event, sessionId: string) {
     <!-- Icon Rail (56px) -->
     <div class="app-rail">
       <div class="rail-top">
-        <div class="rail-logo">M</div>
+        <div class="rail-logo" :class="`conn-${connectionState}`">M</div>
       </div>
       <div class="rail-bottom">
         <button
@@ -239,6 +241,25 @@ async function handleDelete(e: Event, sessionId: string) {
   letter-spacing: -0.03em;
   color: var(--sidebar-rail-logo-fg);
   margin-bottom: 6px;
+  border-radius: var(--radius-md);
+  transition: box-shadow 0.6s ease;
+}
+
+.rail-logo.conn-connected {
+  box-shadow:
+    0 0 0 2.5px rgba(var(--color-primary-rgb), 0.2),
+    0 0 10px 3px rgba(var(--color-primary-rgb), 0.1);
+}
+
+.rail-logo.conn-disconnected,
+.rail-logo.conn-error {
+  box-shadow:
+    0 0 0 2.5px rgba(212, 64, 64, 0.3),
+    0 0 10px 3px rgba(212, 64, 64, 0.18);
+}
+
+.rail-logo.conn-connecting {
+  box-shadow: none;
 }
 
 .rail-btn {
