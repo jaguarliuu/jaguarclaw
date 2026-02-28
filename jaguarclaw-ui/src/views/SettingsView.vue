@@ -14,6 +14,7 @@ import DataSourcesSection from '@/components/settings/DataSourcesSection.vue'
 import ChannelsSection from '@/components/settings/ChannelsSection.vue'
 import AuditLogSection from '@/components/settings/AuditLogSection.vue'
 import SchedulesSection from '@/components/settings/SchedulesSection.vue'
+import HeartbeatSection from '@/components/settings/HeartbeatSection.vue'
 import PlaceholderSection from '@/components/settings/PlaceholderSection.vue'
 
 const route = useRoute()
@@ -42,6 +43,7 @@ const currentSection = computed(() => {
         <ChannelsSection v-else-if="currentSection === 'channels'" />
         <AuditLogSection v-else-if="currentSection === 'audit'" />
         <SchedulesSection v-else-if="currentSection === 'tasks'" />
+        <HeartbeatSection v-else-if="currentSection === 'heartbeat'" />
         <PlaceholderSection v-else title="Not Found" message="Section not found" />
       </main>
     </div>

@@ -5,6 +5,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.socket.WebSocketSession;
 
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -45,5 +46,12 @@ public class ConnectionManager {
      */
     public int getConnectionCount() {
         return connections.size();
+    }
+
+    /**
+     * 获取所有连接 ID
+     */
+    public Set<String> getAllConnectionIds() {
+        return connections.keySet();
     }
 }

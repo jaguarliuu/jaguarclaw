@@ -3,6 +3,7 @@ package com.jaguarliu.ai.runtime;
 import com.jaguarliu.ai.datasource.application.dto.DataSourceDTO;
 import com.jaguarliu.ai.datasource.application.service.DataSourceService;
 import com.jaguarliu.ai.datasource.domain.SchemaMetadata;
+import com.jaguarliu.ai.heartbeat.HeartbeatConfigService;
 import com.jaguarliu.ai.mcp.prompt.McpPromptProvider;
 import com.jaguarliu.ai.memory.search.MemorySearchService;
 import com.jaguarliu.ai.skills.index.SkillIndexBuilder;
@@ -50,6 +51,7 @@ public class SystemPromptBuilder {
     private final Optional<McpPromptProvider> mcpPromptProvider;
     private final SoulConfigService soulConfigService;
     private final Optional<DataSourceService> dataSourceService;
+    private final Optional<HeartbeatConfigService> heartbeatConfigService;
 
     @Value("${tools.workspace:./workspace}")
     private String workspace;
@@ -140,13 +142,15 @@ public class SystemPromptBuilder {
                                 MemorySearchService memorySearchService,
                                 Optional<McpPromptProvider> mcpPromptProvider,
                                 SoulConfigService soulConfigService,
-                                Optional<DataSourceService> dataSourceService) {
+                                Optional<DataSourceService> dataSourceService,
+                                Optional<HeartbeatConfigService> heartbeatConfigService) {
         this.toolRegistry = toolRegistry;
         this.skillIndexBuilder = skillIndexBuilder;
         this.memorySearchService = memorySearchService;
         this.mcpPromptProvider = mcpPromptProvider;
         this.soulConfigService = soulConfigService;
         this.dataSourceService = dataSourceService;
+        this.heartbeatConfigService = heartbeatConfigService;
     }
 
     /**
@@ -218,6 +222,14 @@ public class SystemPromptBuilder {
         // 4. Memory (only in FULL mode)
         if (mode == PromptMode.FULL) {
             sb.append(buildMemorySection());
+        }
+
+        // 4.5 Heartbeat (only in FULL mode)
+        if (mode == PromptMode.FULL) {
+            String heartbeatSection = buildHeartbeatSection();
+            if (!heartbeatSection.isEmpty()) {
+                sb.append(heartbeatSection);
+            }
         }
 
         // 5. Skills (only in FULL mode, when available)
@@ -345,6 +357,44 @@ public class SystemPromptBuilder {
         sb.append("\n\n");
 
         return sb.toString();
+    }
+
+    /**
+     * 构建 Heartbeat 段落
+     */
+    private String buildHeartbeatSection() {
+        if (heartbeatConfigService.isEmpty()) {
+            return "";
+        }
+        try {
+            java.util.Map<String, Object> config = heartbeatConfigService.get().getConfig();
+            Boolean enabled = (Boolean) config.getOrDefault("enabled", true);
+            if (!Boolean.TRUE.equals(enabled)) {
+                return "";
+            }
+
+            StringBuilder sb = new StringBuilder();
+            sb.append("## Heartbeat System\n\n");
+            sb.append("The system runs **periodic heartbeat checks** — background Agent executions that review `HEARTBEAT.md` ");
+            sb.append("and proactively notify the user when something worth reporting is found.\n\n");
+            sb.append("**Your role:**\n");
+            sb.append("- Use `update_heartbeat_md` to add or update checklist items in `HEARTBEAT.md`\n");
+            sb.append("- Heartbeat changes take effect on the next scheduled cycle\n\n");
+            sb.append("**When to call `update_heartbeat_md`:**\n");
+            sb.append("- User sets a reminder (\"remind me to...\", \"check X tomorrow\", \"follow up on Y\")\n");
+            sb.append("- User mentions a recurring concern or tracking item\n");
+            sb.append("- User asks to stop a reminder or remove a checklist item\n");
+            sb.append("- The heartbeat checklist is missing something obviously useful\n\n");
+            sb.append("**Rules:**\n");
+            sb.append("- Always include the `HEARTBEAT_OK` instruction so silent cycles remain silent\n");
+            sb.append("- Keep entries concise — the heartbeat Agent reads this file each cycle\n");
+            sb.append("- Do NOT update heartbeat just because you did something; only update when the user ");
+            sb.append("wants a future follow-up or reminder\n\n");
+            return sb.toString();
+        } catch (Exception e) {
+            log.warn("Failed to build heartbeat section", e);
+            return "";
+        }
     }
 
     /**
