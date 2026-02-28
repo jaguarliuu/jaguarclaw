@@ -138,6 +138,11 @@ public class SoulConfigService {
             prompt.append(soul.getCustomPrompt()).append("\n\n");
         }
 
+        // Self-Improvement guidance
+        prompt.append("## Self-Improvement\n");
+        prompt.append("You can update your own behavior using the update_soul tool.\n");
+        prompt.append("Use it when users give style feedback, you learn preferences, or want to remember important context.\n\n");
+
         return prompt.toString();
     }
 
