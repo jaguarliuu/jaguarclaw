@@ -19,7 +19,7 @@ public class SoulGetHandler implements RpcHandler {
 
     @Override
     public String getMethod() {
-        return soul.get;
+        return "soul.get";
     }
 
     @Override
@@ -28,4 +28,3 @@ public class SoulGetHandler implements RpcHandler {
                 .subscribeOn(Schedulers.boundedElastic());
     }
 }
-
