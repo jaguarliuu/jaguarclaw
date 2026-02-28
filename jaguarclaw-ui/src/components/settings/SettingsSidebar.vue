@@ -32,9 +32,10 @@ const groups = computed(() => [
   {
     label: t('settings.groups.administration'),
     items: [
-      { id: 'system', label: t('settings.nav.system') },
-      { id: 'audit',  label: t('settings.nav.audit') },
-      { id: 'tasks',  label: t('settings.nav.schedules') },
+      { id: 'system',     label: t('settings.nav.system') },
+      { id: 'audit',      label: t('settings.nav.audit') },
+      { id: 'tasks',      label: t('settings.nav.schedules') },
+      { id: 'heartbeat',  label: t('settings.nav.heartbeat') },
     ]
   }
 ])
@@ -131,6 +132,10 @@ function navigateTo(sectionId: string) {
               <svg v-else-if="item.id === 'tasks'" width="16" height="16" viewBox="0 0 16 16" fill="none" class="nav-icon">
                 <circle cx="8" cy="8" r="5.5" stroke="currentColor" stroke-width="1.4"/>
                 <path d="M8 5v3.5L10.5 10" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+              <!-- Heartbeat -->
+              <svg v-else-if="item.id === 'heartbeat'" width="16" height="16" viewBox="0 0 16 16" fill="none" class="nav-icon">
+                <path d="M1 8h3l2-4 2 8 2-4 1 2h4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
               </svg>
 
               <span class="nav-label">{{ item.label }}</span>

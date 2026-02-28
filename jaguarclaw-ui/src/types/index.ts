@@ -126,6 +126,7 @@ export interface RpcEventPayloadMap {
   'lifecycle.error': unknown
   'assistant.delta': unknown
   'session.renamed': unknown
+  'heartbeat.notify': HeartbeatNotifyPayload
 }
 
 // 用 AgentEventType 约束事件名，并用映射表推断 payload 类型
@@ -153,6 +154,7 @@ export type AgentEventType =
   | 'subagent.started'
   | 'subagent.announced'
   | 'subagent.failed'
+  | 'heartbeat.notify'
 
 // Tool Event Payloads
 export interface ToolCallPayload {
@@ -255,6 +257,13 @@ export interface SubagentFailedPayload {
   agentId: string
   task: string
   error: string
+}
+
+// Heartbeat Notify Event Payload
+export interface HeartbeatNotifyPayload {
+  content: string
+  sessionId: string
+  runId: string
 }
 
 // ==================== Node Console Types ====================

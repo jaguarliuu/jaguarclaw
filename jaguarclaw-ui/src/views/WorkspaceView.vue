@@ -14,14 +14,17 @@ import MessageList from '@/components/MessageList.vue'
 import MessageInput from '@/components/MessageInput.vue'
 import SubagentPanel from '@/components/SubagentPanel.vue'
 import ArtifactPanel from '@/components/ArtifactPanel.vue'
+import HeartbeatDetailPanel from '@/components/HeartbeatDetailPanel.vue'
 import ContextInputModal from '@/components/ContextInputModal.vue'
 import { useArtifact } from '@/composables/useArtifact'
+import { useHeartbeat } from '@/composables/useHeartbeat'
 
 const { state: connectionState } = useWebSocket()
 const { checkStatus, getConfig: loadLlmConfig, multiConfig } = useLlmConfig()
 const router = useRouter()
 const route = useRoute()
 const { artifact } = useArtifact()
+const { selectedNotification, selectNotification } = useHeartbeat()
 const { contexts: attachedContexts, uploadFile, addContext, removeContext, clearContexts } = useContext()
 const { servers: mcpServers, loadServers: loadMcpServers } = useMcpServers()
 const { dataSources, loadDataSources } = useDataSource()
@@ -221,7 +224,7 @@ async function handleInstallAction() {
       @delete="handleDeleteSession"
     />
 
-    <main class="main-area">
+    <main class="main-area" @click="selectedNotification && !artifact ? selectNotification(null) : undefined">
       <MessageList
         :messages="messages"
         :stream-blocks="streamBlocks"
@@ -266,7 +269,7 @@ async function handleInstallAction() {
 
     <Transition name="panel-slide">
       <SubagentPanel
-        v-if="activeSubagent && !artifact"
+        v-if="activeSubagent && !artifact && !selectedNotification"
         :subagent="activeSubagent"
         @close="setActiveSubagent(null)"
         @confirm="handleConfirmToolCall"
@@ -275,6 +278,13 @@ async function handleInstallAction() {
 
     <Transition name="panel-slide">
       <ArtifactPanel v-if="artifact" />
+    </Transition>
+
+    <Transition name="panel-slide">
+      <HeartbeatDetailPanel
+        v-if="selectedNotification && !artifact"
+        :notification="selectedNotification"
+      />
     </Transition>
   </div>
 </template>

@@ -58,7 +58,9 @@ public class AgentEvent {
         ARTIFACT_OPEN("artifact.open"),
         ARTIFACT_DELTA("artifact.delta"),
         // 文件创建事件
-        FILE_CREATED("file.created");
+        FILE_CREATED("file.created"),
+        // Heartbeat 通知
+        HEARTBEAT_NOTIFY("heartbeat.notify");
 
         private final String value;
 
@@ -223,6 +225,18 @@ public class AgentEvent {
                 .connectionId(connectionId)
                 .runId(runId)
                 .data(new FileCreatedData(fileId, path, fileName, size))
+                .build();
+    }
+
+    /**
+     * 创建 heartbeat.notify 事件
+     */
+    public static AgentEvent heartbeatNotify(String connectionId, String content, String sessionId, String runId) {
+        return AgentEvent.builder()
+                .type(EventType.HEARTBEAT_NOTIFY)
+                .connectionId(connectionId)
+                .runId(runId)
+                .data(new HeartbeatNotifyData(content, sessionId, runId))
                 .build();
     }
 
@@ -404,6 +418,14 @@ public class AgentEvent {
         private String agentId;
         private String task;
         private String error;
+    }
+
+    @Data
+    @AllArgsConstructor
+    public static class HeartbeatNotifyData {
+        private String content;
+        private String sessionId;
+        private String runId;
     }
 
 }

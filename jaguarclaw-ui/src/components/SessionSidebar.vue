@@ -3,9 +3,11 @@ import type { Session } from '@/types'
 import { ref, watch } from 'vue'
 import { useConfirm } from '@/composables/useConfirm'
 import { useI18n } from '@/i18n'
+import { useHeartbeat } from '@/composables/useHeartbeat'
 
 const { confirm } = useConfirm()
 const { t } = useI18n()
+const { notifications, unreadCount, markAsRead, markAllAsRead, clearAll, selectNotification } = useHeartbeat()
 
 defineProps<{
   sessions: Session[]
@@ -19,24 +21,30 @@ const emit = defineEmits<{
 }>()
 
 const collapsed = ref(localStorage.getItem('sidebar-collapsed') === 'true')
+const notificationsOpen = ref(false)
+
 watch(collapsed, (v) => localStorage.setItem('sidebar-collapsed', String(v)))
+
+function toggleNotifications() {
+  if (collapsed.value) {
+    collapsed.value = false
+    notificationsOpen.value = true
+  } else {
+    notificationsOpen.value = !notificationsOpen.value
+  }
+}
 
 function formatDate(dateStr: string): string {
   const date = new Date(dateStr)
   const now = new Date()
   const diff = now.getTime() - date.getTime()
 
-  // Today
   if (diff < 86400000 && date.getDate() === now.getDate()) {
     return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })
   }
-
-  // This week
   if (diff < 604800000) {
     return date.toLocaleDateString('en-US', { weekday: 'short' })
   }
-
-  // Older
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
@@ -73,6 +81,23 @@ async function handleDelete(e: Event, sessionId: string) {
             <path d="M6 3L10 7.5L6 12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
         </button>
+
+        <!-- Notification Bell -->
+        <button
+          class="rail-btn notif-trigger"
+          :class="{ active: notificationsOpen }"
+          @click="toggleNotifications"
+          :title="t('session.notifications')"
+        >
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <line x1="8" y1="1.5" x2="8" y2="3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+            <path d="M4 11V8a4 4 0 0 0 8 0v3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+            <line x1="2" y1="11" x2="14" y2="11" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+            <path d="M6.5 13a1.5 1.5 0 0 0 3 0" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+          </svg>
+          <span v-if="unreadCount > 0" class="notif-badge">{{ unreadCount > 9 ? '9+' : unreadCount }}</span>
+        </button>
+
         <RouterLink to="/settings/llm" class="rail-btn" :title="t('common.settings')">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
             <path d="M12.22 2h-.44a2 2 0 00-2 2v.18a2 2 0 01-1 1.73l-.43.25a2 2 0 01-2 0l-.15-.08a2 2 0 00-2.73.73l-.22.38a2 2 0 00.73 2.73l.15.1a2 2 0 011 1.72v.51a2 2 0 01-1 1.74l-.15.09a2 2 0 00-.73 2.73l.22.38a2 2 0 002.73.73l.15-.08a2 2 0 012 0l.43.25a2 2 0 011 1.73V20a2 2 0 002 2h.44a2 2 0 002-2v-.18a2 2 0 011-1.73l.43-.25a2 2 0 012 0l.15.08a2 2 0 002.73-.73l.22-.39a2 2 0 00-.73-2.73l-.15-.08a2 2 0 01-1-1.74v-.5a2 2 0 011-1.74l.15-.09a2 2 0 00.73-2.73l-.22-.38a2 2 0 00-2.73-.73l-.15.08a2 2 0 01-2 0l-.43-.25a2 2 0 01-1-1.73V4a2 2 0 00-2-2z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
@@ -82,9 +107,11 @@ async function handleDelete(e: Event, sessionId: string) {
       </div>
     </div>
 
-    <!-- Session Panel (220px, collapsible) -->
+    <!-- Session / Notification Panel (220px, collapsible) -->
     <div class="session-panel" :class="{ collapsed }">
-      <div class="panel-header">
+
+      <!-- Session mode header -->
+      <div class="panel-header" v-if="!notificationsOpen">
         <button class="new-session-btn" @click="emit('create')" :title="t('session.new')">
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
             <path d="M7 2V12M2 7H12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
@@ -92,11 +119,37 @@ async function handleDelete(e: Event, sessionId: string) {
           {{ t('session.new') }}
         </button>
       </div>
-      <nav class="session-list">
+
+      <!-- Notification mode header -->
+      <div class="panel-header notif-header" v-else>
+        <span class="notif-title">{{ t('session.notifications') }}</span>
+        <div class="notif-header-actions">
+          <button
+            v-if="unreadCount > 0"
+            class="notif-action-btn"
+            @click="markAllAsRead"
+            :title="t('session.markAllRead')"
+          >
+            {{ t('session.markAllRead') }}
+          </button>
+          <button
+            v-if="notifications.length > 0"
+            class="notif-action-btn notif-clear-btn"
+            @click="clearAll"
+            :title="t('session.clearAll')"
+          >
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+              <path d="M2 2L10 10M10 2L2 10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Session list -->
+      <nav class="session-list" v-if="!notificationsOpen">
         <div v-if="sessions.length === 0" class="empty-state">
           {{ t('session.empty') }}
         </div>
-
         <div
           v-for="session in sessions"
           :key="session.id"
@@ -115,6 +168,27 @@ async function handleDelete(e: Event, sessionId: string) {
           </button>
         </div>
       </nav>
+
+      <!-- Notification list -->
+      <div class="notif-list" v-else>
+        <div v-if="notifications.length === 0" class="empty-state">
+          {{ t('session.noNotifications') }}
+        </div>
+        <div
+          v-for="n in notifications"
+          :key="n.id"
+          class="notif-item"
+          :class="{ unread: !n.read }"
+          @click="selectNotification(n.id)"
+        >
+          <div class="notif-dot" v-if="!n.read"></div>
+          <div class="notif-dot notif-dot-read" v-else></div>
+          <div class="notif-body">
+            <div class="notif-content">{{ n.content }}</div>
+            <div class="notif-time">{{ formatDate(n.createdAt) }}</div>
+          </div>
+        </div>
+      </div>
 
       <div class="panel-footer">
         <button class="collapse-toggle" @click="collapsed = true" :title="t('session.collapse')">
@@ -195,6 +269,36 @@ async function handleDelete(e: Event, sessionId: string) {
   padding-bottom: 4px;
 }
 
+/* Notification trigger button */
+.notif-trigger {
+  position: relative;
+}
+
+.notif-trigger.active {
+  background: var(--sidebar-rail-hover-bg);
+  color: var(--sidebar-rail-logo-fg);
+}
+
+.notif-badge {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  background: var(--color-error, #ef4444);
+  color: #fff;
+  border-radius: 7px;
+  font-size: 9px;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  pointer-events: none;
+}
+
 /* Session Panel */
 .session-panel {
   width: 220px;
@@ -216,8 +320,57 @@ async function handleDelete(e: Event, sessionId: string) {
 
 .panel-header {
   padding: 10px 8px 4px;
+  flex-shrink: 0;
 }
 
+/* Notification header */
+.notif-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 12px 8px;
+  border-bottom: 1px solid var(--sidebar-panel-border);
+}
+
+.notif-title {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-gray-500);
+}
+
+.notif-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.notif-action-btn {
+  padding: 2px 6px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-gray-500);
+  font-family: var(--font-ui);
+  font-size: 11px;
+  cursor: pointer;
+  transition: all var(--duration-fast);
+  display: flex;
+  align-items: center;
+}
+
+.notif-action-btn:hover {
+  background: var(--sidebar-item-hover-bg);
+  color: var(--color-gray-700);
+}
+
+.notif-clear-btn {
+  padding: 3px;
+}
+
+/* Session list */
 .new-session-btn {
   width: 100%;
   display: flex;
@@ -341,6 +494,69 @@ async function handleDelete(e: Event, sessionId: string) {
   color: #ffaaaa;
 }
 
+/* Notification list */
+.notif-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 6px 8px;
+}
+
+.notif-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 10px;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  margin-bottom: 2px;
+  transition: background var(--duration-fast);
+}
+
+.notif-item:hover {
+  background: var(--sidebar-item-hover-bg);
+}
+
+.notif-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-primary);
+  flex-shrink: 0;
+  margin-top: 5px;
+}
+
+.notif-dot-read {
+  background: transparent;
+}
+
+.notif-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.notif-content {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--color-gray-600);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.notif-item.unread .notif-content {
+  color: var(--color-gray-900, var(--color-black));
+  font-weight: 500;
+}
+
+.notif-time {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--color-gray-400);
+  margin-top: 4px;
+}
+
+/* Footer */
 .panel-footer {
   padding: 8px;
   border-top: 1px solid var(--sidebar-panel-border);

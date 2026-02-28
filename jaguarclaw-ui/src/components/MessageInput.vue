@@ -212,7 +212,7 @@ function handleKeydown(e: KeyboardEvent) {
       scrollSelectedIntoView()
       return
     }
-    if (e.key === 'Tab' || e.key === 'Enter') {
+    if ((e.key === 'Tab' || e.key === 'Enter') && !e.isComposing) {
       e.preventDefault()
       const item = slashItems.value[selectedIndex.value]
       if (item) selectSlashCommand(item)
@@ -226,7 +226,7 @@ function handleKeydown(e: KeyboardEvent) {
   }
 
   // Enter to submit (Shift+Enter for new line)
-  if (e.key === 'Enter' && !e.shiftKey) {
+  if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
     e.preventDefault()
     handleSubmit()
   }
