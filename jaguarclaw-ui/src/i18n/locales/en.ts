@@ -571,6 +571,8 @@ export default {
       subtitle: 'Command execution audit trail',
       filters: {
         nodePlaceholder: 'Node alias',
+        connectionPlaceholder: 'Connection ID',
+        requestPlaceholder: 'Request ID',
         allEvents: 'All events',
         allLevels: 'All levels',
         allStatus: 'All status',
@@ -595,6 +597,8 @@ export default {
         policy: 'Policy:',
         runId: 'Run ID:',
         sessionId: 'Session ID:',
+        connectionId: 'Connection ID:',
+        requestId: 'Request ID:',
         connector: 'Connector:',
       },
       prevBtn: 'Previous',

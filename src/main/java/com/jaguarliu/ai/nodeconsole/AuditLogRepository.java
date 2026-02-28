@@ -18,5 +18,9 @@ public interface AuditLogRepository extends JpaRepository<AuditLogEntity, String
 
     Page<AuditLogEntity> findBySessionIdOrderByCreatedAtDesc(String sessionId, Pageable pageable);
 
+    Page<AuditLogEntity> findByConnectionIdOrderByCreatedAtDesc(String connectionId, Pageable pageable);
+
+    Page<AuditLogEntity> findByRequestIdOrderByCreatedAtDesc(String requestId, Pageable pageable);
+
     Page<AuditLogEntity> findByResultStatusOrderByCreatedAtDesc(String resultStatus, Pageable pageable);
 }

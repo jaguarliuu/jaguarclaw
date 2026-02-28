@@ -41,7 +41,9 @@ public class GatewayWebSocketHandler implements WebSocketHandler {
                     null,
                     "ws.connect",
                     "rejected",
-                    "clientIp=%s".formatted(clientIp)
+                    "clientIp=%s".formatted(clientIp),
+                    null,
+                    null
             );
             return session.close(CloseStatus.POLICY_VIOLATION);
         }
@@ -50,16 +52,45 @@ public class GatewayWebSocketHandler implements WebSocketHandler {
 
         // 注册连接
         connectionManager.register(connectionId, session);
+        auditLogService.logSecurityEvent(
+                "ws.connection.accepted",
+                null,
+                "ws.connect",
+                "success",
+                "clientIp=%s".formatted(clientIp),
+                connectionId,
+                null
+        );
 
         // 处理接收到的消息并发送响应
         // agent.run 等需要排队的请求会立即返回 runId，结果通过事件推送
         Flux<WebSocketMessage> output = session.receive()
                 .filter(message -> message.getType() == WebSocketMessage.Type.TEXT)
                 .flatMap(message -> handleMessage(connectionId, session, message))
-                .doOnError(error -> log.error("WebSocket error: connectionId={}", connectionId, error))
+                .doOnError(error -> {
+                    log.error("WebSocket error: connectionId={}", connectionId, error);
+                    auditLogService.logSecurityEvent(
+                            "ws.connection.error",
+                            null,
+                            "ws.receive",
+                            "error",
+                            error.getMessage(),
+                            connectionId,
+                            null
+                    );
+                })
                 .doFinally(signalType -> {
                     connectionManager.remove(connectionId);
                     messageRateLimiter.clear(connectionId);
+                    auditLogService.logSecurityEvent(
+                            "ws.connection.closed",
+                            null,
+                            "ws.disconnect",
+                            "success",
+                            "signal=%s".formatted(signalType),
+                            connectionId,
+                            null
+                    );
                 });
 
         return session.send(output);

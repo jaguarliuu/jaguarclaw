@@ -7,6 +7,7 @@ import com.jaguarliu.ai.gateway.rpc.model.RpcRequest;
 import com.jaguarliu.ai.gateway.rpc.model.RpcResponse;
 import com.jaguarliu.ai.gateway.ws.ConnectionManager;
 import com.jaguarliu.ai.gateway.security.rate.TokenBudgetService;
+import com.jaguarliu.ai.nodeconsole.AuditLogService;
 import com.jaguarliu.ai.llm.LlmClient;
 import com.jaguarliu.ai.llm.model.LlmRequest;
 import com.jaguarliu.ai.llm.model.LlmResponse;
@@ -66,6 +67,7 @@ public class AgentRunHandler implements RpcHandler {
     private final CancellationManager cancellationManager;
     private final ConnectionManager connectionManager;
     private final TokenBudgetService tokenBudgetService;
+    private final AuditLogService auditLogService;
 
     /**
      * 历史消息数量限制（避免上下文过长）
@@ -100,6 +102,15 @@ public class AgentRunHandler implements RpcHandler {
             return Mono.just(RpcResponse.error(request.getId(), "INVALID_PARAMS", "Missing prompt"));
         }
         if (!tokenBudgetService.tryConsume(principalId, tokenBudgetService.estimateTokens(prompt))) {
+            auditLogService.logSecurityEvent(
+                    "ws.rpc.token_budget_exceeded",
+                    sessionId,
+                    getMethod(),
+                    "rejected",
+                    "principalId=%s".formatted(principalId),
+                    connectionId,
+                    request.getId()
+            );
             return Mono.just(RpcResponse.error(request.getId(), "TOKEN_BUDGET_EXCEEDED", "Daily token budget exceeded"));
         }
 

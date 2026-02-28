@@ -10,6 +10,8 @@ const { t } = useI18n()
 
 // Filter state
 const filterNodeAlias = ref('')
+const filterConnectionId = ref('')
+const filterRequestId = ref('')
 const filterEventType = ref('')
 const filterSafetyLevel = ref('')
 const filterResultStatus = ref('')
@@ -17,7 +19,41 @@ const filterResultStatus = ref('')
 // Expanded row
 const expandedId = ref<string | null>(null)
 
-const eventTypeOptions = ['', 'command.execute', 'command.reject', 'node.register', 'node.remove', 'node.test']
+const eventTypeOptions = [
+  '',
+  'command.execute',
+  'command.reject',
+  'node.register',
+  'node.remove',
+  'node.test',
+  'ws.connection.accepted',
+  'ws.connection.closed',
+  'ws.connection.error',
+  'ws.connection.rate_limited',
+  'ws.auth.bootstrap.invalid_params',
+  'ws.auth.bootstrap.connection_missing',
+  'ws.auth.bootstrap.forbidden',
+  'ws.auth.bootstrap.success',
+  'ws.auth.refresh.invalid_params',
+  'ws.auth.refresh.invalid_token',
+  'ws.auth.refresh.success',
+  'ws.rpc.invalid_type',
+  'ws.rpc.invalid_method',
+  'ws.rpc.parse_error',
+  'ws.rpc.unauthorized',
+  'ws.rpc.permission_denied',
+  'ws.rpc.rate_limited',
+  'ws.rpc.replay_blocked',
+  'ws.rpc.method_not_found',
+  'ws.rpc.handler_error',
+  'ws.rpc.token_budget_exceeded',
+  'ws.rpc.tool.unauthorized',
+  'ws.rpc.tool.permission_denied',
+  'ws.rpc.tool.invalid_params',
+  'ws.rpc.tool.hitl_required',
+  'ws.rpc.tool.execute',
+  'ws.rpc.tool.execute_error'
+]
 const safetyLevelOptions = ['', 'read_only', 'side_effect', 'destructive']
 const resultStatusOptions = ['', 'success', 'error', 'rejected', 'blocked']
 
@@ -37,6 +73,8 @@ const resultStatusSelectOptions = computed<SelectOption<string>[]>(() => [
 function currentFilters() {
   const filters: Record<string, string> = {}
   if (filterNodeAlias.value) filters.nodeAlias = filterNodeAlias.value
+  if (filterConnectionId.value) filters.connectionId = filterConnectionId.value
+  if (filterRequestId.value) filters.requestId = filterRequestId.value
   if (filterEventType.value) filters.eventType = filterEventType.value
   if (filterSafetyLevel.value) filters.safetyLevel = filterSafetyLevel.value
   if (filterResultStatus.value) filters.resultStatus = filterResultStatus.value
@@ -108,6 +146,20 @@ onMounted(() => {
         class="filter-input"
         type="text"
         :placeholder="t('sections.audit.filters.nodePlaceholder')"
+        @keyup.enter="applyFilters"
+      />
+      <input
+        v-model="filterConnectionId"
+        class="filter-input filter-input-wide"
+        type="text"
+        :placeholder="t('sections.audit.filters.connectionPlaceholder')"
+        @keyup.enter="applyFilters"
+      />
+      <input
+        v-model="filterRequestId"
+        class="filter-input filter-input-wide"
+        type="text"
+        :placeholder="t('sections.audit.filters.requestPlaceholder')"
         @keyup.enter="applyFilters"
       />
       <Select v-model="filterEventType" :options="eventTypeSelectOptions" @update:modelValue="applyFilters" style="width: 155px" />
@@ -214,6 +266,14 @@ onMounted(() => {
                     <span class="detail-label">{{ t('sections.audit.expanded.sessionId') }}</span>
                     <span class="detail-value mono">{{ log.sessionId }}</span>
                   </div>
+                  <div v-if="log.connectionId" class="detail-row">
+                    <span class="detail-label">{{ t('sections.audit.expanded.connectionId') }}</span>
+                    <span class="detail-value mono">{{ log.connectionId }}</span>
+                  </div>
+                  <div v-if="log.requestId" class="detail-row">
+                    <span class="detail-label">{{ t('sections.audit.expanded.requestId') }}</span>
+                    <span class="detail-value mono">{{ log.requestId }}</span>
+                  </div>
                   <div v-if="log.connectorType" class="detail-row">
                     <span class="detail-label">{{ t('sections.audit.expanded.connector') }}</span>
                     <span class="detail-value">{{ log.connectorType }}</span>
@@ -288,6 +348,10 @@ onMounted(() => {
   font-family: var(--font-mono);
   font-size: 12px;
   width: 140px;
+}
+
+.filter-input-wide {
+  width: 170px;
 }
 
 .filter-btn {

@@ -20,7 +20,7 @@ public class AuditLogEntity {
     @Id
     private String id;
 
-    @Column(name = "event_type", nullable = false, length = 30)
+    @Column(name = "event_type", nullable = false, length = 100)
     private String eventType;
 
     @Column(name = "run_id", length = 36)
@@ -28,6 +28,12 @@ public class AuditLogEntity {
 
     @Column(name = "session_id", length = 36)
     private String sessionId;
+
+    @Column(name = "connection_id", length = 64)
+    private String connectionId;
+
+    @Column(name = "request_id", length = 100)
+    private String requestId;
 
     @Column(name = "node_alias", length = 100)
     private String nodeAlias;
