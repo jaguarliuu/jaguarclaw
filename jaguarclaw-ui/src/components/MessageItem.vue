@@ -12,6 +12,7 @@ import ContextChip from './ContextChip.vue'
 const props = defineProps<{
   message: Message
   activeSubagentId?: string | null
+  anchorId?: string
 }>()
 
 const emit = defineEmits<{
@@ -49,7 +50,7 @@ const displayContexts = computed(() => {
 </script>
 
 <template>
-  <article class="message" :class="message.role">
+  <article class="message" :class="message.role" :id="anchorId">
     <div class="message-inner">
       <div class="message-meta">
         <span class="msg-avatar" :class="message.role">{{ message.role === 'user' ? t('message.you')[0] : 'M' }}</span>
