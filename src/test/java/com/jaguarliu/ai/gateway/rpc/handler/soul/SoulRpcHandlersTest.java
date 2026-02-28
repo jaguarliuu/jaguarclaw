@@ -69,4 +69,3 @@ class SoulRpcHandlersTest {
         assertEquals(concise, saved.get(responseStyle));
     }
 }
-
