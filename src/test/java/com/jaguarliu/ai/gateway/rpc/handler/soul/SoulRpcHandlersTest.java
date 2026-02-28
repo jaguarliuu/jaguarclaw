@@ -18,25 +18,25 @@ class SoulRpcHandlersTest {
     void soulGet_returnsConfig() {
         SoulConfigService svc = mock(SoulConfigService.class);
         Map<String, Object> cfg = Map.of(
-                agentName, JaguarClaw,
-                responseStyle, balanced,
-                traits, List.of()
+                "agentName", "JaguarClaw",
+                "responseStyle", "balanced",
+                "traits", List.of()
         );
         when(svc.getConfig()).thenReturn(cfg);
 
         SoulGetHandler handler = new SoulGetHandler(svc);
-        RpcRequest req = RpcRequest.builder().type(request).id(1).method(soul.get).build();
+        RpcRequest req = RpcRequest.builder().type("request").id("1").method("soul.get").build();
 
-        RpcResponse resp = handler.handle(conn-1, req).block();
+        RpcResponse resp = handler.handle("conn-1", req).block();
         assertNotNull(resp);
-        assertEquals(response, resp.getType());
-        assertEquals(1, resp.getId());
-        assertTrue(resp.getError() == null);
+        assertEquals("response", resp.getType());
+        assertEquals("1", resp.getId());
+        assertNull(resp.getError());
 
-        @SuppressWarnings(unchecked)
+        @SuppressWarnings("unchecked")
         Map<String, Object> payload = (Map<String, Object>) resp.getPayload();
-        assertEquals(JaguarClaw, payload.get(agentName));
-        assertEquals(balanced, payload.get(responseStyle));
+        assertEquals("JaguarClaw", payload.get("agentName"));
+        assertEquals("balanced", payload.get("responseStyle"));
     }
 
     @Test
@@ -45,27 +45,27 @@ class SoulRpcHandlersTest {
         SoulSaveHandler handler = new SoulSaveHandler(svc);
 
         Map<String, Object> newCfg = Map.of(
-                agentName, JaguarClaw,
-                responseStyle, concise,
-                traits, List.of(focused)
+                "agentName", "JaguarClaw",
+                "responseStyle", "concise",
+                "traits", List.of("focused")
         );
         RpcRequest req = RpcRequest.builder()
-                .type(request).id(2).method(soul.save)
+                .type("request").id("2").method("soul.save")
                 .payload(newCfg)
                 .build();
 
-        RpcResponse resp = handler.handle(conn-1, req).block();
+        RpcResponse resp = handler.handle("conn-1", req).block();
         assertNotNull(resp);
-        assertEquals(response, resp.getType());
-        assertTrue(resp.getError() == null);
+        assertEquals("response", resp.getType());
+        assertNull(resp.getError());
 
-        @SuppressWarnings(unchecked)
+        @SuppressWarnings("unchecked")
         Map<String, Object> payload = (Map<String, Object>) resp.getPayload();
-        assertEquals(Boolean.TRUE, payload.get(success));
+        assertEquals(Boolean.TRUE, payload.get("success"));
 
         ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.forClass(Map.class);
         verify(svc, times(1)).saveConfig(captor.capture());
         Map<String, Object> saved = captor.getValue();
-        assertEquals(concise, saved.get(responseStyle));
+        assertEquals("concise", saved.get("responseStyle"));
     }
 }

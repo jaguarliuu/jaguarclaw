@@ -9,6 +9,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
 
+import java.util.List;
 import java.util.Map;
 
 @Slf4j
@@ -23,7 +24,18 @@ public class SoulUpdateTool implements Tool {
         return ToolDefinition.builder()
                 .name("update_soul")
                 .description("Update your own identity/preferences.")
-                .parameters(Map.of("type", "object"))
+                .parameters(Map.of(
+                        "type", "object",
+                        "properties", Map.of(
+                                "field", Map.of("type", "string",
+                                        "description", "Field to update. One of: agentName, personality, traits, responseStyle, detailLevel, expertise, forbiddenTopics, customPrompt"),
+                                "value", Map.of("type", "string",
+                                        "description", "New value. For array fields (traits, expertise, forbiddenTopics) provide JSON array: [\"item1\",\"item2\"]"),
+                                "reason", Map.of("type", "string",
+                                        "description", "Why you are making this update")
+                        ),
+                        "required", List.of("field", "value")
+                ))
                 .build();
     }
 
