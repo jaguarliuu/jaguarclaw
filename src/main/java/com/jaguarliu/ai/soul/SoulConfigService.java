@@ -4,141 +4,132 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
+import jakarta.annotation.PostConstruct;
+
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.*;
 
 /**
- * Soul 配置服务
+ * Soul 配置服务 — 文件存储（{configDir}/soul.json）
  */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class SoulConfigService {
 
-    private final SoulConfigRepository repository;
+    @Value("${tools.workspace:./workspace}")
+    private String workspace;
+
     private final ObjectMapper objectMapper;
 
-    /**
-     * 获取当前激活的 Soul 配置
-     */
-    public Optional<SoulConfigEntity> getActiveConfig() {
-        return repository.findFirstByEnabledTrueOrderByUpdatedAtDesc();
+    private static final String SOUL_FILE = "soul.json";
+
+    @PostConstruct
+    void init() {
+        Path path = soulPath();
+        if (!Files.exists(path)) {
+            saveConfig(defaultConfig());
+            log.info("Initialized default soul.json at {}", path);
+        }
     }
 
     /**
-     * 获取配置（转换为 Map）
+     * 获取配置 Map；文件不存在时返回默认值
      */
     public Map<String, Object> getConfig() {
-        Optional<SoulConfigEntity> config = getActiveConfig();
-
-        if (config.isEmpty()) {
-            return getDefaultConfig();
+        Path path = soulPath();
+        if (!Files.exists(path)) {
+            return defaultConfig();
         }
-
-        SoulConfigEntity entity = config.get();
-        Map<String, Object> result = new LinkedHashMap<>();
-        result.put("id", entity.getId());
-        result.put("agentName", entity.getAgentName());
-        result.put("personality", entity.getPersonality());
-        result.put("traits", parseJsonArray(entity.getTraits()));
-        result.put("responseStyle", entity.getResponseStyle());
-        result.put("detailLevel", entity.getDetailLevel());
-        result.put("expertise", parseJsonArray(entity.getExpertise()));
-        result.put("forbiddenTopics", parseJsonArray(entity.getForbiddenTopics()));
-        result.put("customPrompt", entity.getCustomPrompt());
-        result.put("enabled", entity.isEnabled());
-
-        return result;
+        try {
+            return objectMapper.readValue(path.toFile(), new TypeReference<Map<String, Object>>() {});
+        } catch (IOException e) {
+            log.warn("Failed to read soul.json, returning defaults", e);
+            return defaultConfig();
+        }
     }
 
     /**
-     * 保存配置
+     * 持久化配置到 soul.json
      */
-    @Transactional
     public void saveConfig(Map<String, Object> configMap) {
-        // 禁用所有现有配置
-        List<SoulConfigEntity> all = repository.findAll();
-        all.forEach(e -> e.setEnabled(false));
-        repository.saveAll(all);
-
-        // 创建新配置
-        SoulConfigEntity entity = new SoulConfigEntity();
-        entity.setAgentName((String) configMap.get("agentName"));
-        entity.setPersonality((String) configMap.get("personality"));
-        entity.setTraits(toJsonArray(configMap.get("traits")));
-        entity.setResponseStyle((String) configMap.get("responseStyle"));
-        entity.setDetailLevel((String) configMap.get("detailLevel"));
-        entity.setExpertise(toJsonArray(configMap.get("expertise")));
-        entity.setForbiddenTopics(toJsonArray(configMap.get("forbiddenTopics")));
-        entity.setCustomPrompt((String) configMap.get("customPrompt"));
-        entity.setEnabled(true);
-
-        repository.save(entity);
-        log.info("Soul config saved: {}", entity.getAgentName());
+        Path path = soulPath();
+        try {
+            Files.createDirectories(path.getParent());
+            objectMapper.writerWithDefaultPrettyPrinter().writeValue(path.toFile(), configMap);
+            log.info("Soul config saved: {}", configMap.get("agentName"));
+        } catch (IOException e) {
+            log.error("Failed to save soul.json", e);
+            throw new RuntimeException("Failed to save soul config", e);
+        }
     }
 
     /**
      * 生成系统提示词片段
      */
     public String generateSystemPrompt() {
-        Optional<SoulConfigEntity> config = getActiveConfig();
-
-        if (config.isEmpty()) {
+        Map<String, Object> soul = getConfig();
+        if (Boolean.FALSE.equals(soul.get("enabled"))) {
             return "";
         }
 
-        SoulConfigEntity soul = config.get();
         StringBuilder prompt = new StringBuilder();
-
         prompt.append("# Your Identity\n\n");
 
-        if (soul.getAgentName() != null && !soul.getAgentName().isEmpty()) {
-            prompt.append("Your name is ").append(soul.getAgentName()).append(".\n\n");
+        String agentName = (String) soul.get("agentName");
+        if (agentName != null && !agentName.isEmpty()) {
+            prompt.append("Your name is ").append(agentName).append(".\n\n");
         }
 
-        if (soul.getPersonality() != null && !soul.getPersonality().isEmpty()) {
+        String personality = (String) soul.get("personality");
+        if (personality != null && !personality.isEmpty()) {
             prompt.append("## Personality\n");
-            prompt.append(soul.getPersonality()).append("\n\n");
+            prompt.append(personality).append("\n\n");
         }
 
-        List<String> traits = parseJsonArray(soul.getTraits());
+        List<String> traits = toStringList(soul.get("traits"));
         if (!traits.isEmpty()) {
             prompt.append("## Key Traits\n");
             traits.forEach(trait -> prompt.append("- ").append(trait).append("\n"));
             prompt.append("\n");
         }
 
-        List<String> expertise = parseJsonArray(soul.getExpertise());
+        List<String> expertise = toStringList(soul.get("expertise"));
         if (!expertise.isEmpty()) {
             prompt.append("## Areas of Expertise\n");
             expertise.forEach(area -> prompt.append("- ").append(area).append("\n"));
             prompt.append("\n");
         }
 
-        if (soul.getResponseStyle() != null) {
+        String responseStyle = (String) soul.get("responseStyle");
+        if (responseStyle != null) {
             prompt.append("## Response Style\n");
-            prompt.append("Tone: ").append(soul.getResponseStyle()).append("\n");
+            prompt.append("Tone: ").append(responseStyle).append("\n");
         }
 
-        if (soul.getDetailLevel() != null) {
-            prompt.append("Detail Level: ").append(soul.getDetailLevel()).append("\n\n");
+        String detailLevel = (String) soul.get("detailLevel");
+        if (detailLevel != null) {
+            prompt.append("Detail Level: ").append(detailLevel).append("\n\n");
         }
 
-        List<String> forbidden = parseJsonArray(soul.getForbiddenTopics());
+        List<String> forbidden = toStringList(soul.get("forbiddenTopics"));
         if (!forbidden.isEmpty()) {
             prompt.append("## Topics to Avoid\n");
             forbidden.forEach(topic -> prompt.append("- ").append(topic).append("\n"));
             prompt.append("\n");
         }
 
-        if (soul.getCustomPrompt() != null && !soul.getCustomPrompt().isEmpty()) {
+        String customPrompt = (String) soul.get("customPrompt");
+        if (customPrompt != null && !customPrompt.isEmpty()) {
             prompt.append("## Additional Guidelines\n");
-            prompt.append(soul.getCustomPrompt()).append("\n\n");
+            prompt.append(customPrompt).append("\n\n");
         }
 
-        // Self-Improvement guidance
         prompt.append("## Self-Improvement\n");
         prompt.append("You can update your own behavior using the update_soul tool.\n");
         prompt.append("Use it when users give style feedback, you learn preferences, or want to remember important context.\n\n");
@@ -146,32 +137,19 @@ public class SoulConfigService {
         return prompt.toString();
     }
 
-    // Helper methods
-    private List<String> parseJsonArray(String json) {
-        if (json == null || json.isEmpty()) {
-            return Collections.emptyList();
-        }
-        try {
-            return objectMapper.readValue(json, new TypeReference<List<String>>() {});
-        } catch (Exception e) {
-            log.warn("Failed to parse JSON array: {}", json);
-            return Collections.emptyList();
-        }
+    private Path soulPath() {
+        return Path.of(workspace).resolve(SOUL_FILE);
     }
 
-    private String toJsonArray(Object obj) {
-        if (obj == null) {
-            return "[]";
+    @SuppressWarnings("unchecked")
+    private List<String> toStringList(Object obj) {
+        if (obj instanceof List) {
+            return (List<String>) obj;
         }
-        try {
-            return objectMapper.writeValueAsString(obj);
-        } catch (Exception e) {
-            log.warn("Failed to serialize to JSON: {}", obj);
-            return "[]";
-        }
+        return Collections.emptyList();
     }
 
-    private Map<String, Object> getDefaultConfig() {
+    private Map<String, Object> defaultConfig() {
         Map<String, Object> config = new LinkedHashMap<>();
         config.put("agentName", "JaguarClaw");
         config.put("personality", "A helpful and professional AI assistant");
@@ -181,7 +159,7 @@ public class SoulConfigService {
         config.put("expertise", Collections.emptyList());
         config.put("forbiddenTopics", Collections.emptyList());
         config.put("customPrompt", "");
-        config.put("enabled", false);
+        config.put("enabled", true);
         return config;
     }
 }
