@@ -7,6 +7,7 @@ import MessageItem from './MessageItem.vue'
 import ToolCallCard from './ToolCallCard.vue'
 import SubagentCard from './SubagentCard.vue'
 import FileCard from './FileCard.vue'
+import ConversationIndex from './ConversationIndex.vue'
 
 const props = defineProps<{
   messages: Message[]
@@ -31,11 +32,26 @@ function renderTextBlock(content: string | undefined): string {
   return render(content || '')
 }
 
-        // 检查是否有内容（用于显示 thinking 状态）
+// 检查是否有内容（用于显示 thinking 状态）
 const hasContent = computed(() => {
   return props.streamBlocks.some(block =>
     (block.type === 'text' && block.content) || block.type === 'tool' || block.type === 'subagent' || block.type === 'file'
   )
+})
+
+// Build index entries from user messages
+const indexEntries = computed(() => {
+  let turn = 0
+  return props.messages
+    .filter(m => m.role === 'user')
+    .map(m => {
+      turn++
+      return {
+        id: m.id,
+        index: turn,
+        preview: m.content.trim().slice(0, 60) || '…'
+      }
+    })
 })
 
 // Auto-scroll on new content
@@ -52,72 +68,83 @@ watch(
 
 <template>
   <div class="message-list" ref="containerRef">
-    <div class="message-container">
-      <!-- Empty state -->
-      <div v-if="messages.length === 0 && !isStreaming" class="empty-state">
-        <p class="empty-title">{{ t('message.emptyTitle') }}</p>
-        <p class="empty-hint">{{ t('message.emptyHint') }}</p>
+    <div class="message-layout">
+      <div class="message-container">
+        <!-- Empty state -->
+        <div v-if="messages.length === 0 && !isStreaming" class="empty-state">
+          <p class="empty-title">{{ t('message.emptyTitle') }}</p>
+          <p class="empty-hint">{{ t('message.emptyHint') }}</p>
+        </div>
+
+        <!-- Messages -->
+        <MessageItem
+          v-for="message in messages"
+          :key="message.id"
+          :message="message"
+          :anchor-id="message.role === 'user' ? `msg-${message.id}` : undefined"
+          :active-subagent-id="activeSubagentId"
+          @confirm="(callId, decision) => emit('confirm', callId, decision)"
+          @select-subagent="(subRunId) => emit('select-subagent', subRunId)"
+        />
+
+        <!-- Streaming message with interleaved blocks -->
+        <article v-if="isStreaming" class="message assistant streaming">
+          <div class="message-meta">
+            <span class="role">{{ t('message.assistantRole') }}</span>
+            <span class="streaming-indicator">
+              <span class="streaming-dot"></span>
+              <span class="streaming-dot"></span>
+              <span class="streaming-dot"></span>
+            </span>
+          </div>
+
+          <!-- Thinking state when no content yet -->
+          <div v-if="!hasContent" class="message-content">
+            <p class="thinking">...</p>
+          </div>
+
+          <!-- Interleaved blocks -->
+          <template v-for="block in streamBlocks" :key="block.id">
+            <!-- Text block -->
+            <div
+              v-if="block.type === 'text' && block.content"
+              class="message-content markdown-body"
+              v-html="renderTextBlock(block.content)"
+            ></div>
+
+            <!-- Tool block -->
+            <ToolCallCard
+              v-else-if="block.type === 'tool' && block.toolCall"
+              :tool-call="block.toolCall"
+              :session-id="currentSessionId ?? undefined"
+              @confirm="(callId, decision) => emit('confirm', callId, decision)"
+            />
+
+            <!-- SubAgent block -->
+            <SubagentCard
+              v-else-if="block.type === 'subagent' && block.subagent"
+              :subagent="block.subagent"
+              :active-subagent-id="activeSubagentId"
+              @select="(subRunId) => emit('select-subagent', subRunId)"
+            />
+
+            <!-- File block -->
+            <FileCard
+              v-else-if="block.type === 'file' && block.file"
+              :file="block.file"
+              :session-id="currentSessionId ?? undefined"
+            />
+          </template>
+        </article>
       </div>
 
-      <!-- Messages -->
-      <MessageItem
-        v-for="message in messages"
-        :key="message.id"
-        :message="message"
-        :active-subagent-id="activeSubagentId"
-        @confirm="(callId, decision) => emit('confirm', callId, decision)"
-        @select-subagent="(subRunId) => emit('select-subagent', subRunId)"
+      <!-- Conversation Index (show when ≥ 2 user turns) -->
+      <ConversationIndex
+        v-if="indexEntries.length >= 2"
+        :entries="indexEntries"
+        :scroll-container="containerRef"
+        class="index-col"
       />
-
-      <!-- Streaming message with interleaved blocks -->
-      <article v-if="isStreaming" class="message assistant streaming">
-        <div class="message-meta">
-          <span class="role">{{ t('message.assistantRole') }}</span>
-          <span class="streaming-indicator">
-            <span class="streaming-dot"></span>
-            <span class="streaming-dot"></span>
-            <span class="streaming-dot"></span>
-          </span>
-        </div>
-
-        <!-- Thinking state when no content yet -->
-        <div v-if="!hasContent" class="message-content">
-          <p class="thinking">...</p>
-        </div>
-
-        <!-- Interleaved blocks -->
-        <template v-for="block in streamBlocks" :key="block.id">
-          <!-- Text block -->
-          <div
-            v-if="block.type === 'text' && block.content"
-            class="message-content markdown-body"
-            v-html="renderTextBlock(block.content)"
-          ></div>
-
-          <!-- Tool block -->
-          <ToolCallCard
-            v-else-if="block.type === 'tool' && block.toolCall"
-            :tool-call="block.toolCall"
-            :session-id="currentSessionId ?? undefined"
-            @confirm="(callId, decision) => emit('confirm', callId, decision)"
-          />
-
-          <!-- SubAgent block -->
-          <SubagentCard
-            v-else-if="block.type === 'subagent' && block.subagent"
-            :subagent="block.subagent"
-            :active-subagent-id="activeSubagentId"
-            @select="(subRunId) => emit('select-subagent', subRunId)"
-          />
-
-          <!-- File block -->
-          <FileCard
-            v-else-if="block.type === 'file' && block.file"
-            :file="block.file"
-            :session-id="currentSessionId ?? undefined"
-          />
-        </template>
-      </article>
     </div>
   </div>
 </template>
@@ -126,13 +153,30 @@ watch(
 .message-list {
   flex: 1;
   overflow-y: auto;
+}
+
+.message-layout {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
   padding: 0 48px;
+  min-height: 100%;
 }
 
 .message-container {
+  flex: 1;
   max-width: 720px;
-  margin: 0 auto;
+  min-width: 0;
   padding: 48px 0;
+}
+
+.index-col {
+  flex-shrink: 0;
+  position: sticky;
+  top: 24px;
+  align-self: flex-start;
+  padding-top: 52px;
+  margin-left: 24px;
 }
 
 .empty-state {
@@ -231,3 +275,4 @@ watch(
 <style>
 @import '@/styles/markdown.css';
 </style>
+
