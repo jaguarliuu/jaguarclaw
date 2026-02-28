@@ -1,11 +1,13 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useSoulConfig, type SoulConfig } from '@/composables/useSoulConfig'
 import { useI18n } from '@/i18n'
 
 const { t } = useI18n()
 
-const { config, loading, error, fetchConfig, saveConfig } = useSoulConfig()
+const { config, loading, error, fetchConfig, saveConfig, watchSoulUpdates } = useSoulConfig()
+
+let stopWatcher: (() => void) | null = null
 
 const editConfig = ref<SoulConfig>({
   agentName: '',
@@ -106,6 +108,11 @@ async function handleSave() {
 onMounted(async () => {
   await fetchConfig()
   syncFormFromConfig()
+  stopWatcher = watchSoulUpdates()
+})
+
+onUnmounted(() => {
+  stopWatcher?.()
 })
 </script>
 
