@@ -7,9 +7,10 @@ import lombok.Setter;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * ReAct 循环运行上下文
@@ -90,10 +91,10 @@ public class RunContext {
     private final CancellationManager cancellationManager;
 
     /**
-     * 当前步数
+     * 当前步数（线程安全）
      */
     @Builder.Default
-    private int currentStep = 0;
+    private final AtomicInteger currentStep = new AtomicInteger(0);
 
     /**
      * 原始用户输入（用于 skill 激活）
@@ -150,10 +151,10 @@ public class RunContext {
     private String modelSelection;
 
     /**
-     * Skill 激活计数器（skillName -> count）
+     * Skill 激活计数器（skillName -> count）（线程安全）
      */
     @Builder.Default
-    private final Map<String, Integer> skillActivationCounts = new HashMap<>();
+    private final Map<String, Integer> skillActivationCounts = new ConcurrentHashMap<>();
 
     /**
      * 最大单个 Skill 激活次数
@@ -195,14 +196,21 @@ public class RunContext {
      * 检查是否达到最大步数
      */
     public boolean isMaxStepsReached() {
-        return currentStep >= config.getMaxSteps();
+        return currentStep.get() >= config.getMaxSteps();
     }
 
     /**
      * 增加步数
      */
     public void incrementStep() {
-        this.currentStep++;
+        this.currentStep.incrementAndGet();
+    }
+
+    /**
+     * 获取当前步数
+     */
+    public int getCurrentStep() {
+        return currentStep.get();
     }
 
     /**
@@ -246,7 +254,7 @@ public class RunContext {
                 .startTime(Instant.now())
                 .config(config)
                 .cancellationManager(cancellationManager)
-                .currentStep(0)
+                .currentStep(new AtomicInteger(0))
                 .build();
     }
 
@@ -288,7 +296,7 @@ public class RunContext {
                 .startTime(Instant.now())
                 .config(config)
                 .cancellationManager(cancellationManager)
-                .currentStep(0)
+                .currentStep(new AtomicInteger(0))
                 .build();
     }
 
@@ -384,7 +392,7 @@ public class RunContext {
                 .startTime(Instant.now())
                 .config(config)
                 .cancellationManager(cancellationManager)
-                .currentStep(0)
+                .currentStep(new AtomicInteger(0))
                 .build();
     }
 }
