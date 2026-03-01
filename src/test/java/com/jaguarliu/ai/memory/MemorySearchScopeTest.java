@@ -1,5 +1,6 @@
 package com.jaguarliu.ai.memory;
 
+import com.jaguarliu.ai.feature.FeatureFlagsProperties;
 import com.jaguarliu.ai.memory.index.MemoryChunkSearchOps;
 import com.jaguarliu.ai.memory.index.MemoryIndexer;
 import com.jaguarliu.ai.memory.model.MemoryScope;
@@ -18,8 +19,7 @@ import java.util.Arrays;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -35,6 +35,9 @@ class MemorySearchScopeTest {
     @Spy
     private MemoryProperties properties = new MemoryProperties();
 
+    @Spy
+    private FeatureFlagsProperties featureFlags = new FeatureFlagsProperties();
+
     @InjectMocks
     private MemorySearchService searchService;
 
@@ -47,7 +50,7 @@ class MemorySearchScopeTest {
     @Test
     @DisplayName("scope=AGENT 只返回指定 agent 的私有记忆")
     void shouldReturnOnlyRequestedAgentMemoryWhenScopeAgent() {
-        when(searchOps.searchByFts(eq("test"), anyInt())).thenReturn(rows(
+        when(searchOps.searchByFts(eq("test"), anyInt(), any(), any())).thenReturn(rows(
                 row("g-1", "global.md", 1, 2, "global", 0.95, "GLOBAL", null),
                 row("a-1", "agent-a.md", 1, 2, "agent-a", 0.80, "AGENT", "agent-a"),
                 row("b-1", "agent-b.md", 1, 2, "agent-b", 0.88, "AGENT", "agent-b")
@@ -62,7 +65,7 @@ class MemorySearchScopeTest {
     @Test
     @DisplayName("scope=GLOBAL 只返回共享记忆")
     void shouldReturnOnlyGlobalMemoryWhenScopeGlobal() {
-        when(searchOps.searchByFts(eq("test"), anyInt())).thenReturn(rows(
+        when(searchOps.searchByFts(eq("test"), anyInt(), any(), any())).thenReturn(rows(
                 row("g-1", "global.md", 1, 2, "global", 0.95, "GLOBAL", null),
                 row("a-1", "agent-a.md", 1, 2, "agent-a", 0.80, "AGENT", "agent-a")
         ));
@@ -76,7 +79,7 @@ class MemorySearchScopeTest {
     @Test
     @DisplayName("scope=BOTH 返回混合结果且 agent 私有优先")
     void shouldPrioritizeAgentMemoryWhenScopeBoth() {
-        when(searchOps.searchByFts(eq("test"), anyInt())).thenReturn(rows(
+        when(searchOps.searchByFts(eq("test"), anyInt(), any(), any())).thenReturn(rows(
                 row("g-1", "global.md", 1, 2, "global", 0.95, "GLOBAL", null),
                 row("a-1", "agent-a.md", 1, 2, "agent-a", 0.40, "AGENT", "agent-a"),
                 row("b-1", "agent-b.md", 1, 2, "agent-b", 0.99, "AGENT", "agent-b")
