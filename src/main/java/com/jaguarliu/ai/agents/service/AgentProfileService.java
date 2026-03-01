@@ -231,11 +231,25 @@ public class AgentProfileService {
         });
     }
 
+    private static final Path WORKSPACE_ROOT = Path.of("workspace").toAbsolutePath().normalize();
+
     private String normalizeWorkspacePath(String name, String inputPath) {
         Path path = (inputPath != null && !inputPath.isBlank())
                 ? Path.of(inputPath.trim())
                 : Path.of("workspace", "agents", name);
-        return path.normalize().toString();
+
+        // 如果是相对路径，基于 workspace root 解析
+        Path resolved = path.isAbsolute()
+                ? path.toAbsolutePath().normalize()
+                : WORKSPACE_ROOT.resolve(path).toAbsolutePath().normalize();
+
+        // 安全检查：必须在 workspace root 内
+        if (!resolved.startsWith(WORKSPACE_ROOT)) {
+            throw new IllegalArgumentException(
+                    "Invalid workspacePath: path must be within workspace root");
+        }
+
+        return resolved.toString();
     }
 
     private void ensureWorkspaceDirectories(String workspacePath) {
