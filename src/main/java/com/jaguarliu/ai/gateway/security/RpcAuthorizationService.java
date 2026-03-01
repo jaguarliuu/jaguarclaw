@@ -32,7 +32,6 @@ public class RpcAuthorizationService {
             "memory.status",
             "subagent.list",
             "schedule.list",
-            "channel.list",
             "nodes.list"
     );
 
@@ -48,9 +47,6 @@ public class RpcAuthorizationService {
             "schedule.delete",
             "schedule.toggle",
             "schedule.run",
-            "channel.create",
-            "channel.delete",
-            "channel.test",
             "skills.upload",
             "tool.confirm"
     );

@@ -1,6 +1,4 @@
 package com.jaguarliu.ai.schedule;
-
-import com.jaguarliu.ai.channel.ChannelRepository;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -21,7 +19,6 @@ public class ScheduledTaskService {
 
     private final ScheduledTaskRepository repository;
     private final ScheduledTaskExecutor executor;
-    private final ChannelRepository channelRepository;
     private final TaskScheduler taskScheduler;
 
     /**
@@ -39,18 +36,21 @@ public class ScheduledTaskService {
     }
 
     public ScheduledTaskEntity create(String name, String cronExpr, String prompt,
-                                       String channelId, String channelType,
+                                       String targetRef, String targetType,
                                        String emailTo, String emailCc) {
-        // 验证渠道存在
-        channelRepository.findById(channelId)
-                .orElseThrow(() -> new IllegalArgumentException("Channel not found: " + channelId));
+        if (targetRef == null || targetRef.isBlank()) {
+            throw new IllegalArgumentException("targetRef is required");
+        }
+        if (targetType == null || targetType.isBlank()) {
+            throw new IllegalArgumentException("targetType is required");
+        }
 
         ScheduledTaskEntity task = ScheduledTaskEntity.builder()
                 .name(name)
                 .cronExpr(cronExpr)
                 .prompt(prompt)
-                .channelId(channelId)
-                .channelType(channelType)
+                .targetRef(targetRef)
+                .targetType(targetType)
                 .emailTo(emailTo)
                 .emailCc(emailCc)
                 .enabled(true)
@@ -142,8 +142,8 @@ public class ScheduledTaskService {
         dto.put("name", task.getName());
         dto.put("cronExpr", task.getCronExpr());
         dto.put("prompt", task.getPrompt());
-        dto.put("channelId", task.getChannelId());
-        dto.put("channelType", task.getChannelType());
+        dto.put("targetRef", task.getTargetRef());
+        dto.put("targetType", task.getTargetType());
         dto.put("emailTo", task.getEmailTo());
         dto.put("emailCc", task.getEmailCc());
         dto.put("enabled", task.isEnabled());

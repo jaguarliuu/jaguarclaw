@@ -1,7 +1,6 @@
 package com.jaguarliu.ai.schedule;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.jaguarliu.ai.channel.ChannelService;
 import com.jaguarliu.ai.llm.model.LlmRequest;
 import com.jaguarliu.ai.runtime.*;
 import com.jaguarliu.ai.session.MessageService;
@@ -10,6 +9,7 @@ import com.jaguarliu.ai.session.RunStatus;
 import com.jaguarliu.ai.session.SessionService;
 import com.jaguarliu.ai.storage.entity.RunEntity;
 import com.jaguarliu.ai.storage.entity.SessionEntity;
+import com.jaguarliu.ai.tools.integration.DeliveryToolService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -32,7 +32,7 @@ public class ScheduledTaskExecutor {
     private final MessageService messageService;
     private final AgentRuntime agentRuntime;
     private final ContextBuilder contextBuilder;
-    private final ChannelService channelService;
+    private final DeliveryToolService deliveryToolService;
     private final CancellationManager cancellationManager;
     private final LoopConfig loopConfig;
     private final ScheduledTaskRepository repository;
@@ -68,8 +68,8 @@ public class ScheduledTaskExecutor {
             messageService.saveAssistantMessage(session.getId(), run.getId(), response);
             runService.updateStatus(run.getId(), RunStatus.DONE);
 
-            // 8. 推送结果到渠道
-            pushToChannel(task, response, true, null);
+            // 8. 推送结果到目标
+            pushToDeliveryTarget(task, response, true, null);
 
             // 9. 更新任务状态
             task.setLastRunAt(LocalDateTime.now());
@@ -82,8 +82,8 @@ public class ScheduledTaskExecutor {
         } catch (Exception e) {
             log.error("Scheduled task failed: name={}, error={}", task.getName(), e.getMessage(), e);
 
-            // 推送错误到渠道
-            pushToChannel(task, null, false, e.getMessage());
+            // 推送错误到目标
+            pushToDeliveryTarget(task, null, false, e.getMessage());
 
             // 更新任务状态
             task.setLastRunAt(LocalDateTime.now());
@@ -93,25 +93,25 @@ public class ScheduledTaskExecutor {
         }
     }
 
-    private void pushToChannel(ScheduledTaskEntity task, String result, boolean success, String error) {
+    private void pushToDeliveryTarget(ScheduledTaskEntity task, String result, boolean success, String error) {
         try {
-            if ("email".equals(task.getChannelType())) {
+            if ("email".equals(task.getTargetType())) {
                 String subject = success
                         ? "[JaguarClaw] " + task.getName() + " - 执行完成"
                         : "[JaguarClaw] " + task.getName() + " - 执行失败";
                 String body = success ? result : "任务执行失败：\n" + error;
-                channelService.sendEmailById(task.getChannelId(), task.getEmailTo(), subject, body, task.getEmailCc());
-            } else if ("webhook".equals(task.getChannelType())) {
+                deliveryToolService.sendEmail(task.getEmailTo(), subject, body, task.getEmailCc());
+            } else if ("webhook".equals(task.getTargetType())) {
                 Map<String, Object> payload = Map.of(
                         "task", task.getName(),
                         "success", success,
                         "content", success ? result : error,
                         "timestamp", LocalDateTime.now().toString()
                 );
-                channelService.sendWebhookById(task.getChannelId(), objectMapper.writeValueAsString(payload));
+                deliveryToolService.sendWebhook(task.getTargetRef(), objectMapper.writeValueAsString(payload), null);
             }
         } catch (Exception e) {
-            log.error("Failed to push scheduled task result to channel: {}", e.getMessage());
+            log.error("Failed to push scheduled task result to delivery target: {}", e.getMessage());
         }
     }
 }

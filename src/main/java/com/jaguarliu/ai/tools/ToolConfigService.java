@@ -64,6 +64,43 @@ public class ToolConfigService {
         hitl.put("dangerousKeywords", properties.getDangerousKeywords());
         result.put("hitl", hitl);
 
+        Map<String, Object> delivery = new LinkedHashMap<>();
+
+        // Email tool configuration
+        Map<String, Object> email = new LinkedHashMap<>();
+        ToolConfigProperties.EmailToolConfig emailCfg = properties.getEmail();
+        email.put("enabled", emailCfg != null && emailCfg.isEnabled());
+        email.put("host", emailCfg != null ? safe(emailCfg.getHost()) : "");
+        email.put("port", emailCfg != null && emailCfg.getPort() != null ? emailCfg.getPort() : 587);
+        email.put("username", emailCfg != null ? safe(emailCfg.getUsername()) : "");
+        email.put("from", emailCfg != null ? safe(emailCfg.getFrom()) : "");
+        email.put("tls", emailCfg != null && emailCfg.isTls());
+        email.put("password", emailCfg != null ? maskApiKey(emailCfg.getPassword()) : "");
+        email.put("configured", isEmailConfigured(emailCfg));
+        delivery.put("email", email);
+
+        // Webhook tool configuration
+        Map<String, Object> webhook = new LinkedHashMap<>();
+        ToolConfigProperties.WebhookToolConfig webhookCfg = properties.getWebhook();
+        webhook.put("enabled", webhookCfg != null && webhookCfg.isEnabled());
+        List<Map<String, Object>> endpoints = new ArrayList<>();
+        if (webhookCfg != null && webhookCfg.getEndpoints() != null) {
+            for (ToolConfigProperties.WebhookEndpoint ep : webhookCfg.getEndpoints()) {
+                Map<String, Object> item = new LinkedHashMap<>();
+                item.put("alias", safe(ep.getAlias()));
+                item.put("url", safe(ep.getUrl()));
+                item.put("method", safe(ep.getMethod()).isBlank() ? "POST" : ep.getMethod().toUpperCase(Locale.ROOT));
+                item.put("headers", ep.getHeaders() != null ? ep.getHeaders() : Map.of());
+                item.put("trigger", safe(ep.getTrigger()));
+                item.put("enabled", ep.isEnabled());
+                endpoints.add(item);
+            }
+        }
+        webhook.put("endpoints", endpoints);
+        webhook.put("configured", !endpoints.isEmpty());
+        delivery.put("webhook", webhook);
+        result.put("delivery", delivery);
+
         return result;
     }
 
@@ -72,6 +109,11 @@ public class ToolConfigService {
      */
     @SuppressWarnings("unchecked")
     public void saveConfig(Map<String, Object> params) {
+        @SuppressWarnings("unchecked")
+        Map<String, Object> deliveryParams = params.containsKey("delivery")
+                ? (Map<String, Object>) params.get("delivery")
+                : params;
+
         // 更新用户域名
         if (params.containsKey("userDomains")) {
             List<String> userDomains = (List<String>) params.get("userDomains");
@@ -109,6 +151,96 @@ public class ToolConfigService {
             }
         }
 
+        // 更新 Email 工具配置
+        if (deliveryParams != null && deliveryParams.containsKey("email")) {
+            Map<String, Object> emailMap = (Map<String, Object>) deliveryParams.get("email");
+            if (emailMap != null) {
+                ToolConfigProperties.EmailToolConfig current = properties.getEmail();
+                if (current == null) {
+                    current = new ToolConfigProperties.EmailToolConfig();
+                }
+                current.setEnabled(Boolean.TRUE.equals(emailMap.get("enabled")));
+                current.setHost(stringOrNull(emailMap.get("host")));
+                Object portObj = emailMap.get("port");
+                if (portObj instanceof Number n) {
+                    current.setPort(n.intValue());
+                } else if (portObj instanceof String s && !s.isBlank()) {
+                    current.setPort(Integer.parseInt(s));
+                } else if (current.getPort() == null) {
+                    current.setPort(587);
+                }
+                current.setUsername(stringOrNull(emailMap.get("username")));
+                current.setFrom(stringOrNull(emailMap.get("from")));
+                current.setTls(!emailMap.containsKey("tls") || Boolean.TRUE.equals(emailMap.get("tls")));
+
+                String incomingPassword = stringOrNull(emailMap.get("password"));
+                if (incomingPassword != null && !incomingPassword.isBlank() && !incomingPassword.contains("***")) {
+                    current.setPassword(incomingPassword);
+                } else if (incomingPassword != null && incomingPassword.isBlank()) {
+                    current.setPassword(null);
+                }
+
+                properties.setEmail(current);
+            }
+        }
+
+        // 更新 Webhook 工具配置
+        if (deliveryParams != null && deliveryParams.containsKey("webhook")) {
+            Map<String, Object> webhookMap = (Map<String, Object>) deliveryParams.get("webhook");
+            if (webhookMap != null) {
+                ToolConfigProperties.WebhookToolConfig webhookCfg = properties.getWebhook();
+                if (webhookCfg == null) {
+                    webhookCfg = new ToolConfigProperties.WebhookToolConfig();
+                }
+
+                webhookCfg.setEnabled(Boolean.TRUE.equals(webhookMap.get("enabled")));
+                Object endpointsObj = webhookMap.get("endpoints");
+                List<ToolConfigProperties.WebhookEndpoint> newEndpoints = new ArrayList<>();
+                if (endpointsObj instanceof List<?> endpointList) {
+                    for (Object item : endpointList) {
+                        if (!(item instanceof Map<?, ?> raw)) {
+                            continue;
+                        }
+                        String alias = stringOrNull(raw.get("alias"));
+                        String url = stringOrNull(raw.get("url"));
+                        if (alias == null || alias.isBlank() || url == null || url.isBlank()) {
+                            continue;
+                        }
+
+                        String method = Optional.ofNullable(stringOrNull(raw.get("method")))
+                                .filter(s -> !s.isBlank())
+                                .orElse("POST")
+                                .toUpperCase(Locale.ROOT);
+
+                        Map<String, String> headers = new LinkedHashMap<>();
+                        Object headersObj = raw.get("headers");
+                        if (headersObj instanceof Map<?, ?> headerMap) {
+                            for (Map.Entry<?, ?> h : headerMap.entrySet()) {
+                                if (h.getKey() != null && h.getValue() != null) {
+                                    headers.put(String.valueOf(h.getKey()), String.valueOf(h.getValue()));
+                                }
+                            }
+                        }
+
+                        boolean endpointEnabled = !raw.containsKey("enabled") || Boolean.TRUE.equals(raw.get("enabled"));
+                        String trigger = stringOrNull(raw.get("trigger"));
+
+                        newEndpoints.add(ToolConfigProperties.WebhookEndpoint.builder()
+                                .alias(alias)
+                                .url(url)
+                                .method(method)
+                                .headers(headers)
+                                .trigger(trigger)
+                                .enabled(endpointEnabled)
+                                .build());
+                    }
+                }
+
+                webhookCfg.setEndpoints(newEndpoints);
+                properties.setWebhook(webhookCfg);
+            }
+        }
+
         // 持久化到文件
         writeConfigFile();
 
@@ -117,6 +249,14 @@ public class ToolConfigService {
 
         log.info("Tool config saved: {} user domains, {} search providers",
                 properties.getUserDomains().size(), properties.getSearchProviders().size());
+    }
+
+    /**
+     * 持久化当前内存配置到文件（不修改内存状态）
+     */
+    public void persistCurrentConfig() {
+        writeConfigFile();
+        searchProviderRegistry.rebuild();
     }
 
     // ==================== Private ====================
@@ -132,6 +272,10 @@ public class ToolConfigService {
             ObjectMapper yamlMapper = new ObjectMapper(new YAMLFactory());
             @SuppressWarnings("unchecked")
             Map<String, Object> config = yamlMapper.readValue(configFile, Map.class);
+            @SuppressWarnings("unchecked")
+            Map<String, Object> deliveryConfig = config.containsKey("delivery")
+                    ? (Map<String, Object>) config.get("delivery")
+                    : config;
 
             if (config.containsKey("userDomains")) {
                 @SuppressWarnings("unchecked")
@@ -178,6 +322,79 @@ public class ToolConfigService {
                 }
             }
 
+            if (deliveryConfig != null && deliveryConfig.containsKey("email")) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> email = (Map<String, Object>) deliveryConfig.get("email");
+                if (email != null) {
+                    ToolConfigProperties.EmailToolConfig emailCfg = new ToolConfigProperties.EmailToolConfig();
+                    emailCfg.setEnabled(Boolean.TRUE.equals(email.get("enabled")));
+                    emailCfg.setHost(stringOrNull(email.get("host")));
+                    Object portObj = email.get("port");
+                    if (portObj instanceof Number n) {
+                        emailCfg.setPort(n.intValue());
+                    } else if (portObj instanceof String s && !s.isBlank()) {
+                        emailCfg.setPort(Integer.parseInt(s));
+                    }
+                    if (emailCfg.getPort() == null) {
+                        emailCfg.setPort(587);
+                    }
+                    emailCfg.setUsername(stringOrNull(email.get("username")));
+                    emailCfg.setFrom(stringOrNull(email.get("from")));
+                    emailCfg.setTls(!email.containsKey("tls") || Boolean.TRUE.equals(email.get("tls")));
+                    emailCfg.setPassword(stringOrNull(email.get("password")));
+                    properties.setEmail(emailCfg);
+                }
+            }
+
+            if (deliveryConfig != null && deliveryConfig.containsKey("webhook")) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> webhook = (Map<String, Object>) deliveryConfig.get("webhook");
+                if (webhook != null) {
+                    ToolConfigProperties.WebhookToolConfig webhookCfg = new ToolConfigProperties.WebhookToolConfig();
+                    webhookCfg.setEnabled(Boolean.TRUE.equals(webhook.get("enabled")));
+                    List<ToolConfigProperties.WebhookEndpoint> endpoints = new ArrayList<>();
+                    Object endpointsObj = webhook.get("endpoints");
+                    if (endpointsObj instanceof List<?> endpointList) {
+                        for (Object item : endpointList) {
+                            if (!(item instanceof Map<?, ?> raw)) {
+                                continue;
+                            }
+                            String alias = stringOrNull(raw.get("alias"));
+                            String url = stringOrNull(raw.get("url"));
+                            if (alias == null || alias.isBlank() || url == null || url.isBlank()) {
+                                continue;
+                            }
+                            String method = Optional.ofNullable(stringOrNull(raw.get("method")))
+                                    .filter(s -> !s.isBlank())
+                                    .orElse("POST")
+                                    .toUpperCase(Locale.ROOT);
+
+                            Map<String, String> headers = new LinkedHashMap<>();
+                            Object headersObj = raw.get("headers");
+                            if (headersObj instanceof Map<?, ?> headerMap) {
+                                for (Map.Entry<?, ?> h : headerMap.entrySet()) {
+                                    if (h.getKey() != null && h.getValue() != null) {
+                                        headers.put(String.valueOf(h.getKey()), String.valueOf(h.getValue()));
+                                    }
+                                }
+                            }
+
+                            boolean endpointEnabled = !raw.containsKey("enabled") || Boolean.TRUE.equals(raw.get("enabled"));
+                            endpoints.add(ToolConfigProperties.WebhookEndpoint.builder()
+                                    .alias(alias)
+                                    .url(url)
+                                    .method(method)
+                                    .headers(headers)
+                                    .trigger(stringOrNull(raw.get("trigger")))
+                                    .enabled(endpointEnabled)
+                                    .build());
+                        }
+                    }
+                    webhookCfg.setEndpoints(endpoints);
+                    properties.setWebhook(webhookCfg);
+                }
+            }
+
             log.info("Loaded tool config from file: {} user domains, {} search providers",
                     properties.getUserDomains().size(), properties.getSearchProviders().size());
         } catch (Exception e) {
@@ -213,6 +430,45 @@ public class ToolConfigService {
             hitl.put("alwaysConfirmTools", properties.getAlwaysConfirmTools());
             hitl.put("dangerousKeywords", properties.getDangerousKeywords());
             config.put("hitl", hitl);
+
+            ToolConfigProperties.EmailToolConfig email = properties.getEmail();
+            Map<String, Object> delivery = new LinkedHashMap<>();
+            if (email != null) {
+                Map<String, Object> emailMap = new LinkedHashMap<>();
+                emailMap.put("enabled", email.isEnabled());
+                emailMap.put("host", safe(email.getHost()));
+                emailMap.put("port", email.getPort() != null ? email.getPort() : 587);
+                emailMap.put("username", safe(email.getUsername()));
+                emailMap.put("from", safe(email.getFrom()));
+                emailMap.put("tls", email.isTls());
+                emailMap.put("password", safe(email.getPassword()));
+                delivery.put("email", emailMap);
+            }
+
+            ToolConfigProperties.WebhookToolConfig webhook = properties.getWebhook();
+            if (webhook != null) {
+                Map<String, Object> webhookMap = new LinkedHashMap<>();
+                webhookMap.put("enabled", webhook.isEnabled());
+                List<Map<String, Object>> endpointList = new ArrayList<>();
+                if (webhook.getEndpoints() != null) {
+                    for (ToolConfigProperties.WebhookEndpoint endpoint : webhook.getEndpoints()) {
+                        Map<String, Object> entry = new LinkedHashMap<>();
+                        entry.put("alias", safe(endpoint.getAlias()));
+                        entry.put("url", safe(endpoint.getUrl()));
+                        entry.put("method", safe(endpoint.getMethod()).isBlank() ? "POST" : endpoint.getMethod().toUpperCase(Locale.ROOT));
+                        entry.put("headers", endpoint.getHeaders() != null ? endpoint.getHeaders() : Map.of());
+                        entry.put("trigger", safe(endpoint.getTrigger()));
+                        entry.put("enabled", endpoint.isEnabled());
+                        endpointList.add(entry);
+                    }
+                }
+                webhookMap.put("endpoints", endpointList);
+                delivery.put("webhook", webhookMap);
+            }
+
+            if (!delivery.isEmpty()) {
+                config.put("delivery", delivery);
+            }
 
             yamlMapper.writeValue(configFile, config);
             log.info("Tool config file written to {}", configFile.getAbsolutePath());
@@ -272,5 +528,32 @@ public class ToolConfigService {
             return "***";
         }
         return apiKey.substring(0, 3) + "***" + apiKey.substring(apiKey.length() - 3);
+    }
+
+    private boolean isEmailConfigured(ToolConfigProperties.EmailToolConfig config) {
+        if (config == null) {
+            return false;
+        }
+        return notBlank(config.getHost())
+                && config.getPort() != null
+                && notBlank(config.getUsername())
+                && notBlank(config.getFrom())
+                && notBlank(config.getPassword());
+    }
+
+    private boolean notBlank(String value) {
+        return value != null && !value.isBlank();
+    }
+
+    private String safe(String value) {
+        return value == null ? "" : value;
+    }
+
+    private String stringOrNull(Object value) {
+        if (value == null) {
+            return null;
+        }
+        String str = String.valueOf(value).trim();
+        return str.isEmpty() ? null : str;
     }
 }

@@ -8,7 +8,9 @@ import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -52,6 +54,16 @@ public class ToolConfigProperties {
     private List<String> dangerousKeywords = new ArrayList<>();
 
     private Integer timeout = 60;
+
+    /**
+     * 邮件工具配置
+     */
+    private EmailToolConfig email = new EmailToolConfig();
+
+    /**
+     * Webhook 工具配置
+     */
+    private WebhookToolConfig webhook = new WebhookToolConfig();
 
     /**
      * 搜索结果发现的域名（临时白名单，session 结束时清除）
@@ -114,5 +126,68 @@ public class ToolConfigProperties {
          * 是否启用
          */
         private boolean enabled;
+    }
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class EmailToolConfig {
+        /**
+         * 是否启用邮件工具
+         */
+        private boolean enabled = false;
+
+        private String host;
+        private Integer port = 587;
+        private String username;
+        private String from;
+        private boolean tls = true;
+
+        /**
+         * SMTP 密码（明文存储在 tool-config.yml，和搜索 API key 一致）
+         */
+        private String password;
+    }
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class WebhookToolConfig {
+        /**
+         * 是否启用 webhook 工具
+         */
+        private boolean enabled = false;
+
+        /**
+         * 可触发 webhook 目标列表（alias 唯一）
+         */
+        private List<WebhookEndpoint> endpoints = new ArrayList<>();
+    }
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class WebhookEndpoint {
+        /**
+         * webhook 别名（自然语言可引用）
+         */
+        private String alias;
+
+        private String url;
+
+        @Builder.Default
+        private String method = "POST";
+
+        @Builder.Default
+        private Map<String, String> headers = new LinkedHashMap<>();
+
+        /**
+         * 触发机制描述（例如 "日报推送"、"异常告警"）
+         */
+        private String trigger;
+
+        @Builder.Default
+        private boolean enabled = true;
     }
 }
