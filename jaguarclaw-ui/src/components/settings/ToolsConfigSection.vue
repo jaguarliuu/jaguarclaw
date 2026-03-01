@@ -293,8 +293,8 @@ onMounted(async () => {
         />
 
         <ConfigCard
-          title="Delivery Tools"
-          description="Configure send_email and send_webhook tool visibility and targets."
+          :title="t('sections.tools.cards.deliveryTools')"
+          :description="t('sections.tools.cards.deliveryToolsDesc')"
           :summary="deliverySummary"
           @click="activeModal = 'delivery'"
         />
