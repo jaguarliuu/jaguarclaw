@@ -83,4 +83,25 @@ class AgentWorkspaceResolverTest {
 
         assertEquals(tempDir.resolve("agents").resolve("agent-a-custom").toAbsolutePath().normalize(), resolved);
     }
+
+    @Test
+    @DisplayName("兼容历史相对路径 workspace/agents/*，避免二次拼接")
+    void resolveProfileWorkspaceShouldSupportLegacyRelativeWorkspacePath() {
+        AgentProfileService profileService = mock(AgentProfileService.class);
+        Path cwd = Path.of(".").toAbsolutePath().normalize();
+        Path workspaceRoot = cwd.resolve("workspace").toAbsolutePath().normalize();
+        String legacyPath = "workspace/agents/agent-a";
+        when(profileService.get("agent-a"))
+                .thenReturn(Optional.of(AgentProfileEntity.builder()
+                        .id("agent-a")
+                        .workspacePath(legacyPath)
+                        .build()));
+
+        AgentWorkspaceResolver resolver = new AgentWorkspaceResolver(Optional.of(profileService));
+        ReflectionTestUtils.setField(resolver, "workspaceRoot", workspaceRoot.toString());
+
+        Path resolved = resolver.resolveAgentWorkspace("agent-a");
+
+        assertEquals(cwd.resolve(legacyPath).toAbsolutePath().normalize(), resolved);
+    }
 }
