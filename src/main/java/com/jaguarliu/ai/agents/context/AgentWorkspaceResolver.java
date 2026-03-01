@@ -78,10 +78,8 @@ public class AgentWorkspaceResolver {
             if (configured.isAbsolute()) {
                 candidate = configured.toAbsolutePath().normalize();
             } else {
-                Path legacyRelative = configured.toAbsolutePath().normalize();
-                candidate = legacyRelative.startsWith(workspaceRootPath)
-                        ? legacyRelative
-                        : workspaceRootPath.resolve(configured).toAbsolutePath().normalize();
+                // 相对路径始终基于 workspaceRoot 解析，而非 CWD
+                candidate = workspaceRootPath.resolve(configured).toAbsolutePath().normalize();
             }
         } catch (InvalidPathException ex) {
             throw new IllegalArgumentException("Invalid workspacePath: " + workspacePath, ex);
