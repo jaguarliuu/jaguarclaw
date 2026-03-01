@@ -22,6 +22,13 @@ public interface MemoryChunkSearchOps {
     List<Object[]> searchByVector(String embedding, int limit);
 
     /**
+     * 向量检索（带 scope 过滤）
+     */
+    default List<Object[]> searchByVector(String embedding, int limit, String scope, String agentId) {
+        return searchByVector(embedding, limit);
+    }
+
+    /**
      * 全文检索
      *
      * @param query FTS 查询字符串
@@ -31,6 +38,13 @@ public interface MemoryChunkSearchOps {
      *         兼容旧实现时也允许只返回前 6 列
      */
     List<Object[]> searchByFts(String query, int limit);
+
+    /**
+     * 全文检索（带 scope 过滤）
+     */
+    default List<Object[]> searchByFts(String query, int limit, String scope, String agentId) {
+        return searchByFts(query, limit);
+    }
 
     /**
      * 更新 chunk 的 embedding

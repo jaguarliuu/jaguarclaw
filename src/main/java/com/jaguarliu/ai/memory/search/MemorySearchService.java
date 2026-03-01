@@ -164,8 +164,10 @@ public class MemorySearchService {
         // 格式化为 PostgreSQL vector 字符串
         String vectorStr = formatVector(queryVector);
 
-        // 执行检索
-        List<Object[]> rows = searchOps.searchByVector(vectorStr, topK);
+        // 执行检索（带 scope 过滤，在 SQL 层过滤）
+        String scopeFilter = scope == MemoryScope.BOTH ? null : scope.name();
+        List<Object[]> rows = searchOps.searchByVector(vectorStr, topK, scopeFilter,
+                scope == MemoryScope.AGENT ? agentId : null);
         int snippetMax = properties.getSearch().getSnippetMaxChars();
 
         return rows.stream()
@@ -179,7 +181,9 @@ public class MemorySearchService {
      * 全文检索实现
      */
     private List<ScopedSearchResult> searchByFts(String query, int topK, MemoryScope scope, String agentId) {
-        List<Object[]> rows = searchOps.searchByFts(query, topK);
+        String scopeFilter = scope == MemoryScope.BOTH ? null : scope.name();
+        List<Object[]> rows = searchOps.searchByFts(query, topK, scopeFilter,
+                scope == MemoryScope.AGENT ? agentId : null);
         int snippetMax = properties.getSearch().getSnippetMaxChars();
 
         return rows.stream()
