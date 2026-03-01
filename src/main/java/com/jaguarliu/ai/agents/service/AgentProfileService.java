@@ -2,6 +2,7 @@ package com.jaguarliu.ai.agents.service;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.jaguarliu.ai.agents.AgentConstants;
 import com.jaguarliu.ai.agents.entity.AgentProfileEntity;
 import com.jaguarliu.ai.agents.repository.AgentProfileRepository;
 import lombok.RequiredArgsConstructor;
@@ -24,9 +25,9 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class AgentProfileService {
 
-    private static final String DEFAULT_AGENT_ID = "main";
-    private static final String DEFAULT_AGENT_NAME = "main";
-    private static final String DEFAULT_AGENT_DISPLAY_NAME = "Main Agent";
+    private static final String DEFAULT_AGENT_ID = AgentConstants.DEFAULT_AGENT_ID;
+    private static final String DEFAULT_AGENT_NAME = AgentConstants.DEFAULT_AGENT_NAME;
+    private static final String DEFAULT_AGENT_DISPLAY_NAME = AgentConstants.DEFAULT_AGENT_DISPLAY_NAME;
 
     private final AgentProfileRepository repository;
     private final ObjectMapper objectMapper;
@@ -213,7 +214,7 @@ public class AgentProfileService {
     }
 
     private void validateAgentName(String name) {
-        if (!name.matches("^[a-zA-Z0-9_-]{1,64}$")) {
+        if (!AgentConstants.SAFE_AGENT_ID_PATTERN.matcher(name).matches()) {
             throw new IllegalArgumentException("Invalid agent name: " + name);
         }
     }

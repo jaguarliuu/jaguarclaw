@@ -1,5 +1,6 @@
 package com.jaguarliu.ai.agents.context;
 
+import com.jaguarliu.ai.agents.AgentConstants;
 import com.jaguarliu.ai.agents.entity.AgentProfileEntity;
 import com.jaguarliu.ai.agents.service.AgentProfileService;
 import org.springframework.beans.factory.annotation.Value;
@@ -16,8 +17,8 @@ import java.util.regex.Pattern;
 @Component
 public class AgentWorkspaceResolver {
 
-    private static final String DEFAULT_AGENT_ID = "main";
-    private static final Pattern SAFE_AGENT_ID_PATTERN = Pattern.compile("^[a-zA-Z0-9_-]{1,128}$");
+    private static final String DEFAULT_AGENT_ID = AgentConstants.DEFAULT_AGENT_ID;
+    private static final Pattern SAFE_AGENT_ID_PATTERN = AgentConstants.SAFE_AGENT_ID_PATTERN;
 
     @Value("${tools.workspace:./workspace}")
     private String workspaceRoot;

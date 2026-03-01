@@ -1,5 +1,6 @@
 package com.jaguarliu.ai.runtime;
 
+import com.jaguarliu.ai.agents.AgentConstants;
 import com.jaguarliu.ai.agents.entity.AgentProfileEntity;
 import com.jaguarliu.ai.agents.service.AgentProfileService;
 import lombok.RequiredArgsConstructor;
@@ -15,7 +16,7 @@ import java.util.regex.Pattern;
 @RequiredArgsConstructor
 public class ChatRouter {
 
-    private static final String FALLBACK_AGENT_ID = "main";
+    private static final String FALLBACK_AGENT_ID = AgentConstants.DEFAULT_AGENT_ID;
     private static final Pattern LEADING_MENTION =
             Pattern.compile("^\\s*@([a-zA-Z0-9_-]{1,64})\\s+(.+)$", Pattern.DOTALL);
 

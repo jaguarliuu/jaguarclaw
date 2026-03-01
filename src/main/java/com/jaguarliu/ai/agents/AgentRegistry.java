@@ -39,7 +39,7 @@ public class AgentRegistry {
             // 没有配置时，创建默认的 main profile
             log.info("No agent profiles configured, creating default 'main' profile");
             AgentProfile defaultProfile = createDefaultProfile();
-            registry.put("main", defaultProfile);
+            registry.put(AgentConstants.DEFAULT_AGENT_ID, defaultProfile);
         } else {
             // 从配置加载
             for (Map.Entry<String, AgentProfile> entry : profiles.entrySet()) {
@@ -155,7 +155,7 @@ public class AgentRegistry {
      */
     private AgentProfile createDefaultProfile() {
         AgentProfile profile = new AgentProfile();
-        profile.setId("main");
+        profile.setId(AgentConstants.DEFAULT_AGENT_ID);
         profile.setSandbox("trusted");
         profile.setWorkspace("./workspace");
         profile.setAuthDir("./.jaguarclaw/auth/main");
