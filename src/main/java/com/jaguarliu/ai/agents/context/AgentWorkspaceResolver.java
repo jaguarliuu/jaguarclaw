@@ -5,14 +5,19 @@ import com.jaguarliu.ai.agents.service.AgentProfileService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
+import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.util.Optional;
+import java.util.regex.Pattern;
 
 /**
  * Agent 作用域工作目录解析器
  */
 @Component
 public class AgentWorkspaceResolver {
+
+    private static final String DEFAULT_AGENT_ID = "main";
+    private static final Pattern SAFE_AGENT_ID_PATTERN = Pattern.compile("^[a-zA-Z0-9_-]{1,128}$");
 
     @Value("${tools.workspace:./workspace}")
     private String workspaceRoot;
@@ -25,31 +30,79 @@ public class AgentWorkspaceResolver {
 
     public Path resolveAgentWorkspace(String agentId) {
         String resolvedAgentId = normalizeAgentId(agentId);
+        Path workspaceRootPath = getWorkspaceRootPath();
 
         if (agentProfileService.isPresent()) {
             Optional<AgentProfileEntity> profile = agentProfileService.get().get(resolvedAgentId);
             if (profile.isPresent()
                     && profile.get().getWorkspacePath() != null
                     && !profile.get().getWorkspacePath().isBlank()) {
-                return Path.of(profile.get().getWorkspacePath()).toAbsolutePath().normalize();
+                return resolveProfileWorkspace(profile.get().getWorkspacePath(), workspaceRootPath);
             }
         }
 
-        return Path.of(workspaceRoot)
-                .resolve("agents")
+        Path agentsRoot = workspaceRootPath.resolve("agents").toAbsolutePath().normalize();
+        Path resolved = agentsRoot
                 .resolve(resolvedAgentId)
                 .toAbsolutePath()
                 .normalize();
+        assertWithinBase(resolved, agentsRoot, "agent workspace");
+        return resolved;
     }
 
     public Path resolveAgentFile(String agentId, String fileName) {
-        return resolveAgentWorkspace(agentId).resolve(fileName).toAbsolutePath().normalize();
+        Path agentWorkspace = resolveAgentWorkspace(agentId);
+        Path safeFileName = normalizeFileName(fileName);
+        Path resolved = agentWorkspace.resolve(safeFileName).toAbsolutePath().normalize();
+        assertWithinBase(resolved, agentWorkspace, "agent file");
+        return resolved;
     }
 
     public String normalizeAgentId(String agentId) {
-        if (agentId == null || agentId.isBlank()) {
-            return "main";
+        String resolved = (agentId == null || agentId.isBlank()) ? DEFAULT_AGENT_ID : agentId.trim();
+        if (!SAFE_AGENT_ID_PATTERN.matcher(resolved).matches()) {
+            throw new IllegalArgumentException("Invalid agentId: " + resolved);
         }
-        return agentId;
+        return resolved;
+    }
+
+    private Path getWorkspaceRootPath() {
+        return Path.of(workspaceRoot).toAbsolutePath().normalize();
+    }
+
+    private Path resolveProfileWorkspace(String workspacePath, Path workspaceRootPath) {
+        final Path candidate;
+        try {
+            Path configured = Path.of(workspacePath.trim());
+            candidate = (configured.isAbsolute() ? configured : workspaceRootPath.resolve(configured))
+                    .toAbsolutePath()
+                    .normalize();
+        } catch (InvalidPathException ex) {
+            throw new IllegalArgumentException("Invalid workspacePath: " + workspacePath, ex);
+        }
+        assertWithinBase(candidate, workspaceRootPath, "workspacePath");
+        return candidate;
+    }
+
+    private Path normalizeFileName(String fileName) {
+        if (fileName == null || fileName.isBlank()) {
+            throw new IllegalArgumentException("fileName is required");
+        }
+        try {
+            Path normalized = Path.of(fileName.trim()).normalize();
+            String value = normalized.toString();
+            if (normalized.isAbsolute() || normalized.getNameCount() != 1 || ".".equals(value) || "..".equals(value)) {
+                throw new IllegalArgumentException("Invalid fileName: " + fileName);
+            }
+            return normalized;
+        } catch (InvalidPathException ex) {
+            throw new IllegalArgumentException("Invalid fileName: " + fileName, ex);
+        }
+    }
+
+    private void assertWithinBase(Path target, Path base, String fieldName) {
+        if (!target.startsWith(base)) {
+            throw new IllegalArgumentException("Invalid " + fieldName + ": path outside workspace root");
+        }
     }
 }
