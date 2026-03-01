@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
-import type { Skill, SkillDetail } from '@/types'
-import { useSkills } from '@/composables/useSkills'
+import { ref, computed, onMounted, watch } from 'vue'
+import type { Skill } from '@/types'
+import { useSkills, type SkillViewScope } from '@/composables/useSkills'
+import { useAgents } from '@/composables/useAgents'
 import { useI18n } from '@/i18n'
 import SkillRow from './SkillRow.vue'
 import SkillDetailPanel from './SkillDetail.vue'
@@ -12,18 +13,50 @@ const {
   uploading, uploadError,
   loadSkills, selectSkill, clearSelection, uploadSkill, clearUploadError
 } = useSkills()
-
+const { agents, enabledAgents, defaultAgent, loadAgents } = useAgents()
 const { t } = useI18n()
 
 const fileInput = ref<HTMLInputElement | null>(null)
+const selectedScope = ref<SkillViewScope>('effective')
+const selectedAgentId = ref<string>('main')
+const initialized = ref(false)
 
-const availableSkills = computed(() => skills.value.filter(s => s.available))
-const unavailableSkills = computed(() => skills.value.filter(s => !s.available))
-
+const availableSkills = computed(() => skills.value.filter((s) => s.available))
+const unavailableSkills = computed(() => skills.value.filter((s) => !s.available))
 const panelOpen = computed(() => selectedSkill.value !== null)
 
+const effectiveAgentId = computed(() => {
+  return selectedAgentId.value || defaultAgent.value?.id || enabledAgents.value[0]?.id || agents.value[0]?.id || 'main'
+})
+
+const agentOptions = computed(() => enabledAgents.value.length > 0 ? enabledAgents.value : agents.value)
+
+const scopeHint = computed(() => {
+  if (selectedScope.value === 'global') {
+    return t('sections.skills.scope.globalHint')
+  }
+  const active = agentOptions.value.find((agent) => agent.id === effectiveAgentId.value)
+  return t('sections.skills.scope.effectiveHint', {
+    agent: active?.displayName || active?.name || effectiveAgentId.value,
+  })
+})
+
+function queryOptions() {
+  if (selectedScope.value === 'global') {
+    return { scope: 'global' as const }
+  }
+  return {
+    scope: 'effective' as const,
+    agentId: effectiveAgentId.value,
+  }
+}
+
+async function reloadSkills() {
+  await loadSkills(queryOptions())
+}
+
 function handleSelect(skill: Skill) {
-  selectSkill(skill.name)
+  selectSkill(skill.name, queryOptions())
 }
 
 function handleClose() {
@@ -42,12 +75,20 @@ async function handleFileChange(event: Event) {
     // error is already set in composable
   }
 
-  // Reset input so same file can be re-uploaded
   input.value = ''
 }
 
-onMounted(() => {
-  loadSkills()
+watch([selectedScope, effectiveAgentId], async () => {
+  if (!initialized.value) return
+  clearSelection()
+  await reloadSkills()
+})
+
+onMounted(async () => {
+  await loadAgents()
+  selectedAgentId.value = defaultAgent.value?.id || enabledAgents.value[0]?.id || agents.value[0]?.id || 'main'
+  initialized.value = true
+  await reloadSkills()
 })
 </script>
 
@@ -62,6 +103,27 @@ onMounted(() => {
       <input ref="fileInput" type="file" accept=".md,.zip" hidden @change="handleFileChange" />
     </header>
 
+    <div class="scope-bar">
+      <label class="scope-field">
+        <span class="scope-label">{{ t('sections.skills.scope.label') }}</span>
+        <select v-model="selectedScope" class="scope-select">
+          <option value="effective">{{ t('sections.skills.scope.effective') }}</option>
+          <option value="global">{{ t('sections.skills.scope.global') }}</option>
+        </select>
+      </label>
+
+      <label class="scope-field">
+        <span class="scope-label">{{ t('sections.skills.scope.agentLabel') }}</span>
+        <select v-model="selectedAgentId" class="scope-select" :disabled="selectedScope === 'global' || agentOptions.length === 0">
+          <option v-for="agent in agentOptions" :key="agent.id" :value="agent.id">
+            {{ agent.displayName || agent.name }}
+          </option>
+        </select>
+      </label>
+
+      <span class="scope-hint">{{ scopeHint }}</span>
+    </div>
+
     <div v-if="uploadError" class="upload-error">
       <span>{{ uploadError }}</span>
       <button class="dismiss-btn" @click="clearUploadError">&times;</button>
@@ -72,7 +134,6 @@ onMounted(() => {
     </div>
 
     <div v-else class="skills-list">
-      <!-- Available -->
       <div v-if="availableSkills.length" class="skill-group">
         <h3 class="group-title">{{ t('sections.skills.availableGroup', { n: String(availableSkills.length) }) }}</h3>
         <div class="group-list">
@@ -86,7 +147,6 @@ onMounted(() => {
         </div>
       </div>
 
-      <!-- Unavailable -->
       <div v-if="unavailableSkills.length" class="skill-group">
         <h3 class="group-title">{{ t('sections.skills.unavailableGroup', { n: String(unavailableSkills.length) }) }}</h3>
         <div class="group-list">
@@ -100,18 +160,12 @@ onMounted(() => {
         </div>
       </div>
 
-      <!-- Empty state -->
       <div v-if="!skills.length" class="empty-state">
         <span>{{ t('sections.skills.empty') }}</span>
       </div>
     </div>
 
-    <!-- Detail Panel -->
-    <SlidePanel
-      :open="panelOpen"
-      :title="selectedSkill || ''"
-      @close="handleClose"
-    >
+    <SlidePanel :open="panelOpen" :title="selectedSkill || ''" @close="handleClose">
       <SkillDetailPanel :skill="selectedSkillDetail" :loading="detailLoading" />
     </SlidePanel>
   </div>
@@ -164,6 +218,49 @@ onMounted(() => {
 .upload-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.scope-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 20px;
+  border-bottom: var(--border-light);
+  background: var(--color-gray-50);
+}
+
+.scope-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.scope-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-gray-dark);
+}
+
+.scope-select {
+  min-width: 128px;
+  padding: 6px 8px;
+  border: var(--border);
+  border-radius: var(--radius-md);
+  background: var(--color-white);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.scope-select:disabled {
+  opacity: 0.5;
+}
+
+.scope-hint {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--color-gray-dark);
 }
 
 .upload-error {

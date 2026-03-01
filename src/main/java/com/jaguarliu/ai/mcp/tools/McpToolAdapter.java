@@ -4,6 +4,7 @@ import com.jaguarliu.ai.mcp.client.ManagedMcpClient;
 import com.jaguarliu.ai.tools.Tool;
 import com.jaguarliu.ai.tools.ToolDefinition;
 import com.jaguarliu.ai.tools.ToolResult;
+import com.jaguarliu.ai.tools.ToolVisibilityResolver;
 import io.modelcontextprotocol.spec.McpSchema;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -18,7 +19,7 @@ import java.util.Map;
  */
 @Slf4j
 @RequiredArgsConstructor
-public class McpToolAdapter implements Tool {
+public class McpToolAdapter implements Tool, ToolVisibilityResolver.ScopedToolMetadataProvider {
 
     private final McpSchema.Tool mcpTool;
     private final ManagedMcpClient mcpClient;
@@ -97,6 +98,25 @@ public class McpToolAdapter implements Tool {
     @Override
     public String getMcpServerName() {
         return mcpClient.getName();
+    }
+
+    @Override
+    public ToolVisibilityResolver.ToolDomain getToolDomain() {
+        return ToolVisibilityResolver.ToolDomain.MCP;
+    }
+
+    @Override
+    public ToolVisibilityResolver.ToolScope getToolScope() {
+        String scope = mcpClient.getConfig().getScope();
+        if ("agent".equalsIgnoreCase(scope)) {
+            return ToolVisibilityResolver.ToolScope.AGENT;
+        }
+        return ToolVisibilityResolver.ToolScope.GLOBAL;
+    }
+
+    @Override
+    public String getScopedAgentId() {
+        return mcpClient.getConfig().getAgentId();
     }
 
     @Override

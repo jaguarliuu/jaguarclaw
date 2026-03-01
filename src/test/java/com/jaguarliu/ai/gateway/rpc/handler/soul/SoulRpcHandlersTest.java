@@ -22,7 +22,7 @@ class SoulRpcHandlersTest {
                 "responseStyle", "balanced",
                 "traits", List.of()
         );
-        when(svc.getConfig()).thenReturn(cfg);
+        when(svc.getConfig("main")).thenReturn(cfg);
 
         SoulGetHandler handler = new SoulGetHandler(svc);
         RpcRequest req = RpcRequest.builder().type("request").id("1").method("soul.get").build();
@@ -64,8 +64,42 @@ class SoulRpcHandlersTest {
         assertEquals(Boolean.TRUE, payload.get("success"));
 
         ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.forClass(Map.class);
-        verify(svc, times(1)).saveConfig(captor.capture());
+        verify(svc, times(1)).saveConfig(eq("main"), captor.capture());
         Map<String, Object> saved = captor.getValue();
         assertEquals("concise", saved.get("responseStyle"));
+    }
+
+    @Test
+    void soulGet_withAgentId_readsAgentScopedConfig() {
+        SoulConfigService svc = mock(SoulConfigService.class);
+        when(svc.getConfig("agent-a")).thenReturn(Map.of("agentName", "Agent A"));
+
+        SoulGetHandler handler = new SoulGetHandler(svc);
+        RpcRequest req = RpcRequest.builder()
+                .type("request").id("3").method("soul.get")
+                .payload(Map.of("agentId", "agent-a"))
+                .build();
+
+        RpcResponse resp = handler.handle("conn-1", req).block();
+        assertNotNull(resp);
+        assertNull(resp.getError());
+        verify(svc, times(1)).getConfig("agent-a");
+    }
+
+    @Test
+    void soulSave_withAgentIdAndNestedConfig_persistsAgentScopedConfig() {
+        SoulConfigService svc = mock(SoulConfigService.class);
+        SoulSaveHandler handler = new SoulSaveHandler(svc);
+
+        Map<String, Object> cfg = Map.of("agentName", "Agent B", "responseStyle", "concise");
+        RpcRequest req = RpcRequest.builder()
+                .type("request").id("4").method("soul.save")
+                .payload(Map.of("agentId", "agent-b", "config", cfg))
+                .build();
+
+        RpcResponse resp = handler.handle("conn-1", req).block();
+        assertNotNull(resp);
+        assertNull(resp.getError());
+        verify(svc, times(1)).saveConfig("agent-b", cfg);
     }
 }

@@ -53,6 +53,13 @@ public class SkillSelector {
      * @return 选择结果
      */
     public SkillSelection tryManualSelection(String userInput) {
+        return tryManualSelection(userInput, "main");
+    }
+
+    /**
+     * 按 agent 作用域尝试解析手动触发的 skill（/skill-name args）
+     */
+    public SkillSelection tryManualSelection(String userInput, String agentId) {
         if (userInput == null || userInput.isBlank()) {
             return SkillSelection.none(userInput);
         }
@@ -73,7 +80,7 @@ public class SkillSelector {
         String arguments = matcher.group(2);
 
         // 检查 skill 是否存在且可用
-        if (!registry.isAvailable(skillName)) {
+        if (!registry.isAvailable(skillName, agentId)) {
             log.warn("Skill not found or unavailable: {}", skillName);
             return SkillSelection.none(userInput);
         }
@@ -92,6 +99,13 @@ public class SkillSelector {
      * @return 选择结果
      */
     public SkillSelection parseFromLlmResponse(String llmResponse, String originalInput) {
+        return parseFromLlmResponse(llmResponse, originalInput, "main");
+    }
+
+    /**
+     * 从 LLM 回复中解析 [USE_SKILL:xxx]（按 agent 作用域）
+     */
+    public SkillSelection parseFromLlmResponse(String llmResponse, String originalInput, String agentId) {
         if (llmResponse == null || llmResponse.isBlank()) {
             return SkillSelection.none(originalInput);
         }
@@ -104,7 +118,7 @@ public class SkillSelector {
         String skillName = matcher.group(1);
 
         // 检查 skill 是否存在且可用
-        if (!registry.isAvailable(skillName)) {
+        if (!registry.isAvailable(skillName, agentId)) {
             log.warn("LLM requested unavailable skill: {}", skillName);
             return SkillSelection.none(originalInput);
         }

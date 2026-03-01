@@ -4,6 +4,7 @@ import com.jaguarliu.ai.memory.MemoryProperties;
 import com.jaguarliu.ai.memory.embedding.EmbeddingModel;
 import com.jaguarliu.ai.memory.embedding.EmbeddingModelFactory;
 import com.jaguarliu.ai.memory.embedding.NoOpEmbeddingModel;
+import com.jaguarliu.ai.memory.model.MemoryScope;
 import com.jaguarliu.ai.memory.store.MemoryStore;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -100,7 +101,7 @@ class MemoryIndexerTest {
         @DisplayName("正常索引文件")
         void indexFileNormally() throws IOException {
             String content = "Line1\nLine2\nLine3";
-            when(memoryStore.read("MEMORY.md")).thenReturn(content);
+            when(memoryStore.read("MEMORY.md", "main", MemoryScope.GLOBAL)).thenReturn(content);
 
             List<MemoryChunk> chunks = List.of(
                     MemoryChunk.builder()
@@ -114,26 +115,26 @@ class MemoryIndexerTest {
 
             indexer.indexFile("MEMORY.md");
 
-            verify(chunkRepository).deleteByFilePath("MEMORY.md");
+            verify(chunkRepository).deleteByFilePathAndScope("MEMORY.md", MemoryChunkEntity.SCOPE_GLOBAL);
             verify(chunkRepository).saveAll(anyList());
         }
 
         @Test
         @DisplayName("空文件不生成 chunks")
         void emptyFileNoChunks() throws IOException {
-            when(memoryStore.read("empty.md")).thenReturn("");
+            when(memoryStore.read("empty.md", "main", MemoryScope.GLOBAL)).thenReturn("");
             when(chunker.chunk("empty.md", "")).thenReturn(List.of());
 
             indexer.indexFile("empty.md");
 
-            verify(chunkRepository).deleteByFilePath("empty.md");
+            verify(chunkRepository).deleteByFilePathAndScope("empty.md", MemoryChunkEntity.SCOPE_GLOBAL);
             verify(chunkRepository, never()).saveAll(anyList());
         }
 
         @Test
         @DisplayName("文件读取失败时不抛异常")
         void fileReadFailureHandled() throws IOException {
-            when(memoryStore.read("missing.md")).thenThrow(new IOException("File not found"));
+            when(memoryStore.read("missing.md", "main", MemoryScope.GLOBAL)).thenThrow(new IOException("File not found"));
 
             // 不应抛出异常
             assertDoesNotThrow(() -> indexer.indexFile("missing.md"));
@@ -142,7 +143,7 @@ class MemoryIndexerTest {
         @Test
         @DisplayName("多个 chunks 正确保存")
         void multipleChunksSaved() throws IOException {
-            when(memoryStore.read("large.md")).thenReturn("content");
+            when(memoryStore.read("large.md", "main", MemoryScope.GLOBAL)).thenReturn("content");
 
             List<MemoryChunk> chunks = List.of(
                     MemoryChunk.builder().filePath("large.md").lineStart(1).lineEnd(10).content("c1").build(),
@@ -179,7 +180,7 @@ class MemoryIndexerTest {
         @Test
         @DisplayName("有 embedding provider 时生成向量")
         void generatesEmbeddingsWhenProviderAvailable() throws IOException {
-            when(memoryStore.read("test.md")).thenReturn("content");
+            when(memoryStore.read("test.md", "main", MemoryScope.GLOBAL)).thenReturn("content");
 
             List<MemoryChunk> chunks = List.of(
                     MemoryChunk.builder().filePath("test.md").lineStart(1).lineEnd(1).content("content").build()
@@ -196,7 +197,7 @@ class MemoryIndexerTest {
         @Test
         @DisplayName("embedding 失败不影响基础功能")
         void embeddingFailureDoesNotAffectBasicFunction() throws IOException {
-            when(memoryStore.read("test.md")).thenReturn("content");
+            when(memoryStore.read("test.md", "main", MemoryScope.GLOBAL)).thenReturn("content");
 
             List<MemoryChunk> chunks = List.of(
                     MemoryChunk.builder().filePath("test.md").lineStart(1).lineEnd(1).content("content").build()
@@ -227,11 +228,11 @@ class MemoryIndexerTest {
         @Test
         @DisplayName("重建时先清空所有 chunks")
         void rebuildClearsAllChunks() throws IOException {
-            when(memoryStore.listFiles()).thenReturn(List.of());
+            when(memoryStore.listFiles(MemoryScope.GLOBAL, "main")).thenReturn(List.of());
 
             indexer.rebuild();
 
-            verify(chunkRepository).deleteAllChunks();
+            verify(chunkRepository).deleteByScope(MemoryChunkEntity.SCOPE_GLOBAL);
         }
 
         @Test
@@ -241,20 +242,20 @@ class MemoryIndexerTest {
                     new MemoryStore.MemoryFileInfo("MEMORY.md", 100, 0),
                     new MemoryStore.MemoryFileInfo("2026-01-15.md", 200, 0)
             );
-            when(memoryStore.listFiles()).thenReturn(files);
-            when(memoryStore.read(anyString())).thenReturn("content");
+            when(memoryStore.listFiles(MemoryScope.GLOBAL, "main")).thenReturn(files);
+            when(memoryStore.read(anyString(), eq("main"), eq(MemoryScope.GLOBAL))).thenReturn("content");
             when(chunker.chunk(anyString(), anyString())).thenReturn(List.of());
 
             indexer.rebuild();
 
-            verify(memoryStore).read("MEMORY.md");
-            verify(memoryStore).read("2026-01-15.md");
+            verify(memoryStore).read("MEMORY.md", "main", MemoryScope.GLOBAL);
+            verify(memoryStore).read("2026-01-15.md", "main", MemoryScope.GLOBAL);
         }
 
         @Test
         @DisplayName("listFiles 失败时不抛异常")
         void listFilesFailureHandled() throws IOException {
-            when(memoryStore.listFiles()).thenThrow(new IOException("Access denied"));
+            when(memoryStore.listFiles(MemoryScope.GLOBAL, "main")).thenThrow(new IOException("Access denied"));
 
             assertDoesNotThrow(() -> indexer.rebuild());
         }
@@ -277,7 +278,7 @@ class MemoryIndexerTest {
         void removesFileIndex() {
             indexer.removeFile("old.md");
 
-            verify(chunkRepository).deleteByFilePath("old.md");
+            verify(chunkRepository).deleteByFilePathAndScope("old.md", MemoryChunkEntity.SCOPE_GLOBAL);
         }
     }
 

@@ -79,6 +79,14 @@ jaguarclaw:
   config-dir: ${JAGUARCLAW_CONFIG_DIR:./data}
   webapp-dir: ${JAGUARCLAW_WEBAPP_DIR:}
 
+# 2.0.2 Feature Flags（用于灰度与回滚）
+feature:
+  agent-control-plane: true
+  agent-scoped-prompt: true
+  agent-dual-memory: true
+  agent-scoped-mcp-skill: true
+  agent-mention-routing: true
+
 # Agent 配置
 agent:
   system-prompt: |

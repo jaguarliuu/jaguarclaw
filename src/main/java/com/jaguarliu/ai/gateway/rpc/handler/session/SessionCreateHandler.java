@@ -39,7 +39,8 @@ public class SessionCreateHandler implements RpcHandler {
             }
 
             String name = extractName(request.getPayload());
-            SessionEntity session = sessionService.create(name, "main", principalId);
+            String agentId = extractAgentId(request.getPayload());
+            SessionEntity session = sessionService.create(name, agentId, principalId);
             return RpcResponse.success(request.getId(), toSessionDto(session));
         }).subscribeOn(Schedulers.boundedElastic());
     }
@@ -57,10 +58,19 @@ public class SessionCreateHandler implements RpcHandler {
         return null;
     }
 
+    private String extractAgentId(Object payload) {
+        if (payload instanceof Map) {
+            Object agentId = ((Map<?, ?>) payload).get("agentId");
+            return agentId != null ? agentId.toString() : null;
+        }
+        return null;
+    }
+
     private Map<String, Object> toSessionDto(SessionEntity session) {
         return Map.of(
                 "id", session.getId(),
                 "name", session.getName(),
+                "agentId", session.getAgentId(),
                 "createdAt", session.getCreatedAt().toString(),
                 "updatedAt", session.getUpdatedAt().toString()
         );

@@ -55,6 +55,8 @@ public class McpServerUpdateHandler implements RpcHandler {
 
             // 构建配置
             var config = new McpProperties.ServerConfig();
+            config.setScope((String) payload.getOrDefault("scope", "global"));
+            config.setAgentId((String) payload.getOrDefault("agentId", null));
             config.setName((String) payload.get("name"));
             config.setTransport(McpProperties.TransportType.valueOf((String) payload.get("transportType")));
             config.setCommand((String) payload.getOrDefault("command", null));
@@ -92,7 +94,9 @@ public class McpServerUpdateHandler implements RpcHandler {
                         "server", Map.of(
                                 "id", entity.getId(),
                                 "name", entity.getName(),
-                                "enabled", entity.getEnabled()
+                                "enabled", entity.getEnabled(),
+                                "scope", entity.getScope(),
+                                "agentId", entity.getAgentId() != null ? entity.getAgentId() : ""
                         )
                 ));
             } catch (Exception e) {

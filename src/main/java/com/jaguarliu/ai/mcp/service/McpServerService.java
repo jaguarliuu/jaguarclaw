@@ -29,6 +29,8 @@ public class McpServerService {
     @Transactional
     public McpServerEntity createServer(McpProperties.ServerConfig config) {
         log.info("Creating MCP server: {}", config.getName());
+        applyScopeDefaults(config);
+        validateScope(config);
 
         // 检查名称是否已存在
         if (repository.existsByName(config.getName())) {
@@ -59,6 +61,8 @@ public class McpServerService {
     @Transactional
     public McpServerEntity updateServer(Long id, McpProperties.ServerConfig config) {
         log.info("Updating MCP server ID {}: {}", id, config.getName());
+        applyScopeDefaults(config);
+        validateScope(config);
 
         var entity = repository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("MCP server not found: " + id));
@@ -79,6 +83,10 @@ public class McpServerService {
         entity.setRequiresHitl(config.isRequiresHitl());
         entity.setHitlTools(config.getHitlTools());
         entity.setRequestTimeoutSeconds(config.getRequestTimeoutSeconds());
+        entity.setScope("agent".equalsIgnoreCase(config.getScope())
+                ? McpServerEntity.SCOPE_AGENT
+                : McpServerEntity.SCOPE_GLOBAL);
+        entity.setAgentId("agent".equalsIgnoreCase(config.getScope()) ? config.getAgentId() : null);
 
         entity = repository.save(entity);
 
@@ -147,10 +155,39 @@ public class McpServerService {
     }
 
     /**
+     * 列出对指定 agent 可见的启用服务器（GLOBAL + AGENT(agentId)）
+     */
+    public List<McpServerEntity> listEnabledServers(String agentId) {
+        if (agentId == null || agentId.isBlank()) {
+            return repository.findByEnabledTrueAndScope(McpServerEntity.SCOPE_GLOBAL);
+        }
+        return repository.findEnabledVisibleToAgent(agentId);
+    }
+
+    /**
      * 获取服务器详情
      */
     public McpServerEntity getServer(Long id) {
         return repository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("MCP server not found: " + id));
+    }
+
+    private void applyScopeDefaults(McpProperties.ServerConfig config) {
+        if (config.getScope() == null || config.getScope().isBlank()) {
+            config.setScope("global");
+        }
+        if ("global".equalsIgnoreCase(config.getScope())) {
+            config.setAgentId(null);
+        }
+    }
+
+    private void validateScope(McpProperties.ServerConfig config) {
+        String scope = config.getScope().trim().toLowerCase();
+        if (!"global".equals(scope) && !"agent".equals(scope)) {
+            throw new IllegalArgumentException("Invalid scope: " + config.getScope() + ". Must be 'global' or 'agent'");
+        }
+        if ("agent".equals(scope) && (config.getAgentId() == null || config.getAgentId().isBlank())) {
+            throw new IllegalArgumentException("agentId is required when scope=agent");
+        }
     }
 }

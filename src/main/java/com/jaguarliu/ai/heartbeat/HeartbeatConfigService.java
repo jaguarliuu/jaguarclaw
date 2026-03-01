@@ -1,10 +1,10 @@
 package com.jaguarliu.ai.heartbeat;
 
+import com.jaguarliu.ai.agents.context.AgentWorkspaceResolver;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import jakarta.annotation.PostConstruct;
@@ -15,43 +15,31 @@ import java.nio.file.Path;
 import java.util.*;
 
 /**
- * Heartbeat 配置服务 — 文件存储（{workspace}/heartbeat.json）
+ * Heartbeat 配置服务（Agent 作用域）
+ * 文件存储在：{workspace}/agents/{agentId}/heartbeat.json 与 HEARTBEAT.md
  */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class HeartbeatConfigService {
 
-    @Value("${tools.workspace:./workspace}")
-    private String workspace;
-
     private final ObjectMapper objectMapper;
+    private final AgentWorkspaceResolver workspaceResolver;
 
     private static final String HEARTBEAT_JSON = "heartbeat.json";
     private static final String HEARTBEAT_MD = "HEARTBEAT.md";
 
     @PostConstruct
     void init() {
-        Path configPath = configPath();
-        if (!Files.exists(configPath)) {
-            saveConfig(defaultConfig());
-            log.info("Initialized default heartbeat.json at {}", configPath);
-        }
-
-        Path mdPath = mdPath();
-        if (!Files.exists(mdPath)) {
-            try {
-                Files.createDirectories(mdPath.getParent());
-                Files.writeString(mdPath, defaultHeartbeatMd());
-                log.info("Initialized default HEARTBEAT.md at {}", mdPath);
-            } catch (IOException e) {
-                log.error("Failed to create HEARTBEAT.md", e);
-            }
-        }
+        ensureAgentDefaults("main");
     }
 
     public Map<String, Object> getConfig() {
-        Path path = configPath();
+        return getConfig("main");
+    }
+
+    public Map<String, Object> getConfig(String agentId) {
+        Path path = configPath(agentId);
         if (!Files.exists(path)) {
             return defaultConfig();
         }
@@ -64,7 +52,11 @@ public class HeartbeatConfigService {
     }
 
     public void saveConfig(Map<String, Object> configMap) {
-        Path path = configPath();
+        saveConfig("main", configMap);
+    }
+
+    public void saveConfig(String agentId, Map<String, Object> configMap) {
+        Path path = configPath(agentId);
         try {
             Files.createDirectories(path.getParent());
             objectMapper.writerWithDefaultPrettyPrinter().writeValue(path.toFile(), configMap);
@@ -76,7 +68,11 @@ public class HeartbeatConfigService {
     }
 
     public String readHeartbeatMd() {
-        Path path = mdPath();
+        return readHeartbeatMd("main");
+    }
+
+    public String readHeartbeatMd(String agentId) {
+        Path path = mdPath(agentId);
         if (!Files.exists(path)) {
             return defaultHeartbeatMd();
         }
@@ -89,7 +85,11 @@ public class HeartbeatConfigService {
     }
 
     public void writeHeartbeatMd(String content) {
-        Path path = mdPath();
+        writeHeartbeatMd("main", content);
+    }
+
+    public void writeHeartbeatMd(String agentId, String content) {
+        Path path = mdPath(agentId);
         try {
             Files.createDirectories(path.getParent());
             Files.writeString(path, content);
@@ -100,12 +100,31 @@ public class HeartbeatConfigService {
         }
     }
 
-    private Path configPath() {
-        return Path.of(workspace).resolve(HEARTBEAT_JSON);
+    private void ensureAgentDefaults(String agentId) {
+        Path configPath = configPath(agentId);
+        if (!Files.exists(configPath)) {
+            saveConfig(agentId, defaultConfig());
+            log.info("Initialized default heartbeat.json at {}", configPath);
+        }
+
+        Path mdPath = mdPath(agentId);
+        if (!Files.exists(mdPath)) {
+            try {
+                Files.createDirectories(mdPath.getParent());
+                Files.writeString(mdPath, defaultHeartbeatMd());
+                log.info("Initialized default HEARTBEAT.md at {}", mdPath);
+            } catch (IOException e) {
+                log.error("Failed to create HEARTBEAT.md", e);
+            }
+        }
     }
 
-    private Path mdPath() {
-        return Path.of(workspace).resolve(HEARTBEAT_MD);
+    private Path configPath(String agentId) {
+        return workspaceResolver.resolveAgentFile(agentId, HEARTBEAT_JSON);
+    }
+
+    private Path mdPath(String agentId) {
+        return workspaceResolver.resolveAgentFile(agentId, HEARTBEAT_MD);
     }
 
     private Map<String, Object> defaultConfig() {

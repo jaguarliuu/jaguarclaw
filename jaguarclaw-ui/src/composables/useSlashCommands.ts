@@ -11,9 +11,18 @@ export function useSlashCommands() {
   async function loadCommands() {
     if (loaded.value) return
     try {
-      const [toolResult, skillResult] = await Promise.all([
+      const [toolResult, skillResult, agentResult] = await Promise.all([
         request<{ tools: { name: string; description: string; hitl: boolean }[] }>('tool.list'),
-        request<{ skills: Skill[] }>('skills.list')
+        request<{ skills: Skill[] }>('skills.list'),
+        request<{
+          agents: {
+            id: string
+            name: string
+            displayName: string
+            description: string
+            enabled: boolean
+          }[]
+        }>('agent.list'),
       ])
 
       const items: SlashCommandItem[] = []
@@ -23,7 +32,7 @@ export function useSlashCommands() {
           type: 'tool',
           name: t.name,
           description: t.description,
-          displayName: '/' + t.name
+          displayName: '/' + t.name,
         })
       }
 
@@ -33,7 +42,17 @@ export function useSlashCommands() {
           type: 'skill',
           name: s.name,
           description: s.description,
-          displayName: '/' + s.name
+          displayName: '/' + s.name,
+        })
+      }
+
+      for (const agent of agentResult.agents) {
+        if (!agent.enabled) continue
+        items.push({
+          type: 'agent',
+          name: agent.id,
+          description: agent.description || agent.displayName || agent.name,
+          displayName: '@' + agent.id,
         })
       }
 
@@ -45,13 +64,28 @@ export function useSlashCommands() {
   }
 
   function filterCommands(query: string): SlashCommandItem[] {
-    if (!query) return commands.value
     const q = query.toLowerCase()
-    return commands.value.filter(c =>
-      c.name.toLowerCase().includes(q) ||
-      c.description.toLowerCase().includes(q)
+    const pool = commands.value.filter((item) => item.type !== 'agent')
+    if (!query) return pool
+    return pool.filter(
+      (c) => c.name.toLowerCase().includes(q) || c.description.toLowerCase().includes(q),
     )
   }
 
-  return { commands: readonly(commands), loaded: readonly(loaded), loadCommands, filterCommands }
+  function filterMentions(query: string): SlashCommandItem[] {
+    const q = query.toLowerCase()
+    const pool = commands.value.filter((item) => item.type === 'agent')
+    if (!query) return pool
+    return pool.filter(
+      (c) => c.name.toLowerCase().includes(q) || c.description.toLowerCase().includes(q),
+    )
+  }
+
+  return {
+    commands: readonly(commands),
+    loaded: readonly(loaded),
+    loadCommands,
+    filterCommands,
+    filterMentions,
+  }
 }

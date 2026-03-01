@@ -3,6 +3,7 @@ package com.jaguarliu.ai.tools.builtin;
 import com.jaguarliu.ai.skills.registry.SkillRegistry;
 import com.jaguarliu.ai.tools.Tool;
 import com.jaguarliu.ai.tools.ToolDefinition;
+import com.jaguarliu.ai.tools.ToolExecutionContext;
 import com.jaguarliu.ai.tools.ToolResult;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -33,8 +34,10 @@ public class UseSkillTool implements Tool {
 
     @Override
     public ToolDefinition getDefinition() {
+        String agentId = resolveAgentId();
+
         // 构建动态描述，包含当前可用的 skill 列表
-        String skillList = skillRegistry.getAvailable().stream()
+        String skillList = skillRegistry.getAvailable(agentId).stream()
                 .map(e -> e.getMetadata().getName() + " - " + truncate(e.getMetadata().getDescription(), 80))
                 .collect(Collectors.joining("\n  "));
 
@@ -63,6 +66,7 @@ public class UseSkillTool implements Tool {
     @Override
     public Mono<ToolResult> execute(Map<String, Object> arguments) {
         String skillName = (String) arguments.get("skill_name");
+        String agentId = resolveAgentId();
 
         if (skillName == null || skillName.isBlank()) {
             return Mono.just(ToolResult.error("skill_name is required"));
@@ -70,9 +74,9 @@ public class UseSkillTool implements Tool {
 
         skillName = skillName.trim();
 
-        if (!skillRegistry.isAvailable(skillName)) {
+        if (!skillRegistry.isAvailable(skillName, agentId)) {
             log.warn("use_skill called with unavailable skill: {}", skillName);
-            String available = skillRegistry.getAvailable().stream()
+            String available = skillRegistry.getAvailable(agentId).stream()
                     .map(e -> e.getMetadata().getName())
                     .collect(Collectors.joining(", "));
             return Mono.just(ToolResult.error(
@@ -89,5 +93,13 @@ public class UseSkillTool implements Tool {
     private String truncate(String text, int maxLen) {
         if (text == null) return "";
         return text.length() <= maxLen ? text : text.substring(0, maxLen - 3) + "...";
+    }
+
+    private String resolveAgentId() {
+        ToolExecutionContext context = ToolExecutionContext.current();
+        if (context == null || context.getAgentId() == null || context.getAgentId().isBlank()) {
+            return "main";
+        }
+        return context.getAgentId();
     }
 }

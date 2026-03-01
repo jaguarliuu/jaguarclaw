@@ -41,13 +41,13 @@ public class RunContext {
     private final String agentId = "main";
 
     /**
-     * 运行类型：main / subagent
+     * 运行类型：main / subagent（兼容）/ worker（语义别名）
      */
     @Builder.Default
     private final String runKind = "main";
 
     /**
-     * 执行通道：main / subagent
+     * 执行通道：main / subagent（兼容）/ worker（语义别名）
      */
     @Builder.Default
     private final String lane = "main";
@@ -118,6 +118,30 @@ public class RunContext {
      */
     @Setter
     private Set<String> excludedMcpServers;
+
+    /**
+     * Agent Profile 级工具白名单（null/empty 表示不限制）
+     */
+    @Setter
+    private Set<String> agentAllowedTools;
+
+    /**
+     * Agent Profile 级工具黑名单
+     */
+    @Setter
+    private Set<String> agentDeniedTools;
+
+    /**
+     * Strategy 级工具白名单（null/empty 表示不限制）
+     */
+    @Setter
+    private Set<String> strategyAllowedTools;
+
+    /**
+     * 当前轮最终可执行的工具名称集合（用于调度层强约束）
+     */
+    @Setter
+    private Set<String> resolvedToolNames;
 
     /**
      * 用户选择的模型，格式 "providerId:modelName"（可空，为空使用默认模型）
@@ -197,11 +221,24 @@ public class RunContext {
             String sessionId,
             LoopConfig config,
             CancellationManager cancellationManager) {
+        return create(runId, connectionId, sessionId, "main", config, cancellationManager);
+    }
+
+    /**
+     * 创建上下文（主运行，显式指定 agentId）
+     */
+    public static RunContext create(
+            String runId,
+            String connectionId,
+            String sessionId,
+            String agentId,
+            LoopConfig config,
+            CancellationManager cancellationManager) {
         return RunContext.builder()
                 .runId(runId)
                 .connectionId(connectionId)
                 .sessionId(sessionId)
-                .agentId("main")
+                .agentId(agentId != null && !agentId.isBlank() ? agentId : "main")
                 .runKind("main")
                 .lane("main")
                 .depth(0)
@@ -256,10 +293,43 @@ public class RunContext {
     }
 
     /**
+     * 创建 Worker 运行上下文（语义别名，兼容使用 subagent lane/runkind 的旧链路）
+     */
+    public static RunContext createWorker(
+            String runId,
+            String connectionId,
+            String sessionId,
+            String agentId,
+            String parentRunId,
+            String requesterSessionId,
+            boolean deliver,
+            LoopConfig config,
+            CancellationManager cancellationManager) {
+        return createSubagent(
+                runId,
+                connectionId,
+                sessionId,
+                agentId,
+                parentRunId,
+                requesterSessionId,
+                deliver,
+                config,
+                cancellationManager
+        );
+    }
+
+    /**
      * 判断是否为子代理运行
      */
     public boolean isSubagent() {
         return "subagent".equals(runKind);
+    }
+
+    /**
+     * 判断是否为 Worker 运行（兼容 subagent 旧值）
+     */
+    public boolean isWorker() {
+        return "worker".equals(runKind) || "subagent".equals(runKind);
     }
 
     /**
@@ -290,11 +360,23 @@ public class RunContext {
             String sessionId,
             LoopConfig config,
             CancellationManager cancellationManager) {
+        return createScheduled(runId, sessionId, "main", config, cancellationManager);
+    }
+
+    /**
+     * 创建定时任务运行上下文（显式指定 agentId）
+     */
+    public static RunContext createScheduled(
+            String runId,
+            String sessionId,
+            String agentId,
+            LoopConfig config,
+            CancellationManager cancellationManager) {
         return RunContext.builder()
                 .runId(runId)
                 .connectionId("__scheduled__")
                 .sessionId(sessionId)
-                .agentId("main")
+                .agentId(agentId != null && !agentId.isBlank() ? agentId : "main")
                 .runKind("scheduled")
                 .lane("main")
                 .depth(0)

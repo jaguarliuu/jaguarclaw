@@ -175,7 +175,9 @@ public class SubagentOpsService {
                     .filter(m -> !m.getRunId().equals(runId))
                     .map(m -> LlmRequest.Message.builder().role(m.getRole()).content(m.getContent()).build())
                     .toList();
-            List<LlmRequest.Message> messages = contextBuilder.buildMessages(historyMessages, message);
+            List<LlmRequest.Message> messages = contextBuilder.buildMessages(
+                    historyMessages, message, null, null, subRun.getAgentId()
+            );
 
             // 4. 创建 subagent RunContext
             RunContext context = RunContext.createSubagent(

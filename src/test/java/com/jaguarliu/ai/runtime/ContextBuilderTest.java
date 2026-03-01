@@ -10,6 +10,7 @@ import com.jaguarliu.ai.skills.selector.SkillSelection;
 import com.jaguarliu.ai.skills.selector.SkillSelector;
 import com.jaguarliu.ai.skills.template.SkillTemplateEngine;
 import com.jaguarliu.ai.tools.ToolRegistry;
+import com.jaguarliu.ai.tools.ToolVisibilityResolver;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -57,6 +58,15 @@ class ContextBuilderTest {
     void setUp() {
         // 设置 systemPromptBuilder 的默认行为（lenient 因为并非所有测试都会触发）
         lenient().when(systemPromptBuilder.build(SystemPromptBuilder.PromptMode.FULL)).thenReturn(DEFAULT_SYSTEM_PROMPT);
+        lenient().when(systemPromptBuilder.build(
+                eq(SystemPromptBuilder.PromptMode.FULL), isNull(), isNull(), isNull()
+        )).thenReturn(DEFAULT_SYSTEM_PROMPT);
+        lenient().when(systemPromptBuilder.build(
+                eq(SystemPromptBuilder.PromptMode.FULL), isNull(), isNull(), isNull(), anyString()
+        )).thenReturn(DEFAULT_SYSTEM_PROMPT);
+        lenient().when(systemPromptBuilder.build(
+                eq(SystemPromptBuilder.PromptMode.SKILL), anySet(), isNull(), isNull(), anyString()
+        )).thenReturn(DEFAULT_SYSTEM_PROMPT);
         lenient().when(systemPromptBuilder.build(eq(SystemPromptBuilder.PromptMode.MINIMAL), any())).thenReturn(DEFAULT_SYSTEM_PROMPT);
 
         ReflectionTestUtils.setField(contextBuilder, "autoSelectEnabled", true);
@@ -127,7 +137,7 @@ class ContextBuilderTest {
         @DisplayName("启用工具时添加工具定义")
         void buildWithToolsEnabled() {
             when(toolRegistry.size()).thenReturn(3);
-            when(toolRegistry.toOpenAiTools()).thenReturn(List.of(
+            when(toolRegistry.toOpenAiTools(any(ToolVisibilityResolver.VisibilityRequest.class))).thenReturn(List.of(
                     Map.of("type", "function", "function", Map.of("name", "read_file")),
                     Map.of("type", "function", "function", Map.of("name", "write_file")),
                     Map.of("type", "function", "function", Map.of("name", "bash"))
@@ -169,7 +179,9 @@ class ContextBuilderTest {
             // 模拟 systemPromptBuilder 返回包含技能索引的完整提示
             String fullPromptWithSkills = DEFAULT_SYSTEM_PROMPT
                     + "\n\n## Available Skills\n<skills>\n  <skill name=\"code-review\">代码审查</skill>\n</skills>";
-            when(systemPromptBuilder.build(SystemPromptBuilder.PromptMode.FULL)).thenReturn(fullPromptWithSkills);
+            when(systemPromptBuilder.build(
+                    eq(SystemPromptBuilder.PromptMode.FULL), isNull(), isNull(), isNull(), eq("main")
+            )).thenReturn(fullPromptWithSkills);
 
             LlmRequest request = contextBuilder.buildWithSkillIndex(null, "审查代码", false);
 
@@ -206,7 +218,7 @@ class ContextBuilderTest {
             when(templateEngine.createContext()).thenReturn(mockContext);
             when(templateEngine.render(eq("请审查以下代码：$ARGUMENTS"), any())).thenReturn("请审查以下代码：test.java");
             when(toolRegistry.size()).thenReturn(2);
-            when(toolRegistry.toOpenAiTools(Set.of("read_file", "grep"))).thenReturn(List.of(
+            when(toolRegistry.toOpenAiTools(any(ToolVisibilityResolver.VisibilityRequest.class))).thenReturn(List.of(
                     Map.of("type", "function", "function", Map.of("name", "read_file")),
                     Map.of("type", "function", "function", Map.of("name", "grep"))
             ));
@@ -248,7 +260,7 @@ class ContextBuilderTest {
             when(templateEngine.createContext()).thenReturn(mockContext);
             when(templateEngine.render(anyString(), any())).thenReturn("简单聊天");
             when(toolRegistry.size()).thenReturn(5);
-            when(toolRegistry.toOpenAiTools()).thenReturn(List.of(
+            when(toolRegistry.toOpenAiTools(any(ToolVisibilityResolver.VisibilityRequest.class))).thenReturn(List.of(
                     Map.of("type", "function", "function", Map.of("name", "tool1")),
                     Map.of("type", "function", "function", Map.of("name", "tool2"))
             ));
@@ -293,14 +305,14 @@ class ContextBuilderTest {
         @DisplayName("检测到 slash command 时激活 skill")
         void buildSmartWithSlashCommand() {
             SkillSelection manualSelection = SkillSelection.manual("code-review", "test.java", "/code-review test.java");
-            when(skillSelector.tryManualSelection("/code-review test.java")).thenReturn(manualSelection);
+            when(skillSelector.tryManualSelection("/code-review test.java", "main")).thenReturn(manualSelection);
 
             LoadedSkill skill = LoadedSkill.builder()
                     .name("code-review")
                     .description("代码审查")
                     .body("审查代码")
                     .build();
-            when(skillRegistry.activate("code-review")).thenReturn(Optional.of(skill));
+            when(skillRegistry.activate("code-review", "main")).thenReturn(Optional.of(skill));
 
             SkillTemplateEngine.TemplateContext mockContext = mock(SkillTemplateEngine.TemplateContext.class);
             when(mockContext.withArguments(anyString())).thenReturn(mockContext);
@@ -320,28 +332,30 @@ class ContextBuilderTest {
         @DisplayName("普通消息且有可用 skill 时注入索引")
         void buildSmartWithNormalMessageAndAvailableSkills() {
             SkillSelection noneSelection = SkillSelection.none("帮我审查代码");
-            when(skillSelector.tryManualSelection("帮我审查代码")).thenReturn(noneSelection);
+            when(skillSelector.tryManualSelection("帮我审查代码", "main")).thenReturn(noneSelection);
 
             // 返回非空列表，触发 buildWithSkillIndex
             SkillEntry entry = SkillEntry.builder()
                     .metadata(SkillMetadata.builder().name("code-review").description("审查").build())
                     .available(true)
                     .build();
-            when(skillRegistry.getAvailable()).thenReturn(List.of(entry));
+            when(skillRegistry.getAvailable("main")).thenReturn(List.of(entry));
 
             ContextBuilder.SkillAwareRequest result = contextBuilder.buildSmart(null, "帮我审查代码", false);
 
             assertFalse(result.hasActiveSkill());
             // buildWithSkillIndex 通过 systemPromptBuilder.build(FULL) 构建包含 skills 索引的提示
-            verify(systemPromptBuilder).build(SystemPromptBuilder.PromptMode.FULL);
+            verify(systemPromptBuilder).build(
+                    eq(SystemPromptBuilder.PromptMode.FULL), isNull(), isNull(), isNull(), eq("main")
+            );
         }
 
         @Test
         @DisplayName("普通消息且无可用 skill 时不注入索引")
         void buildSmartWithNormalMessageNoSkills() {
             SkillSelection noneSelection = SkillSelection.none("帮我审查代码");
-            when(skillSelector.tryManualSelection("帮我审查代码")).thenReturn(noneSelection);
-            when(skillRegistry.getAvailable()).thenReturn(List.of());  // 空列表
+            when(skillSelector.tryManualSelection("帮我审查代码", "main")).thenReturn(noneSelection);
+            when(skillRegistry.getAvailable("main")).thenReturn(List.of());  // 空列表
 
             ContextBuilder.SkillAwareRequest result = contextBuilder.buildSmart(null, "帮我审查代码", false);
 
@@ -355,7 +369,7 @@ class ContextBuilderTest {
             ReflectionTestUtils.setField(contextBuilder, "autoSelectEnabled", false);
 
             SkillSelection noneSelection = SkillSelection.none("帮我审查代码");
-            when(skillSelector.tryManualSelection("帮我审查代码")).thenReturn(noneSelection);
+            when(skillSelector.tryManualSelection("帮我审查代码", "main")).thenReturn(noneSelection);
 
             ContextBuilder.SkillAwareRequest result = contextBuilder.buildSmart(null, "帮我审查代码", false);
 
@@ -373,14 +387,14 @@ class ContextBuilderTest {
         void handleAutoSkillSelection() {
             String llmResponse = "我会使用代码审查技能来帮您。[USE_SKILL:code-review]";
             SkillSelection autoSelection = SkillSelection.auto("code-review", "原始输入");
-            when(skillSelector.parseFromLlmResponse(llmResponse, "原始输入")).thenReturn(autoSelection);
+            when(skillSelector.parseFromLlmResponse(llmResponse, "原始输入", "main")).thenReturn(autoSelection);
 
             LoadedSkill skill = LoadedSkill.builder()
                     .name("code-review")
                     .description("代码审查")
                     .body("审查代码")
                     .build();
-            when(skillRegistry.activate("code-review")).thenReturn(Optional.of(skill));
+            when(skillRegistry.activate("code-review", "main")).thenReturn(Optional.of(skill));
 
             SkillTemplateEngine.TemplateContext mockContext = mock(SkillTemplateEngine.TemplateContext.class);
             when(mockContext.withArguments(anyString())).thenReturn(mockContext);
@@ -403,7 +417,7 @@ class ContextBuilderTest {
         void handleAutoSkillSelectionNoMarker() {
             String llmResponse = "我可以帮您审查代码。";
             SkillSelection noneSelection = SkillSelection.none("原始输入");
-            when(skillSelector.parseFromLlmResponse(llmResponse, "原始输入")).thenReturn(noneSelection);
+            when(skillSelector.parseFromLlmResponse(llmResponse, "原始输入", "main")).thenReturn(noneSelection);
 
             Optional<ContextBuilder.SkillAwareRequest> result = contextBuilder.handleAutoSkillSelection(
                     llmResponse, "原始输入", null, false
@@ -417,8 +431,8 @@ class ContextBuilderTest {
         void handleAutoSkillSelectionSkillNotFound() {
             String llmResponse = "[USE_SKILL:nonexistent]";
             SkillSelection autoSelection = SkillSelection.auto("nonexistent", "原始输入");
-            when(skillSelector.parseFromLlmResponse(llmResponse, "原始输入")).thenReturn(autoSelection);
-            when(skillRegistry.activate("nonexistent")).thenReturn(Optional.empty());
+            when(skillSelector.parseFromLlmResponse(llmResponse, "原始输入", "main")).thenReturn(autoSelection);
+            when(skillRegistry.activate("nonexistent", "main")).thenReturn(Optional.empty());
 
             Optional<ContextBuilder.SkillAwareRequest> result = contextBuilder.handleAutoSkillSelection(
                     llmResponse, "原始输入", null, false

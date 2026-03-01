@@ -1,5 +1,6 @@
 package com.jaguarliu.ai.heartbeat;
 
+import com.jaguarliu.ai.agents.service.AgentProfileService;
 import com.jaguarliu.ai.gateway.events.AgentEvent;
 import com.jaguarliu.ai.gateway.events.EventBus;
 import com.jaguarliu.ai.gateway.ws.ConnectionManager;
@@ -24,7 +25,9 @@ import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.stream.Stream;
 
 /**
  * Heartbeat 定时调度器
@@ -44,15 +47,36 @@ public class HeartbeatScheduler {
     private final EventBus eventBus;
     private final LoopConfig loopConfig;
     private final CancellationManager cancellationManager;
+    private final AgentProfileService agentProfileService;
 
-    private final AtomicLong lastRunAt = new AtomicLong(0);
+    private final Map<String, AtomicLong> lastRunAtByAgent = new ConcurrentHashMap<>();
 
     private static final DateTimeFormatter TIME_FMT = DateTimeFormatter.ofPattern("HH:mm");
 
     @Scheduled(fixedDelay = 60_000)
     public void tick() {
         try {
-            Map<String, Object> config = configService.getConfig();
+            List<String> targetAgentIds = Stream.concat(
+                            Stream.of("main"),
+                            agentProfileService.list().stream()
+                                    .filter(p -> Boolean.TRUE.equals(p.getEnabled()))
+                                    .map(p -> p.getId())
+                    )
+                    .distinct()
+                    .toList();
+
+            for (String agentId : targetAgentIds) {
+                tickForAgent(agentId);
+            }
+
+        } catch (Exception e) {
+            log.error("Heartbeat tick failed", e);
+        }
+    }
+
+    private void tickForAgent(String agentId) {
+        try {
+            Map<String, Object> config = configService.getConfig(agentId);
 
             // 1. Check enabled
             if (!Boolean.TRUE.equals(config.get("enabled"))) {
@@ -63,6 +87,7 @@ public class HeartbeatScheduler {
             int intervalMinutes = ((Number) config.getOrDefault("intervalMinutes", 30)).intValue();
             long now = System.currentTimeMillis();
             long intervalMs = (long) intervalMinutes * 60 * 1000;
+            AtomicLong lastRunAt = lastRunAtByAgent.computeIfAbsent(agentId, ignored -> new AtomicLong(0));
             if (now - lastRunAt.get() < intervalMs) {
                 return;
             }
@@ -79,38 +104,39 @@ public class HeartbeatScheduler {
                 return;
             }
 
-            log.info("Heartbeat tick starting...");
+            log.info("Heartbeat tick starting for agentId={}...", agentId);
             lastRunAt.set(now);
 
             // 4. Read HEARTBEAT.md
-            String prompt = configService.readHeartbeatMd();
+            String prompt = configService.readHeartbeatMd(agentId);
 
             // 5. Create session + run
-            SessionEntity session = sessionService.createScheduledSession("[Heartbeat]");
-            RunEntity run = runService.create(session.getId(), prompt);
+            SessionEntity session = sessionService.createScheduledSession("[Heartbeat][" + agentId + "]");
+            RunEntity run = runService.create(session.getId(), prompt, agentId);
 
             // 6. Build messages + context
             List<LlmRequest.Message> messages = contextBuilder.build(prompt).getMessages();
-            RunContext context = RunContext.createScheduled(run.getId(), session.getId(), loopConfig, cancellationManager);
+            RunContext context = RunContext.createScheduled(
+                    run.getId(), session.getId(), agentId, loopConfig, cancellationManager
+            );
             cancellationManager.register(run.getId());
 
             // 7. Execute
             String response = agentRuntime.executeLoopWithContext(context, messages, prompt);
-            log.info("Heartbeat execution completed, response length: {}", response.length());
+            log.info("Heartbeat execution completed: agentId={}, response length={}", agentId, response.length());
 
             // 8. Silent ack check
             int ackMaxChars = ((Number) config.getOrDefault("ackMaxChars", 300)).intValue();
             String trimmed = response.trim();
             if (trimmed.startsWith("HEARTBEAT_OK") && trimmed.length() <= ackMaxChars) {
-                log.info("Heartbeat returned silent ack, discarding");
+                log.info("Heartbeat returned silent ack, discarding: agentId={}", agentId);
                 return;
             }
 
             // 9. Broadcast to all connections
             broadcastHeartbeat(trimmed, session.getId(), run.getId());
-
         } catch (Exception e) {
-            log.error("Heartbeat tick failed", e);
+            log.error("Heartbeat tick failed for agentId={}", agentId, e);
         }
     }
 

@@ -51,12 +51,32 @@ public class SkillGetHandler implements RpcHandler {
             return Mono.just(RpcResponse.error(request.getId(), "INVALID_PARAMS", "Missing required field: name"));
         }
 
-        Optional<LoadedSkill> skill = skillRegistry.activate(name);
+        String scope = extractScope(payload);
+        String agentId = extractAgentId(payload);
+        Optional<LoadedSkill> skill = "global".equalsIgnoreCase(scope)
+                ? skillRegistry.activateGlobal(name)
+                : skillRegistry.activate(name, agentId);
         if (skill.isEmpty()) {
             return Mono.just(RpcResponse.error(request.getId(), "NOT_FOUND", "Skill not found or unavailable: " + name));
         }
 
         return Mono.just(RpcResponse.success(request.getId(), toDto(skill.get())));
+    }
+
+    private String extractAgentId(Map<String, Object> payload) {
+        Object raw = payload.get("agentId");
+        if (raw == null || raw.toString().isBlank()) {
+            return "main";
+        }
+        return raw.toString();
+    }
+
+    private String extractScope(Map<String, Object> payload) {
+        Object raw = payload.get("scope");
+        if (raw != null && "global".equalsIgnoreCase(raw.toString())) {
+            return "global";
+        }
+        return "effective";
     }
 
     private Map<String, Object> toDto(LoadedSkill skill) {

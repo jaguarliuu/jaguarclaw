@@ -16,6 +16,7 @@ public class AgentContext {
     private final String sessionId;
     private final String runId;
     private final String connectionId;
+    private final String agentId;
     private final String prompt;
 
     /**

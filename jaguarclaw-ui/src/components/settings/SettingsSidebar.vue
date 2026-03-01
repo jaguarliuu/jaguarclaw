@@ -14,6 +14,7 @@ const groups = computed(() => [
     label: t('settings.groups.aiCore'),
     items: [
       { id: 'llm',        label: t('settings.nav.models') },
+      { id: 'agents',     label: t('settings.nav.agents') },
       { id: 'tools',      label: t('settings.nav.tools') },
       { id: 'skills',     label: t('settings.nav.skills') },
       { id: 'memory',     label: t('settings.nav.memory') },
@@ -75,6 +76,13 @@ function navigateTo(sectionId: string) {
                 <rect x="4" y="4" width="8" height="8" rx="1" stroke="currentColor" stroke-width="1.4"/>
                 <path d="M6 4V2M10 4V2M6 12v2M10 12v2M4 6H2M4 10H2M12 6h2M12 10h2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
                 <circle cx="8" cy="8" r="1.5" fill="currentColor"/>
+              </svg>
+              <!-- Agents -->
+              <svg v-else-if="item.id === 'agents'" width="16" height="16" viewBox="0 0 16 16" fill="none" class="nav-icon">
+                <circle cx="5.5" cy="6" r="2" stroke="currentColor" stroke-width="1.4"/>
+                <circle cx="10.5" cy="6" r="2" stroke="currentColor" stroke-width="1.4"/>
+                <path d="M2.5 12.5c.4-1.7 1.8-2.8 3-2.8s2.6 1.1 3 2.8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+                <path d="M7.5 12.5c.4-1.7 1.8-2.8 3-2.8s2.6 1.1 3 2.8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
               </svg>
               <!-- Tools -->
               <svg v-else-if="item.id === 'tools'" width="16" height="16" viewBox="0 0 16 16" fill="none" class="nav-icon">

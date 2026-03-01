@@ -32,7 +32,7 @@ public class ToolExecutionContext {
     private final String agentId;
 
     /**
-     * 运行类型：main / subagent
+     * 运行类型：main / subagent（兼容）/ worker（语义别名）
      */
     private final String runKind;
 
@@ -169,6 +169,13 @@ public class ToolExecutionContext {
      */
     public boolean isSubagent() {
         return "subagent".equals(runKind);
+    }
+
+    /**
+     * 判断当前是否为 worker 运行（兼容 subagent 旧值）
+     */
+    public boolean isWorker() {
+        return "worker".equals(runKind) || "subagent".equals(runKind);
     }
 
     /**

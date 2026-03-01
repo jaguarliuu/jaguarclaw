@@ -1,8 +1,10 @@
 package com.jaguarliu.ai.tools.builtin;
 
 import com.jaguarliu.ai.memory.index.MemoryIndexer;
+import com.jaguarliu.ai.memory.model.MemoryScope;
 import com.jaguarliu.ai.memory.store.MemoryStore;
 import com.jaguarliu.ai.tools.ToolDefinition;
+import com.jaguarliu.ai.tools.ToolExecutionContext;
 import com.jaguarliu.ai.tools.ToolResult;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -54,7 +56,7 @@ class MemoryWriteToolTest {
         }
 
         @Test
-        @DisplayName("包含 target 和 content 参数定义")
+        @DisplayName("包含 target、content 和 scope 参数定义")
         void hasRequiredParameters() {
             ToolDefinition def = tool.getDefinition();
             Map<String, Object> params = def.getParameters();
@@ -63,6 +65,7 @@ class MemoryWriteToolTest {
             Map<String, Object> properties = (Map<String, Object>) params.get("properties");
             assertTrue(properties.containsKey("target"));
             assertTrue(properties.containsKey("content"));
+            assertTrue(properties.containsKey("scope"));
 
             @SuppressWarnings("unchecked")
             List<String> required = (List<String>) params.get("required");
@@ -71,7 +74,7 @@ class MemoryWriteToolTest {
         }
 
         @Test
-        @DisplayName("target 参数有 enum 限制")
+        @DisplayName("target/scope 参数有 enum 限制")
         void targetHasEnumConstraint() {
             ToolDefinition def = tool.getDefinition();
 
@@ -85,6 +88,14 @@ class MemoryWriteToolTest {
             assertTrue(enumValues.contains("core"));
             assertTrue(enumValues.contains("daily"));
             assertEquals(2, enumValues.size());
+
+            @SuppressWarnings("unchecked")
+            Map<String, Object> scopeDef = (Map<String, Object>) properties.get("scope");
+            @SuppressWarnings("unchecked")
+            List<String> scopeEnum = (List<String>) scopeDef.get("enum");
+            assertTrue(scopeEnum.contains("agent"));
+            assertTrue(scopeEnum.contains("global"));
+            assertEquals(2, scopeEnum.size());
         }
     }
 
@@ -93,6 +104,11 @@ class MemoryWriteToolTest {
     @Nested
     @DisplayName("execute")
     class ExecuteTests {
+
+        @AfterEach
+        void tearDown() {
+            ToolExecutionContext.clear();
+        }
 
         @Test
         @DisplayName("target 为 null 时返回错误")
@@ -145,30 +161,61 @@ class MemoryWriteToolTest {
         }
 
         @Test
-        @DisplayName("target=core 写入核心记忆")
+        @DisplayName("target=core 默认写入当前 agent 私有记忆")
         void coreTargetWritesToCore() throws IOException {
+            ToolExecutionContext.set(ToolExecutionContext.builder().agentId("agent-a").build());
             ToolResult result = tool.execute(Map.of("target", "core", "content", "Important info")).block();
 
             assertNotNull(result);
             assertTrue(result.isSuccess());
-            verify(memoryStore).appendToCore("Important info");
-            verify(memoryIndexer).indexFile("MEMORY.md");
+            verify(memoryStore).appendToCore("Important info", "agent-a", MemoryScope.AGENT);
+            verify(memoryIndexer).indexFile("MEMORY.md", MemoryScope.AGENT, "agent-a");
             assertTrue(result.getContent().contains("core memory"));
             assertTrue(result.getContent().contains("MEMORY.md"));
         }
 
         @Test
-        @DisplayName("target=daily 写入今日日记")
+        @DisplayName("target=daily 默认写入当前 agent 私有日记")
         void dailyTargetWritesToDaily() throws IOException {
+            ToolExecutionContext.set(ToolExecutionContext.builder().agentId("agent-a").build());
             ToolResult result = tool.execute(Map.of("target", "daily", "content", "Today's note")).block();
 
             assertNotNull(result);
             assertTrue(result.isSuccess());
-            verify(memoryStore).appendToDaily("Today's note");
+            verify(memoryStore).appendToDaily("Today's note", "agent-a", MemoryScope.AGENT);
 
             String todayFileName = LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE) + ".md";
-            verify(memoryIndexer).indexFile(todayFileName);
+            verify(memoryIndexer).indexFile(todayFileName, MemoryScope.AGENT, "agent-a");
             assertTrue(result.getContent().contains("daily memory"));
+        }
+
+        @Test
+        @DisplayName("scope=global 写入全局记忆")
+        void globalScopeWritesToGlobalMemory() throws IOException {
+            ToolExecutionContext.set(ToolExecutionContext.builder().agentId("agent-a").build());
+            ToolResult result = tool.execute(Map.of(
+                    "target", "core",
+                    "content", "Shared info",
+                    "scope", "global"
+            )).block();
+
+            assertNotNull(result);
+            assertTrue(result.isSuccess());
+            verify(memoryStore).appendToCore("Shared info", "agent-a", MemoryScope.GLOBAL);
+            verify(memoryIndexer).indexFile("MEMORY.md", MemoryScope.GLOBAL, "agent-a");
+        }
+
+        @Test
+        @DisplayName("scope 非法时返回错误")
+        void invalidScopeReturnsError() {
+            ToolResult result = tool.execute(Map.of(
+                    "target", "core",
+                    "content", "abc",
+                    "scope", "both"
+            )).block();
+            assertNotNull(result);
+            assertFalse(result.isSuccess());
+            assertTrue(result.getContent().contains("Invalid scope"));
         }
 
         @Test
@@ -184,7 +231,8 @@ class MemoryWriteToolTest {
         @Test
         @DisplayName("写入失败时返回错误")
         void writeFailureReturnsError() throws IOException {
-            doThrow(new IOException("Disk full")).when(memoryStore).appendToCore(anyString());
+            doThrow(new IOException("Disk full")).when(memoryStore)
+                    .appendToCore(anyString(), anyString(), any(MemoryScope.class));
 
             ToolResult result = tool.execute(Map.of("target", "core", "content", "test")).block();
 
@@ -197,13 +245,14 @@ class MemoryWriteToolTest {
         @Test
         @DisplayName("索引失败不影响写入成功")
         void indexFailureDoesNotAffectWrite() throws IOException {
-            doThrow(new RuntimeException("Index error")).when(memoryIndexer).indexFile(anyString());
+            doThrow(new RuntimeException("Index error")).when(memoryIndexer)
+                    .indexFile(anyString(), any(MemoryScope.class), anyString());
 
             ToolResult result = tool.execute(Map.of("target", "core", "content", "test")).block();
 
             assertNotNull(result);
             assertTrue(result.isSuccess()); // 写入仍然成功
-            verify(memoryStore).appendToCore("test");
+            verify(memoryStore).appendToCore("test", "main", MemoryScope.AGENT);
         }
 
         @Test
@@ -214,7 +263,7 @@ class MemoryWriteToolTest {
 
             assertNotNull(result);
             assertTrue(result.isSuccess());
-            verify(memoryStore).appendToCore(largeContent);
+            verify(memoryStore).appendToCore(largeContent, "main", MemoryScope.AGENT);
             assertTrue(result.getContent().contains("10000 chars"));
         }
     }

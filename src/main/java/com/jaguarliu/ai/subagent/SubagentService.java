@@ -28,8 +28,12 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 /**
- * SubAgent 服务
- * 负责 spawn 子代理、管理子任务生命周期
+ * Worker 执行服务（兼容 SubAgent 命名）
+ * 负责派发 worker 任务并管理其生命周期。
+ *
+ * 说明：
+ * - 领域语义已解耦为「worker execution」；
+ * - 为保持兼容，事件名/数据结构仍沿用 subagent.*。
  */
 @Slf4j
 @Service
@@ -50,7 +54,7 @@ public class SubagentService {
     private final SubagentCompletionTracker completionTracker;
 
     /**
-     * 派生子代理
+     * 派发 worker 任务（兼容旧 subagent 调用）
      *
      * @param parentRunId        父运行 ID
      * @param parentSessionId    父会话 ID
@@ -105,7 +109,7 @@ public class SubagentService {
                     request.isDeliver()
             );
 
-            // 7. 发布 subagent.spawned 事件
+            // 7. 发布 subagent.spawned 事件（兼容保留）
             eventBus.publish(AgentEvent.subagentSpawned(
                     connectionId,
                     parentRunId,
@@ -120,7 +124,7 @@ public class SubagentService {
             // 8. 注册完成跟踪（在提交执行之前，确保 future 存在于 tracker 中）
             completionTracker.register(subRun.getId());
 
-            // 9. 提交到 subagent lane 异步执行
+            // 9. 提交到 subagent lane 异步执行（兼容保留）
             long sequence = queueManager.nextSequence(subSession.getId());
             queueManager.submit(
                     subSession.getId(),
@@ -133,7 +137,7 @@ public class SubagentService {
                     }
             ).subscribe();
 
-            log.info("Spawned subagent: parentRunId={}, subRunId={}, subSessionId={}, agentId={}, task={}",
+            log.info("Spawned worker task: parentRunId={}, subRunId={}, subSessionId={}, agentId={}, task={}",
                     parentRunId, subRun.getId(), subSession.getId(), targetAgentId,
                     truncateTask(request.getTask()));
 
@@ -170,10 +174,12 @@ public class SubagentService {
             messageService.saveUserMessage(sessionId, runId, task);
 
             // 3. 构建上下文（子代理从空历史开始）
-            List<LlmRequest.Message> messages = contextBuilder.buildMessages(List.of(), task);
+            List<LlmRequest.Message> messages = contextBuilder.buildMessages(
+                    List.of(), task, null, null, subRun.getAgentId()
+            );
 
-            // 4. 创建 subagent RunContext
-            RunContext context = RunContext.createSubagent(
+            // 4. 创建 worker RunContext（兼容 subagent 运行类型）
+            RunContext context = RunContext.createWorker(
                     runId,
                     connectionId,
                     sessionId,

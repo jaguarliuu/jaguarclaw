@@ -79,18 +79,14 @@ public class ToolRegistry implements SmartInitializingSingleton {
      * 列出所有工具定义（供 LLM Function Calling 使用）
      */
     public List<ToolDefinition> listDefinitions() {
-        return enabledTools()
-                .map(Tool::getDefinition)
-                .toList();
+        return listDefinitions(ToolVisibilityResolver.VisibilityRequest.builder().build());
     }
 
     /**
      * 转换为 OpenAI Function Calling 格式
      */
     public List<Map<String, Object>> toOpenAiTools() {
-        return enabledTools()
-                .map(tool -> tool.getDefinition().toOpenAiFormat())
-                .toList();
+        return toOpenAiTools(ToolVisibilityResolver.VisibilityRequest.builder().build());
     }
 
     /**
@@ -101,13 +97,9 @@ public class ToolRegistry implements SmartInitializingSingleton {
      * @return 过滤后的工具列表
      */
     public List<Map<String, Object>> toOpenAiTools(Set<String> allowedTools) {
-        if (allowedTools == null || allowedTools.isEmpty()) {
-            return toOpenAiTools();
-        }
-        return enabledTools()
-                .filter(tool -> allowedTools.contains(tool.getName()))
-                .map(tool -> tool.getDefinition().toOpenAiFormat())
-                .toList();
+        return toOpenAiTools(ToolVisibilityResolver.VisibilityRequest.builder()
+                .strategyAllowedTools(allowedTools)
+                .build());
     }
 
     /**
@@ -117,16 +109,9 @@ public class ToolRegistry implements SmartInitializingSingleton {
      * @return 过滤后的工具列表
      */
     public List<Map<String, Object>> toOpenAiToolsExcludingServers(Set<String> excludedMcpServers) {
-        if (excludedMcpServers == null || excludedMcpServers.isEmpty()) {
-            return toOpenAiTools();
-        }
-        return enabledTools()
-                .filter(tool -> {
-                    String serverName = tool.getMcpServerName();
-                    return serverName == null || !excludedMcpServers.contains(serverName);
-                })
-                .map(tool -> tool.getDefinition().toOpenAiFormat())
-                .toList();
+        return toOpenAiTools(ToolVisibilityResolver.VisibilityRequest.builder()
+                .excludedMcpServers(excludedMcpServers)
+                .build());
     }
 
     /**
@@ -137,26 +122,17 @@ public class ToolRegistry implements SmartInitializingSingleton {
      * @return 过滤后的工具列表
      */
     public List<Map<String, Object>> toOpenAiTools(Set<String> allowedTools, Set<String> excludedMcpServers) {
-        if ((allowedTools == null || allowedTools.isEmpty())
-                && (excludedMcpServers == null || excludedMcpServers.isEmpty())) {
-            return toOpenAiTools();
-        }
-        return enabledTools()
-                .filter(tool -> {
-                    // skill 白名单过滤
-                    if (allowedTools != null && !allowedTools.isEmpty()
-                            && !allowedTools.contains(tool.getName())) {
-                        return false;
-                    }
-                    // MCP 服务器排除过滤
-                    if (excludedMcpServers != null && !excludedMcpServers.isEmpty()) {
-                        String serverName = tool.getMcpServerName();
-                        if (serverName != null && excludedMcpServers.contains(serverName)) {
-                            return false;
-                        }
-                    }
-                    return true;
-                })
+        return toOpenAiTools(ToolVisibilityResolver.VisibilityRequest.builder()
+                .strategyAllowedTools(allowedTools)
+                .excludedMcpServers(excludedMcpServers)
+                .build());
+    }
+
+    /**
+     * 转换为 OpenAI Function Calling 格式（多维可见性聚合版）
+     */
+    public List<Map<String, Object>> toOpenAiTools(ToolVisibilityResolver.VisibilityRequest visibilityRequest) {
+        return resolveVisibility(visibilityRequest).tools().stream()
                 .map(tool -> tool.getDefinition().toOpenAiFormat())
                 .toList();
     }
@@ -169,16 +145,25 @@ public class ToolRegistry implements SmartInitializingSingleton {
      * @return 过滤后的工具定义列表
      */
     public List<ToolDefinition> listDefinitions(Set<String> excludedMcpServers) {
-        if (excludedMcpServers == null || excludedMcpServers.isEmpty()) {
-            return listDefinitions();
-        }
-        return enabledTools()
-                .filter(tool -> {
-                    String serverName = tool.getMcpServerName();
-                    return serverName == null || !excludedMcpServers.contains(serverName);
-                })
+        return listDefinitions(ToolVisibilityResolver.VisibilityRequest.builder()
+                .excludedMcpServers(excludedMcpServers)
+                .build());
+    }
+
+    /**
+     * 列出工具定义（多维可见性聚合版）
+     */
+    public List<ToolDefinition> listDefinitions(ToolVisibilityResolver.VisibilityRequest visibilityRequest) {
+        return resolveVisibility(visibilityRequest).tools().stream()
                 .map(Tool::getDefinition)
                 .toList();
+    }
+
+    /**
+     * 列出可见工具名称（用于工具执行层白名单校验）
+     */
+    public Set<String> listVisibleToolNames(ToolVisibilityResolver.VisibilityRequest visibilityRequest) {
+        return resolveVisibility(visibilityRequest).toolNames();
     }
 
     /**
@@ -281,5 +266,13 @@ public class ToolRegistry implements SmartInitializingSingleton {
 
     private java.util.stream.Stream<Tool> enabledTools() {
         return registry.values().stream().filter(Tool::isEnabled);
+    }
+
+    private ToolVisibilityResolver.VisibilityResult resolveVisibility(
+            ToolVisibilityResolver.VisibilityRequest visibilityRequest) {
+        return ToolVisibilityResolver.resolve(
+                enabledTools().toList(),
+                visibilityRequest
+        );
     }
 }

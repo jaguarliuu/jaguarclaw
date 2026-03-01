@@ -45,16 +45,41 @@ public class SkillListHandler implements RpcHandler {
 
     @Override
     public Mono<RpcResponse> handle(String connectionId, RpcRequest request) {
-        List<Map<String, Object>> skills = skillRegistry.getAll().stream()
+        String scope = extractScope(request.getPayload());
+        String agentId = extractAgentId(request.getPayload());
+
+        boolean globalOnly = "global".equalsIgnoreCase(scope);
+        List<Map<String, Object>> skills = (globalOnly ? skillRegistry.getGlobalAll() : skillRegistry.getAll(agentId)).stream()
                 .map(this::toDto)
                 .collect(Collectors.toList());
 
         Map<String, Object> payload = Map.of(
                 "skills", skills,
+                "scope", globalOnly ? "global" : "effective",
                 "version", skillRegistry.getSnapshotVersion()
         );
 
         return Mono.just(RpcResponse.success(request.getId(), payload));
+    }
+
+    private String extractAgentId(Object payload) {
+        if (payload instanceof Map<?, ?> map) {
+            Object raw = map.get("agentId");
+            if (raw != null && !raw.toString().isBlank()) {
+                return raw.toString();
+            }
+        }
+        return "main";
+    }
+
+    private String extractScope(Object payload) {
+        if (payload instanceof Map<?, ?> map) {
+            Object raw = map.get("scope");
+            if (raw != null && "global".equalsIgnoreCase(raw.toString())) {
+                return "global";
+            }
+        }
+        return "effective";
     }
 
     private Map<String, Object> toDto(SkillEntry entry) {

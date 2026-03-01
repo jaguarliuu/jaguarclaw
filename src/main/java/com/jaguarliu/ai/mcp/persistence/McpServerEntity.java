@@ -19,9 +19,24 @@ import java.util.List;
 @Table(name = "mcp_servers")
 public class McpServerEntity {
 
+    public static final String SCOPE_GLOBAL = "GLOBAL";
+    public static final String SCOPE_AGENT = "AGENT";
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    /**
+     * 作用域：GLOBAL / AGENT
+     */
+    @Column(nullable = false, length = 20)
+    private String scope = SCOPE_GLOBAL;
+
+    /**
+     * 当 scope=AGENT 时绑定的 agentId
+     */
+    @Column(name = "agent_id", length = 100)
+    private String agentId;
 
     /**
      * Server 名称（唯一标识）
@@ -124,6 +139,14 @@ public class McpServerEntity {
      */
     @PrePersist
     protected void onCreate() {
+        if (scope == null || scope.isBlank()) {
+            scope = SCOPE_GLOBAL;
+        } else {
+            scope = normalizeScope(scope);
+        }
+        if (SCOPE_GLOBAL.equals(scope)) {
+            agentId = null;
+        }
         createdAt = LocalDateTime.now();
         updatedAt = LocalDateTime.now();
     }
@@ -133,6 +156,10 @@ public class McpServerEntity {
      */
     @PreUpdate
     protected void onUpdate() {
+        scope = normalizeScope(scope);
+        if (SCOPE_GLOBAL.equals(scope)) {
+            agentId = null;
+        }
         updatedAt = LocalDateTime.now();
     }
 
@@ -141,6 +168,8 @@ public class McpServerEntity {
      */
     public McpProperties.ServerConfig toConfig() {
         var config = new McpProperties.ServerConfig();
+        config.setScope(SCOPE_AGENT.equals(this.scope) ? "agent" : "global");
+        config.setAgentId(this.agentId);
         config.setName(this.name);
         config.setTransport(this.transportType);
         config.setCommand(this.command);
@@ -161,6 +190,9 @@ public class McpServerEntity {
      */
     public static McpServerEntity fromConfig(McpProperties.ServerConfig config) {
         var entity = new McpServerEntity();
+        String normalizedScope = normalizeScope(config.getScope());
+        entity.setScope(normalizedScope);
+        entity.setAgentId(SCOPE_AGENT.equals(normalizedScope) ? config.getAgentId() : null);
         entity.setName(config.getName());
         entity.setTransportType(config.getTransport());
         entity.setCommand(config.getCommand());
@@ -174,5 +206,16 @@ public class McpServerEntity {
         entity.setHitlTools(config.getHitlTools() != null ? new ArrayList<>(config.getHitlTools()) : new ArrayList<>());
         entity.setRequestTimeoutSeconds(config.getRequestTimeoutSeconds());
         return entity;
+    }
+
+    private static String normalizeScope(String scope) {
+        if (scope == null || scope.isBlank()) {
+            return SCOPE_GLOBAL;
+        }
+        String normalized = scope.trim().toUpperCase();
+        if (SCOPE_AGENT.equals(normalized)) {
+            return SCOPE_AGENT;
+        }
+        return SCOPE_GLOBAL;
     }
 }

@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 import SettingsSidebar from '@/components/settings/SettingsSidebar.vue'
 import LlmSection from '@/components/settings/LlmSection.vue'
+import AgentsSection from '@/components/settings/AgentsSection.vue'
 import ToolsConfigSection from '@/components/settings/ToolsConfigSection.vue'
 import SkillsSection from '@/components/settings/SkillsSection.vue'
 import MemorySection from '@/components/settings/MemorySection.vue'
@@ -31,6 +32,7 @@ const currentSection = computed(() => {
 
       <main class="settings-content">
         <LlmSection v-if="currentSection === 'llm'" />
+        <AgentsSection v-else-if="currentSection === 'agents'" />
         <ToolsConfigSection v-else-if="currentSection === 'tools'" />
         <SkillsSection v-else-if="currentSection === 'skills'" />
         <MemorySection v-else-if="currentSection === 'memory'" />

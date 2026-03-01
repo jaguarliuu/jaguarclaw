@@ -22,7 +22,8 @@ public class PgMemoryChunkSearchOps implements MemoryChunkSearchOps {
     public List<Object[]> searchByVector(String embedding, int limit) {
         return em.createNativeQuery("""
                 SELECT id, file_path, line_start, line_end, content,
-                       1 - (embedding <=> cast(:embedding as vector)) AS similarity
+                       1 - (embedding <=> cast(:embedding as vector)) AS similarity,
+                       scope, agent_id
                 FROM memory_chunks
                 WHERE embedding IS NOT NULL
                 ORDER BY embedding <=> cast(:embedding as vector)
@@ -37,7 +38,8 @@ public class PgMemoryChunkSearchOps implements MemoryChunkSearchOps {
     public List<Object[]> searchByFts(String query, int limit) {
         return em.createNativeQuery("""
                 SELECT id, file_path, line_start, line_end, content,
-                       ts_rank(tsv, plainto_tsquery('simple', :query)) AS rank
+                       ts_rank(tsv, plainto_tsquery('simple', :query)) AS rank,
+                       scope, agent_id
                 FROM memory_chunks
                 WHERE tsv @@ plainto_tsquery('simple', :query)
                 ORDER BY rank DESC

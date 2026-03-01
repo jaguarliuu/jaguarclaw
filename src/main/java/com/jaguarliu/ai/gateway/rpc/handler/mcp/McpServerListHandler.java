@@ -51,6 +51,8 @@ public class McpServerListHandler implements RpcHandler {
                         serverMap.put("toolPrefix", entity.getToolPrefix());
                         serverMap.put("url", entity.getUrl() != null ? entity.getUrl() : "");
                         serverMap.put("command", entity.getCommand() != null ? entity.getCommand() : "");
+                        serverMap.put("scope", entity.getScope());
+                        serverMap.put("agentId", entity.getAgentId() != null ? entity.getAgentId() : "");
                         serverMap.put("createdAt", entity.getCreatedAt().toString());
                         serverMap.put("updatedAt", entity.getUpdatedAt().toString());
 

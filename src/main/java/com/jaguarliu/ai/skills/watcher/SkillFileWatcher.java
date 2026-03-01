@@ -1,9 +1,11 @@
 package com.jaguarliu.ai.skills.watcher;
 
+import com.jaguarliu.ai.skills.context.SkillScopeResolver;
 import com.jaguarliu.ai.skills.registry.SkillRegistry;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -11,6 +13,7 @@ import java.io.IOException;
 import java.nio.file.*;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -32,6 +35,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public class SkillFileWatcher {
 
     private final SkillRegistry registry;
+    private final Optional<SkillScopeResolver> scopeResolver;
 
     @Value("${skills.watch-enabled:true}")
     private boolean watchEnabled;
@@ -43,8 +47,15 @@ public class SkillFileWatcher {
     // WatchKey → 监听的目录信息
     private final Map<WatchKey, WatchedPath> watchKeyMap = new HashMap<>();
 
-    public SkillFileWatcher(SkillRegistry registry) {
+    @Autowired
+    public SkillFileWatcher(SkillRegistry registry, Optional<SkillScopeResolver> scopeResolver) {
         this.registry = registry;
+        this.scopeResolver = scopeResolver;
+    }
+
+    // 兼容单元测试直接构造
+    public SkillFileWatcher(SkillRegistry registry) {
+        this(registry, Optional.empty());
     }
 
     @PostConstruct
@@ -105,6 +116,11 @@ public class SkillFileWatcher {
         registerDirectory(registry.getProjectSkillsDir(), 0);
         registerDirectory(registry.getUserSkillsDir(), 1);
         registerDirectory(registry.getBuiltinSkillsDir(), 2);
+
+        scopeResolver.ifPresent(resolver ->
+                resolver.resolveAllAgentSkillsDirs().values()
+                        .forEach(dir -> registerDirectory(dir, -1))
+        );
     }
 
     /**
