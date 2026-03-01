@@ -2,6 +2,7 @@ package com.jaguarliu.ai.gateway.rpc.handler.agent;
 
 import com.jaguarliu.ai.agents.entity.AgentProfileEntity;
 import com.jaguarliu.ai.agents.service.AgentProfileService;
+import com.jaguarliu.ai.feature.FeatureFlagsProperties;
 import com.jaguarliu.ai.gateway.rpc.model.RpcRequest;
 import com.jaguarliu.ai.gateway.rpc.model.RpcResponse;
 import com.jaguarliu.ai.gateway.security.ConnectionPrincipal;
@@ -34,10 +35,13 @@ class AgentProfileHandlersTest {
     @Mock
     private ConnectionManager connectionManager;
 
+    private FeatureFlagsProperties featureFlags;
+
     private ConnectionPrincipal principal;
 
     @BeforeEach
     void setUp() {
+        featureFlags = new FeatureFlagsProperties(); // defaults: all enabled
         principal = ConnectionPrincipal.builder()
                 .principalId("local-default")
                 .roles(List.of("local_admin"))
@@ -49,7 +53,7 @@ class AgentProfileHandlersTest {
     class AgentListTests {
         @Test
         void listShouldReturnAgents() {
-            AgentListHandler handler = new AgentListHandler(service, connectionManager);
+            AgentListHandler handler = new AgentListHandler(service, connectionManager, featureFlags);
             when(connectionManager.getPrincipal("conn-1")).thenReturn(principal);
             when(service.list()).thenReturn(List.of(sampleEntity("agent-1", "coder", false)));
 
@@ -66,7 +70,7 @@ class AgentProfileHandlersTest {
 
         @Test
         void listShouldRequireAuth() {
-            AgentListHandler handler = new AgentListHandler(service, connectionManager);
+            AgentListHandler handler = new AgentListHandler(service, connectionManager, featureFlags);
             when(connectionManager.getPrincipal("conn-1")).thenReturn(null);
 
             RpcResponse resp = handler.handle("conn-1", RpcRequest.builder().id("1").method("agent.list").build()).block();
@@ -81,7 +85,7 @@ class AgentProfileHandlersTest {
     class AgentGetTests {
         @Test
         void getShouldReturnAgent() {
-            AgentGetHandler handler = new AgentGetHandler(service, connectionManager);
+            AgentGetHandler handler = new AgentGetHandler(service, connectionManager, featureFlags);
             when(connectionManager.getPrincipal("conn-1")).thenReturn(principal);
             when(service.get("agent-1")).thenReturn(Optional.of(sampleEntity("agent-1", "coder", false)));
 
@@ -101,7 +105,7 @@ class AgentProfileHandlersTest {
 
         @Test
         void getShouldReturnNotFound() {
-            AgentGetHandler handler = new AgentGetHandler(service, connectionManager);
+            AgentGetHandler handler = new AgentGetHandler(service, connectionManager, featureFlags);
             when(connectionManager.getPrincipal("conn-1")).thenReturn(principal);
             when(service.get("missing")).thenReturn(Optional.empty());
 
@@ -123,7 +127,7 @@ class AgentProfileHandlersTest {
     class AgentCreateTests {
         @Test
         void createShouldSucceed() {
-            AgentCreateHandler handler = new AgentCreateHandler(service, connectionManager);
+            AgentCreateHandler handler = new AgentCreateHandler(service, connectionManager, featureFlags);
             when(connectionManager.getPrincipal("conn-1")).thenReturn(principal);
             when(service.create(any())).thenReturn(sampleEntity("agent-2", "reviewer", false));
 
@@ -143,7 +147,7 @@ class AgentProfileHandlersTest {
 
         @Test
         void createShouldReturnInvalidParams() {
-            AgentCreateHandler handler = new AgentCreateHandler(service, connectionManager);
+            AgentCreateHandler handler = new AgentCreateHandler(service, connectionManager, featureFlags);
             when(connectionManager.getPrincipal("conn-1")).thenReturn(principal);
             when(service.create(any())).thenThrow(new IllegalArgumentException("name is required"));
 
@@ -165,7 +169,7 @@ class AgentProfileHandlersTest {
     class AgentUpdateTests {
         @Test
         void updateShouldSucceed() {
-            AgentUpdateHandler handler = new AgentUpdateHandler(service, connectionManager);
+            AgentUpdateHandler handler = new AgentUpdateHandler(service, connectionManager, featureFlags);
             when(connectionManager.getPrincipal("conn-1")).thenReturn(principal);
             when(service.update(any())).thenReturn(sampleEntity("agent-1", "coder", true));
 
@@ -185,7 +189,7 @@ class AgentProfileHandlersTest {
 
         @Test
         void updateShouldReturnInvalidStateForDefaultConstraint() {
-            AgentUpdateHandler handler = new AgentUpdateHandler(service, connectionManager);
+            AgentUpdateHandler handler = new AgentUpdateHandler(service, connectionManager, featureFlags);
             when(connectionManager.getPrincipal("conn-1")).thenReturn(principal);
             when(service.update(any())).thenThrow(new IllegalStateException(
                     "Cannot unset default agent directly. Set another default agent first."));
@@ -208,7 +212,7 @@ class AgentProfileHandlersTest {
     class AgentDeleteTests {
         @Test
         void deleteShouldSucceed() {
-            AgentDeleteHandler handler = new AgentDeleteHandler(service, connectionManager);
+            AgentDeleteHandler handler = new AgentDeleteHandler(service, connectionManager, featureFlags);
             when(connectionManager.getPrincipal("conn-1")).thenReturn(principal);
 
             RpcRequest req = RpcRequest.builder()
@@ -227,7 +231,7 @@ class AgentProfileHandlersTest {
 
         @Test
         void deleteDefaultAgentShouldReturnInvalidState() {
-            AgentDeleteHandler handler = new AgentDeleteHandler(service, connectionManager);
+            AgentDeleteHandler handler = new AgentDeleteHandler(service, connectionManager, featureFlags);
             when(connectionManager.getPrincipal("conn-1")).thenReturn(principal);
             doThrow(new IllegalStateException("Cannot delete default agent")).when(service).delete("main");
 

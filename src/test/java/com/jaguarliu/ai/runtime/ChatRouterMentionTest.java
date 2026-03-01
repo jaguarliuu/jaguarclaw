@@ -2,6 +2,7 @@ package com.jaguarliu.ai.runtime;
 
 import com.jaguarliu.ai.agents.entity.AgentProfileEntity;
 import com.jaguarliu.ai.agents.service.AgentProfileService;
+import com.jaguarliu.ai.feature.FeatureFlagsProperties;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -28,7 +29,7 @@ class ChatRouterMentionTest {
 
     @BeforeEach
     void setUp() {
-        chatRouter = new ChatRouter(agentProfileService);
+        chatRouter = new ChatRouter(agentProfileService, new FeatureFlagsProperties());
     }
 
     @Test

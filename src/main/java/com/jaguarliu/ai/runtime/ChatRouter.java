@@ -3,6 +3,7 @@ package com.jaguarliu.ai.runtime;
 import com.jaguarliu.ai.agents.AgentConstants;
 import com.jaguarliu.ai.agents.entity.AgentProfileEntity;
 import com.jaguarliu.ai.agents.service.AgentProfileService;
+import com.jaguarliu.ai.feature.FeatureFlagsProperties;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -21,16 +22,21 @@ public class ChatRouter {
             Pattern.compile("^\\s*@([a-zA-Z0-9_-]{1,64})\\s+(.+)$", Pattern.DOTALL);
 
     private final AgentProfileService agentProfileService;
+    private final FeatureFlagsProperties featureFlags;
 
     public RouteDecision route(String prompt, String requestedAgentId, String sessionAgentId) {
         String originalPrompt = prompt == null ? "" : prompt;
-        Mention mention = extractLeadingMention(originalPrompt);
 
-        if (mention != null) {
-            if (isEnabled(mention.agentId())) {
-                return new RouteDecision(mention.agentId(), mention.cleanedPrompt(), mention.agentId(), true);
+        // 如果 mention routing 开启，解析 @mention
+        if (featureFlags.isAgentMentionRouting()) {
+            Mention mention = extractLeadingMention(originalPrompt);
+
+            if (mention != null) {
+                if (isEnabled(mention.agentId())) {
+                    return new RouteDecision(mention.agentId(), mention.cleanedPrompt(), mention.agentId(), true);
+                }
+                return new RouteDecision(defaultAgentId(), mention.cleanedPrompt(), mention.agentId(), false);
             }
-            return new RouteDecision(defaultAgentId(), mention.cleanedPrompt(), mention.agentId(), false);
         }
 
         return new RouteDecision(

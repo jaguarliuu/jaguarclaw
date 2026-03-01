@@ -2,6 +2,7 @@ package com.jaguarliu.ai.gateway.rpc.handler.agent;
 
 import com.jaguarliu.ai.agents.entity.AgentProfileEntity;
 import com.jaguarliu.ai.agents.service.AgentProfileService;
+import com.jaguarliu.ai.feature.FeatureFlagsProperties;
 import com.jaguarliu.ai.gateway.rpc.RpcHandler;
 import com.jaguarliu.ai.gateway.rpc.model.RpcRequest;
 import com.jaguarliu.ai.gateway.rpc.model.RpcResponse;
@@ -21,6 +22,7 @@ public class AgentUpdateHandler implements RpcHandler {
 
     private final AgentProfileService agentProfileService;
     private final ConnectionManager connectionManager;
+    private final FeatureFlagsProperties featureFlags;
 
     @Override
     public String getMethod() {
@@ -30,6 +32,9 @@ public class AgentUpdateHandler implements RpcHandler {
     @Override
     public Mono<RpcResponse> handle(String connectionId, RpcRequest request) {
         return Mono.fromCallable(() -> {
+            if (!featureFlags.isAgentControlPlane()) {
+                return RpcResponse.error(request.getId(), "FEATURE_DISABLED", "Agent control plane is disabled");
+            }
             if (resolvePrincipalId(connectionId) == null) {
                 return RpcResponse.error(request.getId(), "UNAUTHORIZED", "Missing authenticated principal");
             }
