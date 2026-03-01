@@ -34,8 +34,8 @@ public class ScheduleCreateHandler implements RpcHandler {
             String name = (String) params.get("name");
             String cronExpr = (String) params.get("cronExpr");
             String prompt = (String) params.get("prompt");
-            String channelId = (String) params.get("channelId");
-            String channelType = (String) params.get("channelType");
+            String targetRef = value(params.get("targetRef"));
+            String targetType = value(params.get("targetType"));
             String emailTo = (String) params.get("emailTo");
             String emailCc = (String) params.get("emailCc");
 
@@ -48,18 +48,26 @@ public class ScheduleCreateHandler implements RpcHandler {
             if (prompt == null || prompt.isBlank()) {
                 return RpcResponse.error(request.getId(), "INVALID_PARAMS", "prompt is required");
             }
-            if (channelId == null || channelId.isBlank()) {
-                return RpcResponse.error(request.getId(), "INVALID_PARAMS", "channelId is required");
+            if (targetRef == null || targetRef.isBlank()) {
+                return RpcResponse.error(request.getId(), "INVALID_PARAMS", "targetRef is required");
             }
-            if (channelType == null || channelType.isBlank()) {
-                return RpcResponse.error(request.getId(), "INVALID_PARAMS", "channelType is required");
+            if (targetType == null || targetType.isBlank()) {
+                return RpcResponse.error(request.getId(), "INVALID_PARAMS", "targetType is required");
             }
 
-            var task = scheduledTaskService.create(name, cronExpr, prompt, channelId, channelType, emailTo, emailCc);
+            var task = scheduledTaskService.create(name, cronExpr, prompt, targetRef, targetType, emailTo, emailCc);
             return RpcResponse.success(request.getId(), ScheduledTaskService.toDto(task));
         }).onErrorResume(e -> {
             log.error("Failed to create scheduled task: {}", e.getMessage());
             return Mono.just(RpcResponse.error(request.getId(), "CREATE_FAILED", e.getMessage()));
         });
+    }
+
+    private String value(Object value) {
+        if (value == null) {
+            return null;
+        }
+        String str = String.valueOf(value).trim();
+        return str.isEmpty() ? null : str;
     }
 }

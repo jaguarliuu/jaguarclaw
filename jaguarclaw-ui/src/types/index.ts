@@ -305,42 +305,34 @@ export interface NodeRegisterPayload {
   safetyPolicy?: SafetyPolicy
 }
 
-// ==================== Channel Types ====================
+// ==================== Delivery Config Types ====================
 
-export type ChannelType = 'email' | 'webhook'
+export type DeliveryTargetType = 'email' | 'webhook'
 
-export interface ChannelInfo {
-  id: string
-  name: string
-  type: ChannelType
+export interface EmailDeliveryConfig {
   enabled: boolean
-  config: EmailChannelConfig | WebhookChannelConfig
-  lastTestedAt: string | null
-  lastTestSuccess: boolean | null
-  createdAt: string
-  updatedAt: string
-}
-
-export interface EmailChannelConfig {
   host: string
   port: number
   username: string
   from: string
   tls: boolean
+  password: string
+  configured: boolean
 }
 
-export interface WebhookChannelConfig {
+export interface WebhookEndpoint {
+  alias: string
   url: string
   method: string
+  trigger?: string
+  enabled: boolean
   headers: Record<string, string>
-  secret: boolean
 }
 
-export interface ChannelCreatePayload {
-  name: string
-  type: ChannelType
-  config: EmailChannelConfig | WebhookChannelConfig
-  credential?: string
+export interface WebhookDeliveryConfig {
+  enabled: boolean
+  configured: boolean
+  endpoints: WebhookEndpoint[]
 }
 
 // ==================== Audit Log Types ====================
@@ -381,8 +373,8 @@ export interface ScheduleInfo {
   name: string
   cronExpr: string
   prompt: string
-  channelId: string
-  channelType: ChannelType
+  targetRef: string
+  targetType: DeliveryTargetType
   emailTo: string | null
   emailCc: string | null
   enabled: boolean
@@ -397,8 +389,8 @@ export interface ScheduleCreatePayload {
   name: string
   cronExpr: string
   prompt: string
-  channelId: string
-  channelType: ChannelType
+  targetRef: string
+  targetType: DeliveryTargetType
   emailTo?: string
   emailCc?: string
 }
@@ -467,6 +459,10 @@ export interface ToolConfig {
   hitl: {
     alwaysConfirmTools: string[]
     dangerousKeywords: string[]
+  }
+  delivery: {
+    email: EmailDeliveryConfig
+    webhook: WebhookDeliveryConfig
   }
 }
 

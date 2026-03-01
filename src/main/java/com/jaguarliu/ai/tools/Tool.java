@@ -44,4 +44,12 @@ public interface Tool {
     default String getMcpServerName() {
         return null;
     }
+
+    /**
+     * 工具是否启用（用于动态控制工具可见性）
+     * 默认启用。
+     */
+    default boolean isEnabled() {
+        return true;
+    }
 }

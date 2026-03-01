@@ -30,10 +30,10 @@ public class ScheduledTaskEntity {
     private String prompt;
 
     @Column(name = "channel_id", nullable = false, length = 36)
-    private String channelId;
+    private String targetRef;
 
     @Column(name = "channel_type", nullable = false, length = 20)
-    private String channelType;
+    private String targetType;
 
     @Column(name = "email_to", length = 500)
     private String emailTo;

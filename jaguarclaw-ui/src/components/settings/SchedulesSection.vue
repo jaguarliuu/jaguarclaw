@@ -1,14 +1,12 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useSchedules } from '@/composables/useSchedules'
-import { useChannels } from '@/composables/useChannels'
 import { useI18n } from '@/i18n'
 import Select from '@/components/common/Select.vue'
 import type { SelectOption } from '@/components/common/Select.vue'
-import type { ChannelType, ChannelInfo, ScheduleInfo } from '@/types'
+import type { DeliveryTargetType, ScheduleInfo } from '@/types'
 
 const { schedules, loading, error, loadSchedules, createSchedule, removeSchedule, toggleSchedule, runSchedule } = useSchedules()
-const { channels, loadChannels } = useChannels()
 const { t } = useI18n()
 
 // Form state
@@ -16,7 +14,8 @@ const showForm = ref(false)
 const formName = ref('')
 const formCron = ref('')
 const formPrompt = ref('')
-const formChannelId = ref('')
+const formTargetType = ref<DeliveryTargetType>('webhook')
+const formTargetRef = ref('')
 const formEmailTo = ref('')
 const formEmailCc = ref('')
 const formError = ref<string | null>(null)
@@ -35,25 +34,18 @@ const cronPresets = computed(() => [
   { label: t('sections.schedules.presets.firstOfMonth'), cron: '0 9 1 * *' }
 ])
 
-// Selected channel info
-const selectedChannel = computed<ChannelInfo | undefined>(() => {
-  return channels.value.find(c => c.id === formChannelId.value)
-})
-
-const isEmailChannel = computed(() => {
-  return selectedChannel.value?.type === 'email'
-})
-
-const channelSelectOptions = computed<SelectOption<string>[]>(() => [
-  { label: t('sections.schedules.fields.channelPlaceholder'), value: '', disabled: true },
-  ...channels.value.map(ch => ({ label: `${ch.name} (${ch.type})`, value: ch.id }))
+const isEmailTarget = computed(() => formTargetType.value === 'email')
+const targetTypeOptions = computed<SelectOption<string>[]>(() => [
+  { label: 'Webhook', value: 'webhook' },
+  { label: 'Email', value: 'email' }
 ])
 
 function resetForm() {
   formName.value = ''
   formCron.value = ''
   formPrompt.value = ''
-  formChannelId.value = ''
+  formTargetType.value = 'webhook'
+  formTargetRef.value = ''
   formEmailTo.value = ''
   formEmailCc.value = ''
   formError.value = null
@@ -92,11 +84,6 @@ function getCronDescription(cron: string): string {
   return `${min} ${hour} ${dom} ${mon} ${dow}`
 }
 
-function getChannelName(channelId: string): string {
-  const ch = channels.value.find(c => c.id === channelId)
-  return ch ? ch.name : channelId
-}
-
 function getStatusText(task: ScheduleInfo): string {
   if (task.lastRunSuccess === null) return t('sections.schedules.neverRun')
   return task.lastRunSuccess ? t('sections.schedules.success') : t('sections.schedules.failed')
@@ -126,11 +113,15 @@ async function handleSubmit() {
     formError.value = t('sections.schedules.errors.promptRequired')
     return
   }
-  if (!formChannelId.value) {
-    formError.value = t('sections.schedules.errors.channelRequired')
+  if (!formTargetType.value) {
+    formError.value = 'Target type is required'
     return
   }
-  if (isEmailChannel.value && !formEmailTo.value.trim()) {
+  if (formTargetType.value === 'webhook' && !formTargetRef.value.trim()) {
+    formError.value = 'Webhook target alias is required'
+    return
+  }
+  if (isEmailTarget.value && !formEmailTo.value.trim()) {
     formError.value = t('sections.schedules.errors.emailToRequired')
     return
   }
@@ -138,15 +129,14 @@ async function handleSubmit() {
   submitting.value = true
   formError.value = null
   try {
-    const channelType = selectedChannel.value?.type as ChannelType
     await createSchedule({
       name: formName.value.trim(),
       cronExpr: formCron.value.trim(),
       prompt: formPrompt.value.trim(),
-      channelId: formChannelId.value,
-      channelType,
-      emailTo: isEmailChannel.value ? formEmailTo.value.trim() : undefined,
-      emailCc: isEmailChannel.value && formEmailCc.value.trim() ? formEmailCc.value.trim() : undefined
+      targetRef: formTargetType.value === 'email' ? 'email-default' : formTargetRef.value.trim(),
+      targetType: formTargetType.value,
+      emailTo: isEmailTarget.value ? formEmailTo.value.trim() : undefined,
+      emailCc: isEmailTarget.value && formEmailCc.value.trim() ? formEmailCc.value.trim() : undefined
     })
     closeForm()
   } catch (e) {
@@ -187,7 +177,6 @@ async function handleDelete(taskId: string) {
 
 onMounted(() => {
   loadSchedules()
-  loadChannels()
 })
 </script>
 
@@ -252,12 +241,17 @@ onMounted(() => {
       </div>
 
       <div class="form-group">
-        <label class="form-label">{{ t('sections.schedules.fields.channelLabel') }}</label>
-        <Select v-model="formChannelId" :options="channelSelectOptions" />
+        <label class="form-label">Target Type *</label>
+        <Select v-model="formTargetType" :options="targetTypeOptions" />
+      </div>
+
+      <div v-if="formTargetType === 'webhook'" class="form-group">
+        <label class="form-label">Webhook Alias *</label>
+        <input v-model="formTargetRef" class="form-input" placeholder="e.g. ops-alert" />
       </div>
 
       <!-- Email fields -->
-      <template v-if="isEmailChannel">
+      <template v-if="isEmailTarget">
         <div class="form-grid">
           <div class="form-group">
             <label class="form-label">{{ t('sections.schedules.fields.toLabel') }}</label>
@@ -286,8 +280,8 @@ onMounted(() => {
         <div class="task-header">
           <div class="task-info">
             <span class="task-name">{{ task.name }}</span>
-            <span class="type-badge" :class="'badge-' + task.channelType">
-              {{ task.channelType }}
+            <span class="type-badge" :class="'badge-' + task.targetType">
+              {{ task.targetType }}
             </span>
             <span class="status-dot" :class="getStatusClass(task)" :title="getStatusText(task)" />
           </div>
@@ -325,7 +319,7 @@ onMounted(() => {
             <span class="cron-hint">{{ getCronDescription(task.cronExpr) }}</span>
           </span>
           <span class="task-detail">
-            <span class="detail-label">{{ t('sections.schedules.detail.channel') }}</span> {{ getChannelName(task.channelId) }}
+            <span class="detail-label">Target</span> {{ task.targetRef }}
           </span>
           <span v-if="task.lastRunAt" class="task-detail">
             <span class="detail-label">{{ t('sections.schedules.detail.lastRun') }}</span> {{ formatTime(task.lastRunAt) }}

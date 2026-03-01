@@ -32,6 +32,28 @@ export function useToolConfig() {
       alwaysConfirmTools: string[]
       dangerousKeywords: string[]
     }
+    delivery?: {
+      email: {
+        enabled: boolean
+        host: string
+        port: number
+        username: string
+        from: string
+        tls: boolean
+        password: string
+      }
+      webhook: {
+        enabled: boolean
+        endpoints: Array<{
+          alias: string
+          url: string
+          method: string
+          trigger?: string
+          enabled: boolean
+          headers: Record<string, string>
+        }>
+      }
+    }
   }): Promise<void> {
     error.value = null
     try {

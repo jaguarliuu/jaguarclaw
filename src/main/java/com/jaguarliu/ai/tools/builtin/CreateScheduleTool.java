@@ -1,7 +1,5 @@
 package com.jaguarliu.ai.tools.builtin;
 
-import com.jaguarliu.ai.channel.ChannelEntity;
-import com.jaguarliu.ai.channel.ChannelRepository;
 import com.jaguarliu.ai.schedule.ScheduledTaskService;
 import com.jaguarliu.ai.tools.Tool;
 import com.jaguarliu.ai.tools.ToolDefinition;
@@ -13,7 +11,6 @@ import reactor.core.publisher.Mono;
 
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
 /**
  * create_schedule 工具
@@ -25,14 +22,13 @@ import java.util.Optional;
 public class CreateScheduleTool implements Tool {
 
     private final ScheduledTaskService scheduledTaskService;
-    private final ChannelRepository channelRepository;
 
     @Override
     public ToolDefinition getDefinition() {
         return ToolDefinition.builder()
                 .name("create_schedule")
-                .description("创建定时执行任务。指定名称、cron 表达式、要执行的 prompt、推送渠道和收件人。" +
-                        "创建后系统会按 cron 表达式定时执行 prompt 并将结果推送到指定渠道。")
+                .description("创建定时执行任务。指定名称、cron 表达式、要执行的 prompt、推送目标类型和目标引用。" +
+                        "target_type=email 时需要 email_to；target_type=webhook 时 target_ref 填 webhook 别名。")
                 .parameters(Map.of(
                         "type", "object",
                         "properties", Map.of(
@@ -48,9 +44,13 @@ public class CreateScheduleTool implements Tool {
                                         "type", "string",
                                         "description", "触发时让 Agent 执行的 prompt 指令"
                                 ),
-                                "channel", Map.of(
+                                "target_type", Map.of(
                                         "type", "string",
-                                        "description", "渠道名称或类型（email/webhook），用于推送执行结果"
+                                        "description", "推送目标类型：email 或 webhook"
+                                ),
+                                "target_ref", Map.of(
+                                        "type", "string",
+                                        "description", "推送目标引用。email 可省略；webhook 填 webhook 别名"
                                 ),
                                 "email_to", Map.of(
                                         "type", "string",
@@ -61,7 +61,7 @@ public class CreateScheduleTool implements Tool {
                                         "description", "邮箱渠道的抄送地址（可选）"
                                 )
                         ),
-                        "required", List.of("name", "cron", "prompt", "channel")
+                        "required", List.of("name", "cron", "prompt")
                 ))
                 .hitl(true)
                 .build();
@@ -72,7 +72,8 @@ public class CreateScheduleTool implements Tool {
         String name = (String) arguments.get("name");
         String cron = (String) arguments.get("cron");
         String prompt = (String) arguments.get("prompt");
-        String channel = (String) arguments.get("channel");
+        String targetType = asString(arguments.get("target_type"));
+        String targetRef = asString(arguments.get("target_ref"));
         String emailTo = (String) arguments.get("email_to");
         String emailCc = (String) arguments.get("email_cc");
 
@@ -85,22 +86,29 @@ public class CreateScheduleTool implements Tool {
         if (prompt == null || prompt.isBlank()) {
             return Mono.just(ToolResult.error("Missing required parameter: prompt"));
         }
-        if (channel == null || channel.isBlank()) {
-            return Mono.just(ToolResult.error("Missing required parameter: channel"));
+        if (targetType == null || targetType.isBlank()) {
+            return Mono.just(ToolResult.error("Missing required parameter: target_type (email/webhook)"));
         }
 
         try {
-            // 解析渠道：先按 name 查，再按 type 查
-            ChannelEntity channelEntity = resolveChannel(channel);
+            targetType = targetType.toLowerCase();
+            if (!"email".equals(targetType) && !"webhook".equals(targetType)) {
+                return Mono.just(ToolResult.error("target_type must be email or webhook"));
+            }
 
-            // email 渠道需要收件人
-            if ("email".equals(channelEntity.getType()) && (emailTo == null || emailTo.isBlank())) {
-                return Mono.just(ToolResult.error("email_to is required for email channels"));
+            if ("email".equals(targetType) && (emailTo == null || emailTo.isBlank())) {
+                return Mono.just(ToolResult.error("email_to is required for email target"));
+            }
+            if ("email".equals(targetType) && (targetRef == null || targetRef.isBlank())) {
+                targetRef = "email-default";
+            }
+            if ("webhook".equals(targetType) && (targetRef == null || targetRef.isBlank())) {
+                return Mono.just(ToolResult.error("target_ref is required for webhook target (alias)"));
             }
 
             var task = scheduledTaskService.create(
                     name, cron, prompt,
-                    channelEntity.getId(), channelEntity.getType(),
+                    targetRef, targetType,
                     emailTo, emailCc);
 
             log.info("Schedule created via tool: name={}, cron={}", name, cron);
@@ -108,7 +116,7 @@ public class CreateScheduleTool implements Tool {
                     "定时任务已创建：\n" +
                     "- 名称: " + task.getName() + "\n" +
                     "- Cron: " + task.getCronExpr() + "\n" +
-                    "- 渠道: " + channelEntity.getName() + " (" + channelEntity.getType() + ")\n" +
+                    "- 目标: " + task.getTargetType() + " (" + task.getTargetRef() + ")\n" +
                     "- 状态: 已启用"));
 
         } catch (Exception e) {
@@ -117,20 +125,11 @@ public class CreateScheduleTool implements Tool {
         }
     }
 
-    private ChannelEntity resolveChannel(String nameOrType) {
-        // 1. 按名称精确匹配
-        Optional<ChannelEntity> byName = channelRepository.findByName(nameOrType);
-        if (byName.isPresent()) {
-            return byName.get();
+    private String asString(Object value) {
+        if (value == null) {
+            return null;
         }
-
-        // 2. 按类型匹配第一个启用的
-        List<ChannelEntity> byType = channelRepository.findByEnabledTrueAndType(nameOrType);
-        if (!byType.isEmpty()) {
-            return byType.get(0);
-        }
-
-        throw new IllegalArgumentException("Channel not found: '" + nameOrType +
-                "'. Please create a channel in /channels first.");
+        String str = value.toString().trim();
+        return str.isEmpty() ? null : str;
     }
 }

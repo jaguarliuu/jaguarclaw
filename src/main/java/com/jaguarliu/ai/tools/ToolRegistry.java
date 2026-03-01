@@ -68,14 +68,18 @@ public class ToolRegistry implements SmartInitializingSingleton {
      * 获取工具
      */
     public Optional<Tool> get(String name) {
-        return Optional.ofNullable(registry.get(name));
+        Tool tool = registry.get(name);
+        if (tool == null || !tool.isEnabled()) {
+            return Optional.empty();
+        }
+        return Optional.of(tool);
     }
 
     /**
      * 列出所有工具定义（供 LLM Function Calling 使用）
      */
     public List<ToolDefinition> listDefinitions() {
-        return registry.values().stream()
+        return enabledTools()
                 .map(Tool::getDefinition)
                 .toList();
     }
@@ -84,7 +88,7 @@ public class ToolRegistry implements SmartInitializingSingleton {
      * 转换为 OpenAI Function Calling 格式
      */
     public List<Map<String, Object>> toOpenAiTools() {
-        return registry.values().stream()
+        return enabledTools()
                 .map(tool -> tool.getDefinition().toOpenAiFormat())
                 .toList();
     }
@@ -100,7 +104,7 @@ public class ToolRegistry implements SmartInitializingSingleton {
         if (allowedTools == null || allowedTools.isEmpty()) {
             return toOpenAiTools();
         }
-        return registry.values().stream()
+        return enabledTools()
                 .filter(tool -> allowedTools.contains(tool.getName()))
                 .map(tool -> tool.getDefinition().toOpenAiFormat())
                 .toList();
@@ -116,7 +120,7 @@ public class ToolRegistry implements SmartInitializingSingleton {
         if (excludedMcpServers == null || excludedMcpServers.isEmpty()) {
             return toOpenAiTools();
         }
-        return registry.values().stream()
+        return enabledTools()
                 .filter(tool -> {
                     String serverName = tool.getMcpServerName();
                     return serverName == null || !excludedMcpServers.contains(serverName);
@@ -137,7 +141,7 @@ public class ToolRegistry implements SmartInitializingSingleton {
                 && (excludedMcpServers == null || excludedMcpServers.isEmpty())) {
             return toOpenAiTools();
         }
-        return registry.values().stream()
+        return enabledTools()
                 .filter(tool -> {
                     // skill 白名单过滤
                     if (allowedTools != null && !allowedTools.isEmpty()
@@ -168,7 +172,7 @@ public class ToolRegistry implements SmartInitializingSingleton {
         if (excludedMcpServers == null || excludedMcpServers.isEmpty()) {
             return listDefinitions();
         }
-        return registry.values().stream()
+        return enabledTools()
                 .filter(tool -> {
                     String serverName = tool.getMcpServerName();
                     return serverName == null || !excludedMcpServers.contains(serverName);
@@ -181,14 +185,14 @@ public class ToolRegistry implements SmartInitializingSingleton {
      * 检查工具是否存在
      */
     public boolean exists(String name) {
-        return registry.containsKey(name);
+        return get(name).isPresent();
     }
 
     /**
      * 获取已注册工具数量
      */
     public int size() {
-        return registry.size();
+        return (int) enabledTools().count();
     }
 
     // ==================== 渐进式加载方法 ====================
@@ -200,7 +204,7 @@ public class ToolRegistry implements SmartInitializingSingleton {
      * @return 工具列表
      */
     public List<Map<String, Object>> toOpenAiToolsProgressive(Set<String> l1ToolIds) {
-        return registry.values().stream()
+        return enabledTools()
                 .map(tool -> {
                     ToolDefinition def = tool.getDefinition();
                     if (l1ToolIds != null && l1ToolIds.contains(tool.getName())) {
@@ -224,7 +228,7 @@ public class ToolRegistry implements SmartInitializingSingleton {
             Set<String> excludedMcpServers,
             Set<String> l1ToolIds
     ) {
-        return registry.values().stream()
+        return enabledTools()
                 .filter(tool -> {
                     // 白名单过滤
                     if (allowedTools != null && !allowedTools.isEmpty()) {
@@ -255,7 +259,7 @@ public class ToolRegistry implements SmartInitializingSingleton {
      * 估算当前工具的 L0 总 token 数
      */
     public int estimateL0Tokens() {
-        return registry.values().stream()
+        return enabledTools()
                 .mapToInt(tool -> tool.getDefinition().estimateL0Tokens())
                 .sum();
     }
@@ -264,7 +268,7 @@ public class ToolRegistry implements SmartInitializingSingleton {
      * 估算给定 L1 工具集合的总 token 数
      */
     public int estimateProgressiveTokens(Set<String> l1ToolIds) {
-        return registry.values().stream()
+        return enabledTools()
                 .mapToInt(tool -> {
                     ToolDefinition def = tool.getDefinition();
                     if (l1ToolIds != null && l1ToolIds.contains(tool.getName())) {
@@ -273,5 +277,9 @@ public class ToolRegistry implements SmartInitializingSingleton {
                     return def.estimateL0Tokens();
                 })
                 .sum();
+    }
+
+    private java.util.stream.Stream<Tool> enabledTools() {
+        return registry.values().stream().filter(Tool::isEnabled);
     }
 }

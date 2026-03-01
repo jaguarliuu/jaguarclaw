@@ -26,7 +26,6 @@ const groups = computed(() => [
     items: [
       { id: 'nodes',       label: t('settings.nav.nodes') },
       { id: 'datasources', label: t('settings.nav.dataSources') },
-      { id: 'channels',    label: t('settings.nav.channels') },
     ]
   },
   {
@@ -112,11 +111,6 @@ function navigateTo(sectionId: string) {
                 <ellipse cx="8" cy="4" rx="5" ry="1.5" stroke="currentColor" stroke-width="1.4"/>
                 <path d="M3 4v4c0 .83 2.24 1.5 5 1.5S13 8.83 13 8V4" stroke="currentColor" stroke-width="1.4"/>
                 <path d="M3 8v4c0 .83 2.24 1.5 5 1.5S13 12.83 13 12V8" stroke="currentColor" stroke-width="1.4"/>
-              </svg>
-              <!-- Channels -->
-              <svg v-else-if="item.id === 'channels'" width="16" height="16" viewBox="0 0 16 16" fill="none" class="nav-icon">
-                <path d="M8 9v5M5.5 7C6.17 6.33 7.04 6 8 6s1.83.33 2.5 1M3.5 5C4.83 3.67 6.33 3 8 3s3.17.67 4.5 2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
-                <circle cx="8" cy="9" r="1" fill="currentColor"/>
               </svg>
               <!-- System -->
               <svg v-else-if="item.id === 'system'" width="16" height="16" viewBox="0 0 16 16" fill="none" class="nav-icon">

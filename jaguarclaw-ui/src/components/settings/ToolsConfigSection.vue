@@ -6,12 +6,13 @@ import ConfigCard from '@/components/common/ConfigCard.vue'
 import TrustedDomainsModal from './modals/TrustedDomainsModal.vue'
 import SearchProvidersModal from './modals/SearchProvidersModal.vue'
 import CommandSafetyModal from './modals/CommandSafetyModal.vue'
+import DeliveryConfigModal from './modals/DeliveryConfigModal.vue'
 
 const { config, loading, error, getConfig, saveConfig } = useToolConfig()
 const { t } = useI18n()
 
 // Modal state
-const activeModal = ref<'domains' | 'providers' | 'safety' | null>(null)
+const activeModal = ref<'domains' | 'providers' | 'safety' | 'delivery' | null>(null)
 
 // Save state
 const saving = ref(false)
@@ -38,6 +39,75 @@ const safetySummary = computed(() => {
   return `${toolsCount} tools, ${keywordsCount} keywords configured`
 })
 
+const deliverySummary = computed(() => {
+  if (!config.value) return ''
+  const { email, webhook } = currentDelivery()
+  const emailStatus = email?.enabled ? (email?.configured ? 'enabled' : 'enabled/not-configured') : 'disabled'
+  const webhookCount = webhook?.endpoints?.length || 0
+  const webhookStatus = webhook?.enabled ? `enabled (${webhookCount} endpoints)` : 'disabled'
+  return `Email: ${emailStatus}, Webhook: ${webhookStatus}`
+})
+
+function currentDelivery() {
+  return {
+    email: config.value?.delivery?.email || {
+      enabled: false,
+      host: '',
+      port: 587,
+      username: '',
+      from: '',
+      tls: true,
+      password: '',
+      configured: false
+    },
+    webhook: config.value?.delivery?.webhook || {
+      enabled: false,
+      configured: false,
+      endpoints: []
+    }
+  }
+}
+
+function currentDeliveryForSave() {
+  const { email, webhook } = currentDelivery()
+  return {
+    email: {
+      enabled: !!email.enabled,
+      host: email.host || '',
+      port: Number(email.port) || 587,
+      username: email.username || '',
+      from: email.from || '',
+      tls: email.tls ?? true,
+      password: email.password || ''
+    },
+    webhook: {
+      enabled: !!webhook.enabled,
+      endpoints: (webhook.endpoints || []).map(ep => ({
+        alias: ep.alias || '',
+        url: ep.url || '',
+        method: ep.method || 'POST',
+        trigger: ep.trigger,
+        enabled: ep.enabled ?? true,
+        headers: { ...(ep.headers || {}) }
+      }))
+    }
+  }
+}
+
+function currentDeliveryForModal() {
+  const { email, webhook } = currentDelivery()
+  return {
+    email: { ...email },
+    webhook: {
+      ...webhook,
+      endpoints: (webhook.endpoints || []).map(ep => ({
+        ...ep,
+        headers: { ...(ep.headers || {}) }
+      }))
+    }
+  }
+}
+
 async function handleSaveDomains(domains: string[]) {
   saving.value = true
   saveError.value = null
@@ -53,7 +123,8 @@ async function handleSaveDomains(domains: string[]) {
       hitl: {
         alwaysConfirmTools: Array.from(config.value?.hitl?.alwaysConfirmTools || []),
         dangerousKeywords: Array.from(config.value?.hitl?.dangerousKeywords || [])
-      }
+      },
+      delivery: currentDeliveryForSave()
     })
     await getConfig()
     saveSuccess.value = true
@@ -77,7 +148,8 @@ async function handleSaveProviders(providers: { type: string; apiKey: string; en
       hitl: {
         alwaysConfirmTools: Array.from(config.value?.hitl?.alwaysConfirmTools || []),
         dangerousKeywords: Array.from(config.value?.hitl?.dangerousKeywords || [])
-      }
+      },
+      delivery: currentDeliveryForSave()
     })
     await getConfig()
     saveSuccess.value = true
@@ -102,7 +174,58 @@ async function handleSaveSafety(data: { alwaysConfirmTools: string[]; dangerousK
         apiKey: '',
         enabled: p.enabled
       })) || [],
-      hitl: data
+      hitl: data,
+      delivery: currentDeliveryForSave()
+    })
+    await getConfig()
+    saveSuccess.value = true
+    activeModal.value = null
+    setTimeout(() => { saveSuccess.value = false }, 3000)
+  } catch (e) {
+    saveError.value = e instanceof Error ? e.message : t('sections.tools.errors.failedToSave')
+  } finally {
+    saving.value = false
+  }
+}
+
+async function handleSaveDelivery(data: {
+  email: {
+    enabled: boolean
+    host: string
+    port: number
+    username: string
+    from: string
+    tls: boolean
+    password: string
+  }
+  webhook: {
+    enabled: boolean
+    endpoints: Array<{
+      alias: string
+      url: string
+      method: string
+      trigger?: string
+      enabled: boolean
+      headers: Record<string, string>
+    }>
+  }
+}) {
+  saving.value = true
+  saveError.value = null
+  saveSuccess.value = false
+  try {
+    await saveConfig({
+      userDomains: Array.from(config.value?.trustedDomains.user || []),
+      searchProviders: config.value?.searchProviders.map(p => ({
+        type: p.type,
+        apiKey: '',
+        enabled: p.enabled
+      })) || [],
+      hitl: {
+        alwaysConfirmTools: Array.from(config.value?.hitl?.alwaysConfirmTools || []),
+        dangerousKeywords: Array.from(config.value?.hitl?.dangerousKeywords || [])
+      },
+      delivery: data
     })
     await getConfig()
     saveSuccess.value = true
@@ -168,6 +291,13 @@ onMounted(async () => {
           :badge="{ text: t('sections.tools.cards.securityBadge'), variant: 'warning' }"
           @click="activeModal = 'safety'"
         />
+
+        <ConfigCard
+          title="Delivery Tools"
+          description="Configure send_email and send_webhook tool visibility and targets."
+          :summary="deliverySummary"
+          @click="activeModal = 'delivery'"
+        />
       </div>
     </template>
 
@@ -200,6 +330,14 @@ onMounted(async () => {
       :dangerous-keywords="Array.from(config.hitl?.dangerousKeywords || [])"
       @close="activeModal = null"
       @save="handleSaveSafety"
+    />
+
+    <DeliveryConfigModal
+      v-if="activeModal === 'delivery' && config"
+      :email="currentDeliveryForModal().email"
+      :webhook="currentDeliveryForModal().webhook"
+      @close="activeModal = null"
+      @save="handleSaveDelivery"
     />
   </div>
 </template>

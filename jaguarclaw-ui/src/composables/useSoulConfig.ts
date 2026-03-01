@@ -55,16 +55,26 @@ export function useSoulConfig() {
     const pendingCallIds = new Set<string>()
 
     const offCall = onEvent('tool.call', (event) => {
-      if (event.payload.toolName === 'update_soul') {
-        pendingCallIds.add(event.payload.callId)
+      const payload = event.payload
+      if (payload && typeof payload === 'object' && 'toolName' in payload && 'callId' in payload) {
+        const toolName = String((payload as { toolName: unknown }).toolName)
+        const callId = String((payload as { callId: unknown }).callId)
+        if (toolName === 'update_soul') {
+          pendingCallIds.add(callId)
+        }
       }
     })
 
     const offResult = onEvent('tool.result', (event) => {
-      if (pendingCallIds.has(event.payload.callId)) {
-        pendingCallIds.delete(event.payload.callId)
-        if (event.payload.success) {
-          fetchConfig()
+      const payload = event.payload
+      if (payload && typeof payload === 'object' && 'callId' in payload) {
+        const callId = String((payload as { callId: unknown }).callId)
+        const success = Boolean((payload as { success?: unknown }).success)
+        if (pendingCallIds.has(callId)) {
+          pendingCallIds.delete(callId)
+          if (success) {
+            fetchConfig()
+          }
         }
       }
     })
