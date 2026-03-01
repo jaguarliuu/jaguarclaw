@@ -7,12 +7,14 @@ import com.jaguarliu.ai.gateway.rpc.model.RpcRequest;
 import com.jaguarliu.ai.gateway.rpc.model.RpcResponse;
 import com.jaguarliu.ai.gateway.ws.ConnectionManager;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
 import java.util.Map;
 
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class AgentDeleteHandler implements RpcHandler {
@@ -52,7 +54,8 @@ public class AgentDeleteHandler implements RpcHandler {
                 }
                 return RpcResponse.error(request.getId(), "INVALID_PARAMS", e.getMessage());
             } catch (Exception e) {
-                return RpcResponse.error(request.getId(), "INTERNAL_ERROR", e.getMessage());
+                log.error("agent.delete failed", e);
+                return RpcResponse.error(request.getId(), "INTERNAL_ERROR", "Failed to delete agent");
             }
         }).subscribeOn(Schedulers.boundedElastic());
     }
