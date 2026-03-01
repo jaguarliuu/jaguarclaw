@@ -139,6 +139,7 @@ export default {
         model: 'Model',
         status: 'Status',
         actions: 'Actions',
+        persona: 'Persona',
       },
       form: {
         nameLabel: 'Agent ID',
@@ -412,6 +413,7 @@ export default {
     },
     soul: {
       subtitle: "Configure your agent's personality and response style",
+      agentScopeLabel: 'Current Agent',
       loading: 'Loading configuration...',
       savedSuccess: 'Soul configuration saved successfully',
       savingBtn: 'Saving...',

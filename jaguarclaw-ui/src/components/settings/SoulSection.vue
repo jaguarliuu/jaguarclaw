@@ -1,13 +1,18 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { useSoulConfig, type SoulConfig } from '@/composables/useSoulConfig'
+import { useAgents } from '@/composables/useAgents'
 import { useI18n } from '@/i18n'
 
 const { t } = useI18n()
+const route = useRoute()
 
 const { config, loading, error, fetchConfig, saveConfig, watchSoulUpdates } = useSoulConfig()
+const { agents, defaultAgent, loadAgents } = useAgents()
 
 let stopWatcher: (() => void) | null = null
+const selectedAgentId = ref('main')
 
 const editConfig = ref<SoulConfig>({
   agentName: '',
@@ -40,6 +45,14 @@ const detailLevelOptions = computed(() => [
   { value: 'balanced', label: t('sections.soul.detail.balanced') },
   { value: 'detailed', label: t('sections.soul.detail.detailed') }
 ])
+
+const sortedAgents = computed(() => {
+  return [...agents.value].sort((a, b) => {
+    if (a.isDefault && !b.isDefault) return -1
+    if (!a.isDefault && b.isDefault) return 1
+    return a.createdAt.localeCompare(b.createdAt)
+  })
+})
 
 function syncFormFromConfig() {
   if (!config.value) return
@@ -93,7 +106,7 @@ async function handleSave() {
   saveSuccess.value = false
 
   try {
-    await saveConfig(editConfig.value)
+    await saveConfig(editConfig.value, selectedAgentId.value)
     saveSuccess.value = true
     setTimeout(() => {
       saveSuccess.value = false
@@ -105,23 +118,61 @@ async function handleSave() {
   }
 }
 
-onMounted(async () => {
-  await fetchConfig()
+async function loadAgentSoul(agentId: string) {
+  await fetchConfig(agentId)
   syncFormFromConfig()
-  stopWatcher = watchSoulUpdates()
+}
+
+function resolveRouteAgentId() {
+  const fromQuery = route.query.agentId
+  if (typeof fromQuery === 'string' && fromQuery.trim().length > 0) {
+    return fromQuery.trim()
+  }
+  return defaultAgent.value?.id || 'main'
+}
+
+onMounted(async () => {
+  await loadAgents()
+  selectedAgentId.value = resolveRouteAgentId()
+  await loadAgentSoul(selectedAgentId.value)
+  stopWatcher = watchSoulUpdates(() => {
+    void loadAgentSoul(selectedAgentId.value)
+  })
 })
 
 onUnmounted(() => {
   stopWatcher?.()
 })
+
+watch(selectedAgentId, async (agentId) => {
+  await loadAgentSoul(agentId)
+})
+
+watch(
+  () => route.query.agentId,
+  (value) => {
+    if (typeof value !== 'string' || !value.trim()) return
+    if (value !== selectedAgentId.value) {
+      selectedAgentId.value = value
+    }
+  },
+)
 </script>
 
 <template>
   <div class="soul-section">
     <header class="section-header">
-      <div>
+      <div class="header-left">
         <h2 class="section-title">{{ t('settings.nav.persona') }}</h2>
         <p class="section-subtitle">{{ t('sections.soul.subtitle') }}</p>
+      </div>
+      <div class="header-agent-select">
+        <label class="form-label" for="soul-agent-selector">{{ t('sections.soul.agentScopeLabel') }}</label>
+        <select id="soul-agent-selector" v-model="selectedAgentId" class="form-select">
+          <option v-for="agent in sortedAgents" :key="agent.id" :value="agent.id">
+            {{ agent.displayName || agent.name }}
+          </option>
+        </select>
       </div>
     </header>
 
@@ -129,7 +180,7 @@ onUnmounted(() => {
 
     <div v-if="error && !config" class="error-state">
       <p>{{ error }}</p>
-      <button class="retry-btn" @click="fetchConfig">{{ t('common.retry') }}</button>
+      <button class="retry-btn" @click="fetchConfig(selectedAgentId)">{{ t('common.retry') }}</button>
     </div>
 
     <template v-if="config">
@@ -317,7 +368,19 @@ onUnmounted(() => {
 }
 
 .section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
   margin-bottom: 24px;
+}
+
+.header-left {
+  min-width: 0;
+}
+
+.header-agent-select {
+  min-width: 220px;
 }
 
 .section-title {
@@ -394,6 +457,7 @@ onUnmounted(() => {
 }
 
 .form-input,
+.form-select,
 .form-textarea {
   width: 100%;
   padding: 10px 12px;
@@ -406,6 +470,7 @@ onUnmounted(() => {
 }
 
 .form-input:focus,
+.form-select:focus,
 .form-textarea:focus {
   outline: none;
   border-color: var(--color-black);
@@ -568,5 +633,16 @@ onUnmounted(() => {
 .save-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+@media (max-width: 768px) {
+  .section-header {
+    flex-direction: column;
+  }
+
+  .header-agent-select {
+    width: 100%;
+    min-width: 0;
+  }
 }
 </style>

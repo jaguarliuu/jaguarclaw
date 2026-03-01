@@ -52,7 +52,7 @@ const fileInputRef = ref<HTMLInputElement | null>(null)
 const isExpanded = ref(false)
 
 // Slash command autocomplete
-const { loadCommands, filterCommands, filterMentions } = useSlashCommands()
+const { loadCommands, filterCommands } = useSlashCommands()
 const { t } = useI18n()
 
 const showSlashMenu = ref(false)
@@ -295,7 +295,15 @@ function handleInput(e: Event) {
   if (val.startsWith('@')) {
     const query = val.substring(1).split(/\s/)[0] ?? ''
     if (!val.includes(' ')) {
-      slashItems.value = filterMentions(query)
+      const q = query.toLowerCase()
+      slashItems.value = enabledAgents.value
+        .map((agent) => ({
+          type: 'agent' as const,
+          name: agent.id,
+          description: agent.description || agent.displayName || agent.name,
+          displayName: '@' + agent.id,
+        }))
+        .filter((item) => !query || item.name.toLowerCase().includes(q) || item.description.toLowerCase().includes(q))
       showSlashMenu.value = slashItems.value.length > 0
       selectedIndex.value = 0
       return
