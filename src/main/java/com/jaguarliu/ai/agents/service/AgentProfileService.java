@@ -6,6 +6,9 @@ import com.jaguarliu.ai.agents.AgentConstants;
 import com.jaguarliu.ai.agents.AgentRegistry;
 import com.jaguarliu.ai.agents.entity.AgentProfileEntity;
 import com.jaguarliu.ai.agents.repository.AgentProfileRepository;
+import com.jaguarliu.ai.mcp.persistence.McpServerRepository;
+import com.jaguarliu.ai.memory.index.MemoryChunkEntity;
+import com.jaguarliu.ai.memory.index.MemoryChunkRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -32,6 +35,8 @@ public class AgentProfileService {
 
     private final AgentProfileRepository repository;
     private final AgentRegistry agentRegistry;
+    private final MemoryChunkRepository memoryChunkRepository;
+    private final McpServerRepository mcpServerRepository;
     private final ObjectMapper objectMapper;
 
     @Transactional(readOnly = true)
@@ -202,6 +207,10 @@ public class AgentProfileService {
         if (Boolean.TRUE.equals(entity.getIsDefault())) {
             throw new IllegalStateException("Cannot delete default agent");
         }
+
+        // cascade cleanup: memory chunks and MCP server configs
+        memoryChunkRepository.deleteByScopeAndAgentId(MemoryChunkEntity.SCOPE_AGENT, agentId);
+        mcpServerRepository.deleteByScopeAndAgentId("AGENT", agentId);
 
         repository.deleteById(agentId);
         agentRegistry.refresh();
