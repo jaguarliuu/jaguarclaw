@@ -1,12 +1,15 @@
 package com.jaguarliu.ai.agents;
 
+import com.jaguarliu.ai.agents.entity.AgentProfileEntity;
 import com.jaguarliu.ai.agents.model.AgentProfile;
+import com.jaguarliu.ai.agents.repository.AgentProfileRepository;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -14,7 +17,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Agent 注册中心
- * 管理所有 Agent Profile，提供按 agentId 查询能力
+ * DB-first + YAML fallback
  */
 @Slf4j
 @Component
@@ -22,33 +25,43 @@ import java.util.concurrent.ConcurrentHashMap;
 public class AgentRegistry {
 
     private final AgentsProperties agentsProperties;
+    private final AgentProfileRepository agentProfileRepository;
 
-    /**
-     * Agent Profile 映射表：agentId → AgentProfile
-     */
     private final Map<String, AgentProfile> registry = new ConcurrentHashMap<>();
 
-    /**
-     * 初始化：从配置加载所有 Agent Profile
-     */
     @PostConstruct
     public void init() {
-        Map<String, AgentProfile> profiles = agentsProperties.getProfiles();
+        refresh();
+    }
 
-        if (profiles == null || profiles.isEmpty()) {
-            // 没有配置时，创建默认的 main profile
-            log.info("No agent profiles configured, creating default 'main' profile");
-            AgentProfile defaultProfile = createDefaultProfile();
-            registry.put(AgentConstants.DEFAULT_AGENT_ID, defaultProfile);
+    /**
+     * 从 DB 重新加载所有 Agent Profile。
+     * CRUD 操作后调用此方法刷新内存缓存。
+     */
+    public synchronized void refresh() {
+        registry.clear();
+
+        List<AgentProfileEntity> dbProfiles = agentProfileRepository.findByEnabledTrueOrderByCreatedAtAsc();
+
+        if (!dbProfiles.isEmpty()) {
+            for (AgentProfileEntity entity : dbProfiles) {
+                AgentProfile profile = toAgentProfile(entity);
+                registry.put(entity.getId(), profile);
+            }
+            log.info("AgentRegistry refreshed from DB: {} profiles: {}", registry.size(), registry.keySet());
         } else {
-            // 从配置加载
-            for (Map.Entry<String, AgentProfile> entry : profiles.entrySet()) {
-                String agentId = entry.getKey();
-                AgentProfile profile = entry.getValue();
-                profile.setId(agentId); // 确保 id 与 key 一致
-                registry.put(agentId, profile);
-                log.debug("Loaded agent profile: {} (sandbox={}, canSpawn={})",
-                        agentId, profile.getSandbox(), profile.isCanSpawn());
+            // DB 无数据时，走 YAML fallback（保持向后兼容）
+            Map<String, AgentProfile> yamlProfiles = agentsProperties.getProfiles();
+            if (yamlProfiles != null && !yamlProfiles.isEmpty()) {
+                for (Map.Entry<String, AgentProfile> entry : yamlProfiles.entrySet()) {
+                    entry.getValue().setId(entry.getKey());
+                    registry.put(entry.getKey(), entry.getValue());
+                }
+                log.info("AgentRegistry loaded from YAML fallback: {} profiles", registry.size());
+            } else {
+                AgentProfile defaultProfile = createDefaultProfile();
+                registry.put(AgentConstants.DEFAULT_AGENT_ID, defaultProfile);
+                log.info("AgentRegistry created default 'main' profile");
             }
         }
 
@@ -60,29 +73,21 @@ public class AgentRegistry {
                 agentsProperties.setDefaultAgent(registry.keySet().iterator().next());
             }
         }
-
-        log.info("AgentRegistry initialized with {} profiles: {}, default={}",
-                registry.size(),
-                registry.keySet(),
-                agentsProperties.getDefaultAgent());
     }
 
-    /**
-     * 获取 Agent Profile
-     *
-     * @param agentId Agent ID
-     * @return Optional<AgentProfile>
-     */
+    private AgentProfile toAgentProfile(AgentProfileEntity entity) {
+        AgentProfile profile = new AgentProfile();
+        profile.setId(entity.getId());
+        profile.setSandbox("trusted");
+        profile.setWorkspace(entity.getWorkspacePath());
+        profile.setCanSpawn(true);
+        return profile;
+    }
+
     public Optional<AgentProfile> get(String agentId) {
         return Optional.ofNullable(registry.get(agentId));
     }
 
-    /**
-     * 获取 Agent Profile，不存在时返回默认
-     *
-     * @param agentId Agent ID，为 null 时返回默认
-     * @return AgentProfile
-     */
     public AgentProfile getOrDefault(String agentId) {
         if (agentId == null || agentId.isBlank()) {
             agentId = agentsProperties.getDefaultAgent();
@@ -90,69 +95,38 @@ public class AgentRegistry {
         return registry.getOrDefault(agentId, registry.get(agentsProperties.getDefaultAgent()));
     }
 
-    /**
-     * 获取默认 Agent Profile
-     */
     public AgentProfile getDefault() {
         return getOrDefault(null);
     }
 
-    /**
-     * 获取默认 Agent ID
-     */
     public String getDefaultAgentId() {
         return agentsProperties.getDefaultAgent();
     }
 
-    /**
-     * 检查 Agent 是否存在
-     */
     public boolean exists(String agentId) {
         return registry.containsKey(agentId);
     }
 
-    /**
-     * 获取所有已注册的 Agent ID
-     */
     public Set<String> listAgentIds() {
         return Collections.unmodifiableSet(registry.keySet());
     }
 
-    /**
-     * 获取 Lane 配置
-     */
     public AgentsProperties.LaneConfig getLaneConfig() {
         return agentsProperties.getLane();
     }
 
-    /**
-     * 验证 agentId 是否有效
-     * 用于 spawn 时校验目标 agent 是否可用
-     *
-     * @param agentId 要验证的 Agent ID
-     * @return true 如果有效
-     */
     public boolean isValidAgentId(String agentId) {
         if (agentId == null || agentId.isBlank()) {
-            return true; // 空值会使用默认
+            return true;
         }
         return registry.containsKey(agentId);
     }
 
-    /**
-     * 检查指定 agent 是否允许 spawn 子代理
-     *
-     * @param agentId Agent ID
-     * @return true 如果允许 spawn
-     */
     public boolean canSpawn(String agentId) {
         AgentProfile profile = getOrDefault(agentId);
         return profile != null && profile.isCanSpawn();
     }
 
-    /**
-     * 创建默认 Profile
-     */
     private AgentProfile createDefaultProfile() {
         AgentProfile profile = new AgentProfile();
         profile.setId(AgentConstants.DEFAULT_AGENT_ID);
@@ -160,7 +134,6 @@ public class AgentRegistry {
         profile.setWorkspace("./workspace");
         profile.setAuthDir("./.jaguarclaw/auth/main");
         profile.setCanSpawn(true);
-        // tools 保持默认（允许所有）
         return profile;
     }
 }

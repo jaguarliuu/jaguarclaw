@@ -3,6 +3,7 @@ package com.jaguarliu.ai.agents.service;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jaguarliu.ai.agents.AgentConstants;
+import com.jaguarliu.ai.agents.AgentRegistry;
 import com.jaguarliu.ai.agents.entity.AgentProfileEntity;
 import com.jaguarliu.ai.agents.repository.AgentProfileRepository;
 import lombok.RequiredArgsConstructor;
@@ -30,6 +31,7 @@ public class AgentProfileService {
     private static final String DEFAULT_AGENT_DISPLAY_NAME = AgentConstants.DEFAULT_AGENT_DISPLAY_NAME;
 
     private final AgentProfileRepository repository;
+    private final AgentRegistry agentRegistry;
     private final ObjectMapper objectMapper;
 
     @Transactional(readOnly = true)
@@ -108,6 +110,7 @@ public class AgentProfileService {
                 .build();
 
         AgentProfileEntity saved = repository.save(entity);
+        agentRegistry.refresh();
         log.info("Created agent profile: id={}, name={}, default={}, enabled={}",
                 saved.getId(), saved.getName(), saved.getIsDefault(), saved.getEnabled());
         return saved;
@@ -181,6 +184,7 @@ public class AgentProfileService {
         }
 
         AgentProfileEntity saved = repository.save(entity);
+        agentRegistry.refresh();
         log.info("Updated agent profile: id={}, name={}, default={}, enabled={}",
                 saved.getId(), saved.getName(), saved.getIsDefault(), saved.getEnabled());
         return saved;
@@ -200,6 +204,7 @@ public class AgentProfileService {
         }
 
         repository.deleteById(agentId);
+        agentRegistry.refresh();
         log.info("Deleted agent profile: id={}, name={}", entity.getId(), entity.getName());
     }
 
