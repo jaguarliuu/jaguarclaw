@@ -6,6 +6,7 @@ import com.jaguarliu.ai.agents.entity.AgentProfileEntity;
 import com.jaguarliu.ai.agents.repository.AgentProfileRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -23,6 +24,10 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class AgentProfileService {
 
+    private static final String DEFAULT_AGENT_ID = "main";
+    private static final String DEFAULT_AGENT_NAME = "main";
+    private static final String DEFAULT_AGENT_DISPLAY_NAME = "Main Agent";
+
     private final AgentProfileRepository repository;
     private final ObjectMapper objectMapper;
 
@@ -34,6 +39,34 @@ public class AgentProfileService {
     @Transactional(readOnly = true)
     public Optional<AgentProfileEntity> get(String agentId) {
         return repository.findById(agentId);
+    }
+
+    @Transactional
+    public void ensureDefaultMainAgentExists() {
+        if (repository.count() > 0) {
+            return;
+        }
+
+        String workspacePath = normalizeWorkspacePath(DEFAULT_AGENT_NAME, null);
+        ensureWorkspaceDirectories(workspacePath);
+
+        AgentProfileEntity defaultAgent = AgentProfileEntity.builder()
+                .id(DEFAULT_AGENT_ID)
+                .name(DEFAULT_AGENT_NAME)
+                .displayName(DEFAULT_AGENT_DISPLAY_NAME)
+                .workspacePath(workspacePath)
+                .enabled(true)
+                .isDefault(true)
+                .allowedTools("[]")
+                .excludedTools("[]")
+                .build();
+
+        try {
+            repository.save(defaultAgent);
+            log.info("Bootstrapped default agent profile: id={}, workspace={}", DEFAULT_AGENT_ID, workspacePath);
+        } catch (DataIntegrityViolationException ex) {
+            log.debug("Default agent bootstrap skipped due to concurrent initialization", ex);
+        }
     }
 
     @Transactional
@@ -264,4 +297,3 @@ public class AgentProfileService {
     ) {
     }
 }
-

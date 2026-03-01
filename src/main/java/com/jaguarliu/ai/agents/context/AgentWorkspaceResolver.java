@@ -74,9 +74,14 @@ public class AgentWorkspaceResolver {
         final Path candidate;
         try {
             Path configured = Path.of(workspacePath.trim());
-            candidate = (configured.isAbsolute() ? configured : workspaceRootPath.resolve(configured))
-                    .toAbsolutePath()
-                    .normalize();
+            if (configured.isAbsolute()) {
+                candidate = configured.toAbsolutePath().normalize();
+            } else {
+                Path legacyRelative = configured.toAbsolutePath().normalize();
+                candidate = legacyRelative.startsWith(workspaceRootPath)
+                        ? legacyRelative
+                        : workspaceRootPath.resolve(configured).toAbsolutePath().normalize();
+            }
         } catch (InvalidPathException ex) {
             throw new IllegalArgumentException("Invalid workspacePath: " + workspacePath, ex);
         }
