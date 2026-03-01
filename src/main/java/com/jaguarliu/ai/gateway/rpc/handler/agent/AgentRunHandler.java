@@ -1,5 +1,7 @@
 package com.jaguarliu.ai.gateway.rpc.handler.agent;
 
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import com.jaguarliu.ai.gateway.events.AgentEvent;
 import com.jaguarliu.ai.gateway.events.EventBus;
 import com.jaguarliu.ai.gateway.rpc.RpcHandler;
@@ -41,7 +43,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
+import java.time.Duration;
 
 /**
  * agent.run 处理器
@@ -80,7 +82,10 @@ public class AgentRunHandler implements RpcHandler {
     /**
      * 每个 session 的锁对象
      */
-    private final Map<String, Object> sessionLocks = new ConcurrentHashMap<>();
+    private final Cache<String, Object> sessionLocks = Caffeine.newBuilder()
+            .maximumSize(10_000)
+            .expireAfterAccess(Duration.ofMinutes(30))
+            .build();
 
     @Override
     public String getMethod() {
@@ -179,7 +184,7 @@ public class AgentRunHandler implements RpcHandler {
                     routeDecision.mentionedAgentId(), resolvedAgentId);
         }
 
-        Object lock = sessionLocks.computeIfAbsent(resolvedSessionId, k -> new Object());
+        Object lock = sessionLocks.get(resolvedSessionId, k -> new Object());
         synchronized (lock) {
             long sequence = sessionLaneManager.nextSequence(resolvedSessionId);
             RunEntity run = runService.create(resolvedSessionId, routedPrompt, resolvedAgentId, principalId);
