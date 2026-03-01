@@ -21,6 +21,9 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 public class MemoryChunkEntity {
 
+    public static final String SCOPE_GLOBAL = "GLOBAL";
+    public static final String SCOPE_AGENT = "AGENT";
+
     @Id
     private String id;
 
@@ -36,6 +39,13 @@ public class MemoryChunkEntity {
     @Column(nullable = false, columnDefinition = "TEXT")
     private String content;
 
+    @Builder.Default
+    @Column(name = "scope", nullable = false, length = 16)
+    private String scope = SCOPE_GLOBAL;
+
+    @Column(name = "agent_id", length = 64)
+    private String agentId;
+
     // embedding 和 tsv 由 Native Query 操作，不映射到 JPA
     // tsv 由数据库触发器自动填充
 
@@ -47,6 +57,9 @@ public class MemoryChunkEntity {
 
     @PrePersist
     protected void onCreate() {
+        if (scope == null || scope.isBlank()) {
+            scope = SCOPE_GLOBAL;
+        }
         createdAt = LocalDateTime.now();
         updatedAt = LocalDateTime.now();
     }

@@ -6,6 +6,11 @@ import com.jaguarliu.ai.datasource.domain.SchemaMetadata;
 import com.jaguarliu.ai.heartbeat.HeartbeatConfigService;
 import com.jaguarliu.ai.mcp.prompt.McpPromptProvider;
 import com.jaguarliu.ai.memory.search.MemorySearchService;
+import com.jaguarliu.ai.runtime.prompt.KernelPromptFacet;
+import com.jaguarliu.ai.runtime.prompt.MemoryPromptFacet;
+import com.jaguarliu.ai.runtime.prompt.PromptAssemblyContext;
+import com.jaguarliu.ai.runtime.prompt.SoulPromptFacet;
+import com.jaguarliu.ai.runtime.prompt.ToolPromptFacet;
 import com.jaguarliu.ai.skills.index.SkillIndexBuilder;
 import com.jaguarliu.ai.soul.SoulConfigService;
 import com.jaguarliu.ai.tools.ToolDefinition;
@@ -56,6 +61,14 @@ public class SystemPromptBuilder {
     @Value("${tools.workspace:./workspace}")
     private String workspace;
 
+    @Value("${agent.custom-system-prompt:}")
+    private String customSystemPrompt;
+
+    private final KernelPromptFacet kernelPromptFacet;
+    private final SoulPromptFacet soulPromptFacet;
+    private final ToolPromptFacet toolPromptFacet;
+    private final MemoryPromptFacet memoryPromptFacet;
+
     // 身份段落
     private static final String IDENTITY_SECTION = """
         You are JaguarClaw, an AI coding assistant. You help users with software engineering tasks including:
@@ -78,40 +91,43 @@ public class SystemPromptBuilder {
         - Respect file system boundaries (stay within workspace when possible)
         """;
 
-    // 子代理策略段落
+    // Worker 执行策略段落（兼容 sessions_spawn）
     private static final String SUBAGENT_SECTION = """
-        ## SubAgent (sessions_spawn)
+        ## Worker Task Execution (sessions_spawn)
 
-        You have the ability to spawn SubAgents — independent assistants that execute tasks asynchronously \
+        You have the ability to spawn worker tasks — independent executions that run asynchronously \
         in isolated sessions. Use the `sessions_spawn` tool to delegate work.
 
-        **When to use SubAgents:**
+        This is a **worker execution mechanism**, not the multi-agent architecture layer.
+        Multi-agent means peer agents selected by `agentId`; `sessions_spawn` only handles async delegation.
+
+        **When to use worker tasks:**
         - **Long-running tasks**: Tasks that may take significant time (network requests, large file processing, \
-        complex computations). Spawn a subagent so the user can continue chatting.
-        - **Parallel independent tasks**: Multiple tasks with no dependencies between them. Spawn one subagent \
+        complex computations). Spawn a worker so the user can continue chatting.
+        - **Parallel independent tasks**: Multiple tasks with no dependencies between them. Spawn one worker \
         per task to run them concurrently.
         - **Isolated context tasks**: Tasks that benefit from a clean, focused context (e.g., researching a \
         specific topic, generating a standalone artifact).
 
-        **Examples of good subagent use:**
-        - "Monitor this URL every 30 seconds for 5 minutes" → spawn a subagent for the monitoring
-        - "Analyze these 3 log files for errors" → spawn 3 subagents, one per file
-        - "Research best practices for X while I work on Y" → spawn a subagent for the research
-        - "Run these tests and report back" → spawn a subagent for test execution
+        **Examples of good worker usage:**
+        - "Monitor this URL every 30 seconds for 5 minutes" → spawn a worker for monitoring
+        - "Analyze these 3 log files for errors" → spawn 3 workers, one per file
+        - "Research best practices for X while I work on Y" → spawn a worker for research
+        - "Run these tests and report back" → spawn a worker for test execution
 
-        **When NOT to use SubAgents:**
+        **When NOT to use worker tasks:**
         - Simple, fast operations (reading a file, quick calculations)
         - Tasks that require interactive back-and-forth with the user
         - Tasks that depend on the result of your current work
 
         **How it works:**
         1. Call `sessions_spawn` with a clear `task` description
-        2. The subagent runs independently; you'll be notified when it completes
+        2. The worker runs independently; you'll be notified when it completes
         3. Results are automatically announced back to the current session
-        4. You can continue responding to the user while subagents work
+        4. You can continue responding to the user while workers run
 
-        **Important**: Be proactive about using subagents. When you identify a task that fits the criteria above, \
-        spawn a subagent without waiting for explicit instructions. Explain to the user what you've delegated.
+        **Important**: Be proactive about using worker tasks. When you identify a task that fits the criteria above, \
+        spawn a worker without waiting for explicit instructions. Explain to the user what you've delegated.
         """;
 
     // 自适应规划协议段落
@@ -151,6 +167,11 @@ public class SystemPromptBuilder {
         this.soulConfigService = soulConfigService;
         this.dataSourceService = dataSourceService;
         this.heartbeatConfigService = heartbeatConfigService;
+
+        this.kernelPromptFacet = new KernelPromptFacet();
+        this.soulPromptFacet = new SoulPromptFacet(soulConfigService);
+        this.toolPromptFacet = new ToolPromptFacet(toolRegistry);
+        this.memoryPromptFacet = new MemoryPromptFacet(memorySearchService);
     }
 
     /**
@@ -178,114 +199,41 @@ public class SystemPromptBuilder {
      * 构建系统提示（完整版本，支持所有参数）
      */
     public String build(PromptMode mode, Set<String> allowedTools, Set<String> excludedMcpServers, String dataSourceId) {
+        return build(mode, allowedTools, excludedMcpServers, dataSourceId, "main");
+    }
+
+    /**
+     * 构建系统提示（支持 agentId，用于多 Agent 作用域）
+     */
+    public String build(PromptMode mode, Set<String> allowedTools, Set<String> excludedMcpServers, String dataSourceId, String agentId) {
         if (mode == PromptMode.NONE) {
             return "You are JaguarClaw, an AI coding assistant.";
         }
 
-        StringBuilder sb = new StringBuilder();
+        PromptAssemblyContext context = new PromptAssemblyContext(
+                mode, allowedTools, excludedMcpServers, dataSourceId, agentId
+        );
 
-        // 1. Identity
-        sb.append(IDENTITY_SECTION.trim());
-        sb.append("\n\n");
+        java.util.Map<String, String> blocks = new java.util.HashMap<>();
+        blocks.put("IDENTITY", IDENTITY_SECTION.trim());
+        blocks.put("SOUL", soulPromptFacet.supports(context) ? soulPromptFacet.render(context) : "");
+        blocks.put("TOOLS", toolPromptFacet.supports(context) ? toolPromptFacet.render(context) : "");
+        blocks.put("SAFETY", mode == PromptMode.FULL ? SAFETY_SECTION.trim() + "\n\n" : "");
+        blocks.put("PLANNING", mode == PromptMode.FULL ? PLANNING_SECTION.trim() + "\n\n" : "");
+        blocks.put("SUBAGENT", mode == PromptMode.FULL && hasSessionsSpawnTool(allowedTools)
+                ? SUBAGENT_SECTION.trim() + "\n\n" : "");
+        blocks.put("MEMORY", memoryPromptFacet.supports(context) ? memoryPromptFacet.render(context) : "");
+        blocks.put("HEARTBEAT", mode == PromptMode.FULL ? buildHeartbeatSection(context.getAgentId()) : "");
+        blocks.put("SKILLS", mode == PromptMode.FULL ? buildSkillsSection(context.getAgentId()) : "");
+        blocks.put("WORKSPACE", buildWorkspaceSection());
+        blocks.put("DATASOURCE", mode == PromptMode.FULL && dataSourceId != null && !dataSourceId.isBlank()
+                ? buildDataSourceSection(dataSourceId) : "");
+        blocks.put("DATETIME", mode == PromptMode.FULL ? buildDateTimeSection() : "");
+        blocks.put("RUNTIME", buildRuntimeSection(mode));
+        blocks.put("MCP", mode == PromptMode.FULL ? buildMcpSection(excludedMcpServers) : "");
+        blocks.put("CUSTOM", mode == PromptMode.FULL ? buildCustomSection() : "");
 
-        // 1.5 Soul Configuration (only in FULL mode)
-        if (mode == PromptMode.FULL) {
-            String soulSection = buildSoulSection();
-            if (!soulSection.isEmpty()) {
-                sb.append(soulSection);
-            }
-        }
-
-        // 2. Tooling (SKILL 模式跳过——工具定义已通过 tools 参数传递给 LLM)
-        if (mode != PromptMode.SKILL) {
-            sb.append(buildToolingSection(allowedTools, excludedMcpServers));
-        }
-
-        // 3. Safety (only in FULL mode)
-        if (mode == PromptMode.FULL) {
-            sb.append(SAFETY_SECTION.trim());
-            sb.append("\n\n");
-        }
-
-        // 3.3 Planning Protocol (only in FULL mode)
-        if (mode == PromptMode.FULL) {
-            sb.append(PLANNING_SECTION.trim());
-            sb.append("\n\n");
-        }
-
-        // 3.5 SubAgent guidance (only in FULL mode, when sessions_spawn tool is available)
-        if (mode == PromptMode.FULL && hasSessionsSpawnTool(allowedTools)) {
-            sb.append(SUBAGENT_SECTION.trim());
-            sb.append("\n\n");
-        }
-
-        // 4. Memory (only in FULL mode)
-        if (mode == PromptMode.FULL) {
-            sb.append(buildMemorySection());
-        }
-
-        // 4.5 Heartbeat (only in FULL mode)
-        if (mode == PromptMode.FULL) {
-            String heartbeatSection = buildHeartbeatSection();
-            if (!heartbeatSection.isEmpty()) {
-                sb.append(heartbeatSection);
-            }
-        }
-
-        // 5. Skills (only in FULL mode, when available)
-        if (mode == PromptMode.FULL) {
-            String skillsSection = buildSkillsSection();
-            if (!skillsSection.isEmpty()) {
-                sb.append(skillsSection);
-            }
-        }
-
-        // 6. Workspace
-        sb.append(buildWorkspaceSection());
-
-        // 6.5. DataSource (only in FULL mode, when dataSourceId is provided)
-        if (mode == PromptMode.FULL && dataSourceId != null && !dataSourceId.isBlank()) {
-            String dataSourceSection = buildDataSourceSection(dataSourceId);
-            if (!dataSourceSection.isEmpty()) {
-                sb.append(dataSourceSection);
-            }
-        }
-
-        // 7. Current Date & Time (only in FULL mode)
-        if (mode == PromptMode.FULL) {
-            sb.append(buildDateTimeSection());
-        }
-
-        // 8. Runtime
-        sb.append(buildRuntimeSection(mode));
-
-        // 9. MCP Server Capabilities (only in FULL mode)
-        if (mode == PromptMode.FULL) {
-            mcpPromptProvider.ifPresent(provider -> {
-                String mcpAdditions = provider.getSystemPromptAdditions(excludedMcpServers);
-                if (!mcpAdditions.isEmpty()) {
-                    sb.append(mcpAdditions.trim());
-                    sb.append("\n\n");
-                }
-            });
-        }
-
-        return sb.toString().trim();
-    }
-
-    /**
-     * 构建 Soul 配置段落
-     */
-    private String buildSoulSection() {
-        try {
-            String soulPrompt = soulConfigService.generateSystemPrompt();
-            if (soulPrompt != null && !soulPrompt.isEmpty()) {
-                return soulPrompt.trim() + "\n\n";
-            }
-        } catch (Exception e) {
-            log.warn("Failed to build soul section", e);
-        }
-        return "";
+        return kernelPromptFacet.assemble(context, blocks).trim();
     }
 
     /**
@@ -300,41 +248,10 @@ public class SystemPromptBuilder {
     }
 
     /**
-     * 构建工具段落
-     */
-    private String buildToolingSection(Set<String> allowedTools, Set<String> excludedMcpServers) {
-        List<ToolDefinition> tools = toolRegistry.listDefinitions(excludedMcpServers);
-
-        if (tools.isEmpty()) {
-            return "";
-        }
-
-        StringBuilder sb = new StringBuilder();
-        sb.append("## Available Tools\n\n");
-        sb.append("You can use the following tools to help complete tasks:\n\n");
-
-        for (ToolDefinition tool : tools) {
-            // 如果有白名单且当前工具不在白名单中，跳过
-            if (allowedTools != null && !allowedTools.contains(tool.getName())) {
-                continue;
-            }
-
-            sb.append(String.format("- **%s**: %s", tool.getName(), tool.getDescription()));
-            if (tool.isHitl()) {
-                sb.append(" _(requires confirmation)_");
-            }
-            sb.append("\n");
-        }
-
-        sb.append("\nUse tools when they help accomplish the task. Always explain what you're doing.\n\n");
-        return sb.toString();
-    }
-
-    /**
      * 构建技能段落
      */
-    private String buildSkillsSection() {
-        String skillIndex = skillIndexBuilder.buildIndex();
+    private String buildSkillsSection(String agentId) {
+        String skillIndex = skillIndexBuilder.buildIndex(agentId);
 
         if (skillIndex.isEmpty()) {
             return "";
@@ -353,21 +270,43 @@ public class SystemPromptBuilder {
         sb.append("- Do NOT skip skill activation to save a step — the quality improvement is significant\n\n");
 
         // 附加技能索引（只有 XML 部分，说明已在上面）
-        sb.append(skillIndexBuilder.buildCompactIndex());
+        sb.append(skillIndexBuilder.buildCompactIndex(agentId));
         sb.append("\n\n");
 
         return sb.toString();
     }
 
+    private String buildMcpSection(Set<String> excludedMcpServers) {
+        if (mcpPromptProvider.isEmpty()) {
+            return "";
+        }
+        String mcpAdditions = mcpPromptProvider.get().getSystemPromptAdditions(excludedMcpServers);
+        if (mcpAdditions == null || mcpAdditions.isBlank()) {
+            return "";
+        }
+        return mcpAdditions.trim() + "\n\n";
+    }
+
+    private String buildCustomSection() {
+        if (customSystemPrompt == null || customSystemPrompt.isBlank()) {
+            return "";
+        }
+        return "## Custom Instructions\n\n" + customSystemPrompt.trim() + "\n\n";
+    }
+
+    int kernelTemplateBuildCount(PromptMode mode) {
+        return kernelPromptFacet.getTemplateBuildCount(mode);
+    }
+
     /**
      * 构建 Heartbeat 段落
      */
-    private String buildHeartbeatSection() {
+    private String buildHeartbeatSection(String agentId) {
         if (heartbeatConfigService.isEmpty()) {
             return "";
         }
         try {
-            java.util.Map<String, Object> config = heartbeatConfigService.get().getConfig();
+            java.util.Map<String, Object> config = heartbeatConfigService.get().getConfig(agentId);
             Boolean enabled = (Boolean) config.getOrDefault("enabled", true);
             if (!Boolean.TRUE.equals(enabled)) {
                 return "";
@@ -403,17 +342,23 @@ public class SystemPromptBuilder {
     private String buildMemorySection() {
         StringBuilder sb = new StringBuilder();
         sb.append("## Memory\n\n");
-        sb.append("You have access to a **global, cross-session** memory system:\n\n");
-        sb.append("- `memory_search(query)`: Search all historical memories (preferences, facts, past summaries)\n");
-        sb.append("- `memory_get(path)`: Read specific memory files\n");
-        sb.append("- `memory_write(content, target)`: Save important information\n");
+        sb.append("You have access to a **dual-scope memory system** (global + agent-private):\n\n");
+        sb.append("- `memory_search(query, scope?)`\n");
+        sb.append("  - scope=\"both\" (default) → current agent + global\n");
+        sb.append("  - scope=\"agent\" → current agent only\n");
+        sb.append("  - scope=\"global\" → shared only\n");
+        sb.append("- `memory_write(content, target, scope?)`\n");
+        sb.append("  - scope=\"agent\" (default) → current agent private\n");
+        sb.append("  - scope=\"global\" → shared across agents\n");
+        sb.append("- `read_file(path)`: Read specific memory files\n");
         sb.append("  - target=\"core\" → MEMORY.md (long-term: preferences, constraints)\n");
         sb.append("  - target=\"daily\" → Today's log (session summaries, work records)\n\n");
-        sb.append("**Key point**: Memories are global and cross-session. Information saved today ");
-        sb.append("will be searchable in all future conversations. This is a personal assistant, not multi-tenant.\n\n");
+        sb.append("**Key point**: Global memory is cross-session and shared by all agents; ");
+        sb.append("agent memory is isolated to each agent profile.\n\n");
         sb.append("**When to use memory:**\n");
         sb.append("- Search for relevant context at conversation start\n");
-        sb.append("- Save user preferences/constraints to core memory\n");
+        sb.append("- Save stable user preferences to global core memory\n");
+        sb.append("- Save agent-specific strategy/working notes to agent scope\n");
         sb.append("- Summarize significant tasks to daily log\n\n");
         return sb.toString();
     }

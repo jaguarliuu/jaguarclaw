@@ -46,7 +46,14 @@ public class SkillIndexBuilder {
      * @return 格式化的索引字符串，如果没有可用 skill 返回空字符串
      */
     public String buildIndex() {
-        List<SkillEntry> available = registry.getAvailable();
+        return buildIndex("main");
+    }
+
+    /**
+     * 构建 skill 索引（按 agent 作用域）
+     */
+    public String buildIndex(String agentId) {
+        List<SkillEntry> available = registry.getAvailable(agentId);
 
         if (available.isEmpty()) {
             return "";
@@ -106,7 +113,14 @@ public class SkillIndexBuilder {
      * 构建紧凑索引（只有 XML 部分，不含说明）
      */
     public String buildCompactIndex() {
-        List<SkillEntry> available = registry.getAvailable();
+        return buildCompactIndex("main");
+    }
+
+    /**
+     * 构建紧凑索引（按 agent 作用域）
+     */
+    public String buildCompactIndex(String agentId) {
+        List<SkillEntry> available = registry.getAvailable(agentId);
 
         if (available.isEmpty()) {
             return "";
@@ -131,7 +145,14 @@ public class SkillIndexBuilder {
      * 构建 skill 列表（用于 UI 展示或补全）
      */
     public List<SkillSummary> buildSkillList() {
-        return registry.getAvailable().stream()
+        return buildSkillList("main");
+    }
+
+    /**
+     * 构建 skill 列表（按 agent 作用域）
+     */
+    public List<SkillSummary> buildSkillList(String agentId) {
+        return registry.getAvailable(agentId).stream()
                 .sorted(Comparator.comparingInt(e -> e.getMetadata().getPriority()))
                 .map(entry -> new SkillSummary(
                         entry.getMetadata().getName(),
@@ -145,7 +166,14 @@ public class SkillIndexBuilder {
      * 计算索引的 token 成本
      */
     public int calculateIndexCost() {
-        int skillTokens = registry.getAvailable().stream()
+        return calculateIndexCost("main");
+    }
+
+    /**
+     * 计算索引的 token 成本（按 agent 作用域）
+     */
+    public int calculateIndexCost(String agentId) {
+        int skillTokens = registry.getAvailable(agentId).stream()
                 .mapToInt(SkillEntry::getTokenCost)
                 .sum();
         return BASE_OVERHEAD_TOKENS + skillTokens;
@@ -155,8 +183,15 @@ public class SkillIndexBuilder {
      * 获取索引统计信息
      */
     public IndexStats getStats() {
-        List<SkillEntry> available = registry.getAvailable();
-        int totalCost = calculateIndexCost();
+        return getStats("main");
+    }
+
+    /**
+     * 获取索引统计信息（按 agent 作用域）
+     */
+    public IndexStats getStats(String agentId) {
+        List<SkillEntry> available = registry.getAvailable(agentId);
+        int totalCost = calculateIndexCost(agentId);
         int includedCount = 0;
         int usedTokens = BASE_OVERHEAD_TOKENS;
 

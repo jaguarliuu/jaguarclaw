@@ -1,10 +1,10 @@
 package com.jaguarliu.ai.soul;
 
+import com.jaguarliu.ai.agents.context.AgentWorkspaceResolver;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import jakarta.annotation.PostConstruct;
@@ -15,42 +15,46 @@ import java.nio.file.Path;
 import java.util.*;
 
 /**
- * Soul 配置服务 — 文件存储（{configDir}/soul.json）
+ * Soul 配置服务（Agent 作用域）
+ * 文件存储在：{workspace}/agents/{agentId}/soul.json 与 SOUL.md
  */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class SoulConfigService {
 
-    @Value("${tools.workspace:./workspace}")
-    private String workspace;
-
     private final ObjectMapper objectMapper;
+    private final AgentWorkspaceResolver workspaceResolver;
 
-    private static final String SOUL_FILE = "soul.json";
+    private static final String SOUL_JSON_FILE = "soul.json";
+    private static final String SOUL_MD_FILE = "SOUL.md";
 
     @PostConstruct
     void init() {
-        Path path = soulPath();
-        if (!Files.exists(path)) {
-            saveConfig(defaultConfig());
-            log.info("Initialized default soul.json at {}", path);
-        }
+        ensureAgentDefaults("main");
     }
 
     /**
      * 获取配置 Map；文件不存在时返回默认值
      */
     public Map<String, Object> getConfig() {
-        Path path = soulPath();
+        return getConfig("main");
+    }
+
+    /**
+     * 获取指定 agent 的配置 Map；文件不存在时返回默认值
+     */
+    public Map<String, Object> getConfig(String agentId) {
+        String resolvedAgentId = workspaceResolver.normalizeAgentId(agentId);
+        Path path = soulJsonPath(resolvedAgentId);
         if (!Files.exists(path)) {
-            return defaultConfig();
+            return defaultConfig(resolvedAgentId);
         }
         try {
             return objectMapper.readValue(path.toFile(), new TypeReference<Map<String, Object>>() {});
         } catch (IOException e) {
             log.warn("Failed to read soul.json, returning defaults", e);
-            return defaultConfig();
+            return defaultConfig(resolvedAgentId);
         }
     }
 
@@ -58,11 +62,20 @@ public class SoulConfigService {
      * 持久化配置到 soul.json
      */
     public void saveConfig(Map<String, Object> configMap) {
-        Path path = soulPath();
+        saveConfig("main", configMap);
+    }
+
+    /**
+     * 持久化指定 agent 配置到 soul.json，并同步更新 SOUL.md
+     */
+    public void saveConfig(String agentId, Map<String, Object> configMap) {
+        String resolvedAgentId = workspaceResolver.normalizeAgentId(agentId);
+        Path path = soulJsonPath(resolvedAgentId);
         try {
             Files.createDirectories(path.getParent());
             objectMapper.writerWithDefaultPrettyPrinter().writeValue(path.toFile(), configMap);
-            log.info("Soul config saved: {}", configMap.get("agentName"));
+            syncSoulMarkdown(resolvedAgentId);
+            log.info("Soul config saved: agentId={}, agentName={}", resolvedAgentId, configMap.get("agentName"));
         } catch (IOException e) {
             log.error("Failed to save soul.json", e);
             throw new RuntimeException("Failed to save soul config", e);
@@ -73,7 +86,15 @@ public class SoulConfigService {
      * 生成系统提示词片段
      */
     public String generateSystemPrompt() {
-        Map<String, Object> soul = getConfig();
+        return generateSystemPrompt("main");
+    }
+
+    /**
+     * 生成指定 agent 的系统提示词片段
+     */
+    public String generateSystemPrompt(String agentId) {
+        String resolvedAgentId = workspaceResolver.normalizeAgentId(agentId);
+        Map<String, Object> soul = getConfig(resolvedAgentId);
         if (Boolean.FALSE.equals(soul.get("enabled"))) {
             return "";
         }
@@ -137,8 +158,37 @@ public class SoulConfigService {
         return prompt.toString();
     }
 
-    private Path soulPath() {
-        return Path.of(workspace).resolve(SOUL_FILE);
+    private void ensureAgentDefaults(String agentId) {
+        String resolvedAgentId = workspaceResolver.normalizeAgentId(agentId);
+        Path jsonPath = soulJsonPath(resolvedAgentId);
+        if (!Files.exists(jsonPath)) {
+            saveConfig(resolvedAgentId, defaultConfig(resolvedAgentId));
+            log.info("Initialized default soul.json at {}", jsonPath);
+            return;
+        }
+        Path mdPath = soulMdPath(resolvedAgentId);
+        if (!Files.exists(mdPath)) {
+            syncSoulMarkdown(resolvedAgentId);
+            log.info("Initialized default SOUL.md at {}", mdPath);
+        }
+    }
+
+    private void syncSoulMarkdown(String agentId) {
+        Path path = soulMdPath(agentId);
+        try {
+            Files.createDirectories(path.getParent());
+            Files.writeString(path, generateSystemPrompt(agentId));
+        } catch (IOException e) {
+            log.warn("Failed to sync SOUL.md for agentId={}", agentId, e);
+        }
+    }
+
+    private Path soulJsonPath(String agentId) {
+        return workspaceResolver.resolveAgentFile(agentId, SOUL_JSON_FILE);
+    }
+
+    private Path soulMdPath(String agentId) {
+        return workspaceResolver.resolveAgentFile(agentId, SOUL_MD_FILE);
     }
 
     @SuppressWarnings("unchecked")
@@ -149,9 +199,9 @@ public class SoulConfigService {
         return Collections.emptyList();
     }
 
-    private Map<String, Object> defaultConfig() {
+    private Map<String, Object> defaultConfig(String agentId) {
         Map<String, Object> config = new LinkedHashMap<>();
-        config.put("agentName", "JaguarClaw");
+        config.put("agentName", "main".equals(agentId) ? "JaguarClaw" : agentId);
         config.put("personality", "A helpful and professional AI assistant");
         config.put("traits", Collections.emptyList());
         config.put("responseStyle", "balanced");

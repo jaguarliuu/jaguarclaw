@@ -1,6 +1,7 @@
 package com.jaguarliu.ai.memory.store;
 
 import com.jaguarliu.ai.memory.MemoryProperties;
+import com.jaguarliu.ai.memory.model.MemoryScope;
 import com.jaguarliu.ai.tools.ToolsProperties;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
@@ -12,6 +13,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Stream;
 
@@ -37,11 +39,16 @@ public class MemoryStore {
     private final MemoryProperties memoryProperties;
     private final ToolsProperties toolsProperties;
 
+    private Path workspaceRoot;
     private Path memoryDir;
 
     @PostConstruct
     public void init() {
-        memoryDir = Path.of(toolsProperties.getWorkspace())
+        workspaceRoot = Path.of(toolsProperties.getWorkspace())
+                .toAbsolutePath()
+                .normalize();
+
+        memoryDir = workspaceRoot
                 .resolve(memoryProperties.getPath())
                 .toAbsolutePath()
                 .normalize();
@@ -65,26 +72,37 @@ public class MemoryStore {
      * 追加内容到核心记忆 MEMORY.md（全局长期记忆）
      */
     public void appendToCore(String content) throws IOException {
-        Path corePath = memoryDir.resolve("MEMORY.md");
+        appendToCore(content, null, MemoryScope.GLOBAL);
+    }
+
+    public void appendToCore(String content, String agentId, MemoryScope scope) throws IOException {
+        Path baseDir = resolveScopeDir(scope, agentId);
+        Path corePath = baseDir.resolve("MEMORY.md");
         appendToFile(corePath, content);
-        log.info("Appended to global MEMORY.md: {} chars", content.length());
+        log.info("Appended to {} MEMORY.md: {} chars", scope == MemoryScope.AGENT ? "agent" : "global", content.length());
     }
 
     /**
      * 追加内容到今天的日记文件（全局日记）
      */
     public void appendToDaily(String content) throws IOException {
+        appendToDaily(content, null, MemoryScope.GLOBAL);
+    }
+
+    public void appendToDaily(String content, String agentId, MemoryScope scope) throws IOException {
+        Path baseDir = resolveScopeDir(scope, agentId);
         String fileName = LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE) + ".md";
-        Path dailyPath = memoryDir.resolve(fileName);
+        Path dailyPath = baseDir.resolve(fileName);
         appendToFile(dailyPath, content);
-        log.info("Appended to global daily log {}: {} chars", fileName, content.length());
+        log.info("Appended to {} daily log {}: {} chars",
+                scope == MemoryScope.AGENT ? "agent" : "global", fileName, content.length());
     }
 
     /**
      * 追加内容到指定文件
      */
     public void appendToFile(Path filePath, String content) throws IOException {
-        validatePath(filePath);
+        validatePath(filePath, inferBaseDir(filePath));
 
         // 确保父目录存在
         Files.createDirectories(filePath.getParent());
@@ -105,8 +123,13 @@ public class MemoryStore {
      * @return 文件内容
      */
     public String read(String relativePath) throws IOException {
-        Path filePath = memoryDir.resolve(relativePath).normalize();
-        validatePath(filePath);
+        return read(relativePath, null, MemoryScope.GLOBAL);
+    }
+
+    public String read(String relativePath, String agentId, MemoryScope scope) throws IOException {
+        Path baseDir = resolveScopeDir(scope, agentId);
+        Path filePath = baseDir.resolve(relativePath).normalize();
+        validatePath(filePath, baseDir);
 
         if (!Files.exists(filePath)) {
             throw new IOException("Memory file not found: " + relativePath);
@@ -124,8 +147,13 @@ public class MemoryStore {
      * @return 指定范围的内容
      */
     public String readLines(String relativePath, int startLine, int limit) throws IOException {
-        Path filePath = memoryDir.resolve(relativePath).normalize();
-        validatePath(filePath);
+        return readLines(relativePath, startLine, limit, null, MemoryScope.GLOBAL);
+    }
+
+    public String readLines(String relativePath, int startLine, int limit, String agentId, MemoryScope scope) throws IOException {
+        Path baseDir = resolveScopeDir(scope, agentId);
+        Path filePath = baseDir.resolve(relativePath).normalize();
+        validatePath(filePath, baseDir);
 
         if (!Files.exists(filePath)) {
             throw new IOException("Memory file not found: " + relativePath);
@@ -146,18 +174,57 @@ public class MemoryStore {
      * 列出所有记忆文件（全局）
      */
     public List<MemoryFileInfo> listFiles() throws IOException {
-        if (!Files.exists(memoryDir)) {
+        return listFiles(MemoryScope.GLOBAL, null);
+    }
+
+    public List<MemoryFileInfo> listFiles(MemoryScope scope, String agentId) throws IOException {
+        MemoryScope resolvedScope = scope == null ? MemoryScope.GLOBAL : scope;
+        if (resolvedScope == MemoryScope.BOTH) {
+            List<MemoryFileInfo> merged = new ArrayList<>();
+            merged.addAll(listFiles(resolveScopeDir(MemoryScope.GLOBAL, agentId)));
+            merged.addAll(listFiles(resolveScopeDir(MemoryScope.AGENT, agentId)));
+            return merged.stream()
+                    .sorted((a, b) -> b.relativePath().compareTo(a.relativePath()))
+                    .toList();
+        }
+        return listFiles(resolveScopeDir(resolvedScope, agentId));
+    }
+
+    /**
+     * 检查核心记忆文件是否存在
+     */
+    public boolean coreMemoryExists() {
+        return coreMemoryExists(MemoryScope.GLOBAL, null);
+    }
+
+    public boolean coreMemoryExists(MemoryScope scope, String agentId) {
+        Path dir = resolveScopeDir(scope, agentId);
+        return Files.exists(dir.resolve("MEMORY.md"));
+    }
+
+    /**
+     * 路径安全校验
+     */
+    private void validatePath(Path filePath, Path baseDir) throws IOException {
+        Path normalized = filePath.toAbsolutePath().normalize();
+        if (!normalized.startsWith(baseDir)) {
+            throw new IOException("Access denied: path outside memory directory");
+        }
+    }
+
+    private List<MemoryFileInfo> listFiles(Path baseDir) throws IOException {
+        if (!Files.exists(baseDir)) {
             return List.of();
         }
 
-        try (Stream<Path> paths = Files.walk(memoryDir, 1)) {
+        try (Stream<Path> paths = Files.walk(baseDir, 1)) {
             return paths
                     .filter(Files::isRegularFile)
                     .filter(p -> p.toString().endsWith(".md"))
                     .map(p -> {
                         try {
                             return new MemoryFileInfo(
-                                    memoryDir.relativize(p).toString().replace('\\', '/'),
+                                    baseDir.relativize(p).toString().replace('\\', '/'),
                                     Files.size(p),
                                     Files.getLastModifiedTime(p).toMillis()
                             );
@@ -171,21 +238,45 @@ public class MemoryStore {
         }
     }
 
-    /**
-     * 检查核心记忆文件是否存在
-     */
-    public boolean coreMemoryExists() {
-        return Files.exists(memoryDir.resolve("MEMORY.md"));
+    private Path resolveScopeDir(MemoryScope scope, String agentId) {
+        MemoryScope resolvedScope = scope == null ? MemoryScope.GLOBAL : scope;
+        return switch (resolvedScope) {
+            case GLOBAL -> memoryDir;
+            case AGENT -> workspaceRoot
+                    .resolve("agents")
+                    .resolve(normalizeAgentId(agentId))
+                    .resolve(memoryProperties.getPath())
+                    .toAbsolutePath()
+                    .normalize();
+            case BOTH -> throw new IllegalArgumentException("BOTH scope is not supported for single-file operations");
+        };
     }
 
-    /**
-     * 路径安全校验
-     */
-    private void validatePath(Path filePath) throws IOException {
+    private Path inferBaseDir(Path filePath) {
         Path normalized = filePath.toAbsolutePath().normalize();
-        if (!normalized.startsWith(memoryDir)) {
-            throw new IOException("Access denied: path outside memory directory");
+        if (normalized.startsWith(memoryDir)) {
+            return memoryDir;
         }
+        if (normalized.startsWith(workspaceRoot.resolve("agents").toAbsolutePath().normalize())) {
+            int nameCount = normalized.getNameCount();
+            int baseCount = workspaceRoot.toAbsolutePath().normalize().getNameCount();
+            if (nameCount >= baseCount + 3) {
+                return workspaceRoot
+                        .resolve("agents")
+                        .resolve(normalized.getName(baseCount + 1).toString())
+                        .resolve(memoryProperties.getPath())
+                        .toAbsolutePath()
+                        .normalize();
+            }
+        }
+        return memoryDir;
+    }
+
+    private String normalizeAgentId(String agentId) {
+        if (agentId == null || agentId.isBlank()) {
+            return "main";
+        }
+        return agentId;
     }
 
     /**

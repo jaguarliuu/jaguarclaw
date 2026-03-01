@@ -27,7 +27,8 @@ public class SqliteMemoryChunkSearchOps implements MemoryChunkSearchOps {
     public List<Object[]> searchByFts(String query, int limit) {
         return em.createNativeQuery("""
                 SELECT mc.id, mc.file_path, mc.line_start, mc.line_end, mc.content,
-                       -bm25(memory_chunks_fts) AS rank
+                       -bm25(memory_chunks_fts) AS rank,
+                       mc.scope, mc.agent_id
                 FROM memory_chunks_fts fts
                 JOIN memory_chunks mc ON mc.id = fts.chunk_id
                 WHERE memory_chunks_fts MATCH :query

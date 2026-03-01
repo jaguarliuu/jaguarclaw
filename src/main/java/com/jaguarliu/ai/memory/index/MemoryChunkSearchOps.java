@@ -15,7 +15,9 @@ public interface MemoryChunkSearchOps {
      *
      * @param embedding 向量字符串，格式 [0.1,0.2,...]
      * @param limit     返回数量限制
-     * @return Object[] 数组：[id, file_path, line_start, line_end, content, similarity]
+     * @return Object[] 数组：
+     *         [id, file_path, line_start, line_end, content, similarity, scope, agent_id]
+     *         兼容旧实现时也允许只返回前 6 列
      */
     List<Object[]> searchByVector(String embedding, int limit);
 
@@ -24,7 +26,9 @@ public interface MemoryChunkSearchOps {
      *
      * @param query FTS 查询字符串
      * @param limit 返回数量限制
-     * @return Object[] 数组：[id, file_path, line_start, line_end, content, rank]
+     * @return Object[] 数组：
+     *         [id, file_path, line_start, line_end, content, rank, scope, agent_id]
+     *         兼容旧实现时也允许只返回前 6 列
      */
     List<Object[]> searchByFts(String query, int limit);
 

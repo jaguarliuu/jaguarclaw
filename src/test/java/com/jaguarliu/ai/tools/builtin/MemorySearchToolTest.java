@@ -1,8 +1,10 @@
 package com.jaguarliu.ai.tools.builtin;
 
+import com.jaguarliu.ai.memory.model.MemoryScope;
 import com.jaguarliu.ai.memory.search.MemorySearchService;
 import com.jaguarliu.ai.memory.search.SearchResult;
 import com.jaguarliu.ai.tools.ToolDefinition;
+import com.jaguarliu.ai.tools.ToolExecutionContext;
 import com.jaguarliu.ai.tools.ToolResult;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -48,7 +50,7 @@ class MemorySearchToolTest {
         }
 
         @Test
-        @DisplayName("包含 query 参数定义")
+        @DisplayName("包含 query/scope 参数定义")
         void hasQueryParameter() {
             ToolDefinition def = tool.getDefinition();
             Map<String, Object> params = def.getParameters();
@@ -59,6 +61,7 @@ class MemorySearchToolTest {
             @SuppressWarnings("unchecked")
             Map<String, Object> properties = (Map<String, Object>) params.get("properties");
             assertTrue(properties.containsKey("query"));
+            assertTrue(properties.containsKey("scope"));
 
             @SuppressWarnings("unchecked")
             List<String> required = (List<String>) params.get("required");
@@ -71,6 +74,11 @@ class MemorySearchToolTest {
     @Nested
     @DisplayName("execute")
     class ExecuteTests {
+
+        @AfterEach
+        void tearDown() {
+            ToolExecutionContext.clear();
+        }
 
         @Test
         @DisplayName("query 为 null 时返回错误")
@@ -95,7 +103,7 @@ class MemorySearchToolTest {
         @Test
         @DisplayName("无搜索结果时返回提示信息")
         void noResultsReturnsMessage() {
-            when(searchService.search("unknown query")).thenReturn(List.of());
+            when(searchService.search("unknown query", MemoryScope.BOTH, "main")).thenReturn(List.of());
 
             ToolResult result = tool.execute(Map.of("query", "unknown query")).block();
 
@@ -125,7 +133,7 @@ class MemorySearchToolTest {
                             .source("fts")
                             .build()
             );
-            when(searchService.search("Python")).thenReturn(searchResults);
+            when(searchService.search("Python", MemoryScope.BOTH, "main")).thenReturn(searchResults);
 
             ToolResult result = tool.execute(Map.of("query", "Python")).block();
 
@@ -140,9 +148,22 @@ class MemorySearchToolTest {
         }
 
         @Test
+        @DisplayName("scope=agent 使用当前 agentId 过滤")
+        void usesAgentScopeWithCurrentAgentId() {
+            ToolExecutionContext.set(ToolExecutionContext.builder().agentId("agent-a").build());
+            when(searchService.search("Python", MemoryScope.AGENT, "agent-a")).thenReturn(List.of());
+
+            ToolResult result = tool.execute(Map.of("query", "Python", "scope", "agent")).block();
+
+            assertNotNull(result);
+            assertTrue(result.isSuccess());
+            verify(searchService).search("Python", MemoryScope.AGENT, "agent-a");
+        }
+
+        @Test
         @DisplayName("搜索服务异常时返回错误")
         void searchExceptionReturnsError() {
-            when(searchService.search(anyString()))
+            when(searchService.search(anyString(), any(MemoryScope.class), anyString()))
                     .thenThrow(new RuntimeException("Database error"));
 
             ToolResult result = tool.execute(Map.of("query", "test")).block();
@@ -151,6 +172,16 @@ class MemorySearchToolTest {
             assertFalse(result.isSuccess());
             assertTrue(result.getContent().contains("Memory search failed"));
             assertTrue(result.getContent().contains("Database error"));
+        }
+
+        @Test
+        @DisplayName("scope 非法时返回错误")
+        void invalidScopeReturnsError() {
+            ToolResult result = tool.execute(Map.of("query", "test", "scope", "invalid")).block();
+
+            assertNotNull(result);
+            assertFalse(result.isSuccess());
+            assertTrue(result.getContent().contains("Invalid scope"));
         }
 
         @Test
@@ -166,7 +197,7 @@ class MemorySearchToolTest {
                             .source("vector")
                             .build()
             );
-            when(searchService.search("test")).thenReturn(searchResults);
+            when(searchService.search("test", MemoryScope.BOTH, "main")).thenReturn(searchResults);
 
             ToolResult result = tool.execute(Map.of("query", "test")).block();
 
@@ -187,7 +218,7 @@ class MemorySearchToolTest {
                             .source("vector")
                             .build()
             );
-            when(searchService.search("test")).thenReturn(searchResults);
+            when(searchService.search("test", MemoryScope.BOTH, "main")).thenReturn(searchResults);
 
             ToolResult result = tool.execute(Map.of("query", "test")).block();
 

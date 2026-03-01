@@ -13,6 +13,7 @@ import com.jaguarliu.ai.subagent.SubagentCompletionTracker;
 import com.jaguarliu.ai.tools.ToolDispatcher;
 import com.jaguarliu.ai.tools.ToolRegistry;
 import com.jaguarliu.ai.tools.ToolResult;
+import com.jaguarliu.ai.tools.ToolVisibilityResolver;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -156,7 +157,7 @@ public class AgentRuntime {
 
                     Optional<SkillActivator.SkillAwareRequest> skillRequest =
                             skillActivator.applyActivation(activation.get(), cleanHistory, 
-                                    context.getOriginalInput());
+                                    context.getOriginalInput(), context.getAgentId());
 
                     if (skillRequest.isPresent()) {
                         context.incrementSkillActivation(skillName);
@@ -171,7 +172,7 @@ public class AgentRuntime {
                         // 设置 active skill（使用 ContextBuilder 创建）
                         Optional<ContextBuilder.SkillAwareRequest> ctxRequest =
                                 contextBuilder.handleSkillActivationByName(skillName,
-                                        context.getOriginalInput(), historyForContext, true);
+                                        context.getOriginalInput(), historyForContext, true, context.getAgentId());
                         
                         if (ctxRequest.isPresent()) {
                             context.setActiveSkill(ctxRequest.get());
@@ -247,7 +248,7 @@ public class AgentRuntime {
 
                 Optional<SkillActivator.SkillAwareRequest> skillRequest =
                         skillActivator.applyActivation(toolActivation.get(), cleanHistory,
-                                context.getOriginalInput());
+                                context.getOriginalInput(), context.getAgentId());
 
                 if (skillRequest.isPresent()) {
                     skillActivator.publishActivationEvent(context, toolActivation.get());
@@ -261,7 +262,7 @@ public class AgentRuntime {
                     // 设置 active skill（使用 ContextBuilder 创建）
                     Optional<ContextBuilder.SkillAwareRequest> ctxRequest =
                             contextBuilder.handleSkillActivationByName(skillName,
-                                    context.getOriginalInput(), historyForContext, true);
+                                    context.getOriginalInput(), historyForContext, true, context.getAgentId());
                     
                     if (ctxRequest.isPresent()) {
                         context.setActiveSkill(ctxRequest.get());
@@ -289,16 +290,21 @@ public class AgentRuntime {
 
         Set<String> excluded = context.getExcludedMcpServers();
         ContextBuilder.SkillAwareRequest activeSkill = context.getActiveSkill();
-        Set<String> allowed = (activeSkill != null) ? activeSkill.allowedTools() : null;
 
-        List<Map<String, Object>> tools;
-        if (allowed != null && !allowed.isEmpty()) {
-            tools = toolRegistry.toOpenAiTools(allowed, excluded);
-        } else if (excluded != null && !excluded.isEmpty()) {
-            tools = toolRegistry.toOpenAiToolsExcludingServers(excluded);
-        } else {
-            tools = toolRegistry.toOpenAiTools();
-        }
+        Set<String> strategyAllowedTools = resolveStrategyAllowedTools(context, activeSkill);
+        Set<String> skillAllowedTools = resolveSkillAllowedTools(activeSkill);
+
+        ToolVisibilityResolver.VisibilityRequest visibilityRequest = ToolVisibilityResolver.VisibilityRequest.builder()
+                .agentId(context.getAgentId())
+                .agentAllowedTools(context.getAgentAllowedTools())
+                .agentDeniedTools(context.getAgentDeniedTools())
+                .strategyAllowedTools(strategyAllowedTools)
+                .skillAllowedTools(skillAllowedTools)
+                .excludedMcpServers(excluded)
+                .build();
+
+        List<Map<String, Object>> tools = toolRegistry.toOpenAiTools(visibilityRequest);
+        Set<String> resolvedToolNames = toolRegistry.listVisibleToolNames(visibilityRequest);
 
         if (activeSkill != null && activeSkill.hasActiveSkill()) {
             tools = tools.stream()
@@ -308,8 +314,12 @@ public class AgentRuntime {
                         return fn == null || !"use_skill".equals(fn.get("name"));
                     })
                     .toList();
+            resolvedToolNames = resolvedToolNames.stream()
+                    .filter(name -> !"use_skill".equals(name))
+                    .collect(java.util.stream.Collectors.toSet());
         }
 
+        context.setResolvedToolNames(resolvedToolNames);
         requestBuilder.tools(tools);
 
         if (context.getModelSelection() != null) {
@@ -321,6 +331,27 @@ public class AgentRuntime {
         }
 
         return streamLlmCall(context.getConnectionId(), context.getRunId(), requestBuilder.build());
+    }
+
+    private Set<String> resolveStrategyAllowedTools(
+            RunContext context,
+            ContextBuilder.SkillAwareRequest activeSkill
+    ) {
+        if (context.getStrategyAllowedTools() != null && !context.getStrategyAllowedTools().isEmpty()) {
+            return context.getStrategyAllowedTools();
+        }
+        // 兼容历史链路：曾借用 activeSkill(无 name) 传递 strategy 白名单
+        if (activeSkill != null && !activeSkill.hasActiveSkill()) {
+            return activeSkill.allowedTools();
+        }
+        return null;
+    }
+
+    private Set<String> resolveSkillAllowedTools(ContextBuilder.SkillAwareRequest activeSkill) {
+        if (activeSkill == null || !activeSkill.hasActiveSkill()) {
+            return null;
+        }
+        return activeSkill.allowedTools();
     }
 
     /**

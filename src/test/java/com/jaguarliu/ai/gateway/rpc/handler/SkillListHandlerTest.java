@@ -62,7 +62,7 @@ class SkillListHandlerTest {
                 .tokenCost(30)
                 .build();
 
-        when(skillRegistry.getAll()).thenReturn(List.of(entry1, entry2));
+        when(skillRegistry.getAll("main")).thenReturn(List.of(entry1, entry2));
         when(skillRegistry.getSnapshotVersion()).thenReturn(5L);
 
         RpcRequest request = RpcRequest.builder()
@@ -104,7 +104,7 @@ class SkillListHandlerTest {
     @DisplayName("空列表返回空数组")
     @SuppressWarnings("unchecked")
     void handleEmptyList() {
-        when(skillRegistry.getAll()).thenReturn(List.of());
+        when(skillRegistry.getAll("main")).thenReturn(List.of());
         when(skillRegistry.getSnapshotVersion()).thenReturn(1L);
 
         RpcRequest request = RpcRequest.builder()

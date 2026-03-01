@@ -1,6 +1,13 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, nextTick } from 'vue'
-import type { SlashCommandItem, AttachedContext, ContextType, DataSourceInfo, ModelOption } from '@/types'
+import type {
+  SlashCommandItem,
+  AttachedContext,
+  ContextType,
+  DataSourceInfo,
+  ModelOption,
+  AgentProfile,
+} from '@/types'
 import type { McpServer } from '@/composables/useMcpServers'
 import { useSlashCommands } from '@/composables/useSlashCommands'
 import { useI18n } from '@/i18n'
@@ -22,6 +29,8 @@ const props = defineProps<{
   selectedModel?: string | null
   defaultModel?: string
   activeModelLabel?: string
+  agents?: AgentProfile[]
+  selectedAgentId?: string
 }>()
 
 const emit = defineEmits<{
@@ -33,6 +42,7 @@ const emit = defineEmits<{
   'toggle-mcp-server': [serverName: string]
   'select-datasource': [dataSourceId: string | undefined]
   'select-model': [providerId: string, modelName: string]
+  'select-agent': [agentId: string]
   'open-model-settings': []
 }>()
 
@@ -42,7 +52,7 @@ const fileInputRef = ref<HTMLInputElement | null>(null)
 const isExpanded = ref(false)
 
 // Slash command autocomplete
-const { loadCommands, filterCommands } = useSlashCommands()
+const { loadCommands, filterCommands, filterMentions } = useSlashCommands()
 const { t } = useI18n()
 
 const showSlashMenu = ref(false)
@@ -62,6 +72,7 @@ const showDataSourceSelector = ref(false)
 
 // Model selector
 const showModelSelector = ref(false)
+const showAgentSelector = ref(false)
 
 // 是否显示模型选择按钮
 const showModelButton = computed(() => {
@@ -72,6 +83,22 @@ const showModelButton = computed(() => {
 const modelLabel = computed(() => {
   return props.activeModelLabel || 'Model'
 })
+
+const enabledAgents = computed(() => (props.agents ?? []).filter((agent) => agent.enabled))
+
+const showAgentButton = computed(() => enabledAgents.value.length > 0)
+
+const selectedAgent = computed(() => {
+  const targetId = props.selectedAgentId
+  if (!targetId) return enabledAgents.value[0] ?? null
+  return (
+    enabledAgents.value.find((agent) => agent.id === targetId) ?? enabledAgents.value[0] ?? null
+  )
+})
+
+const agentLabel = computed(
+  () => selectedAgent.value?.displayName || selectedAgent.value?.name || t('input.agentFallback'),
+)
 
 // MCP 状态标签
 const mcpStatusLabel = computed(() => {
@@ -85,10 +112,10 @@ const mcpStatusLabel = computed(() => {
 // 数据源状态标签
 const dataSourceLabel = computed(() => {
   const sources = props.dataSources ?? []
-  const activeSources = sources.filter(s => s.status === 'ACTIVE')
+  const activeSources = sources.filter((s) => s.status === 'ACTIVE')
   if (activeSources.length === 0) return null
 
-  const selectedSource = activeSources.find(s => s.id === props.selectedDataSourceId)
+  const selectedSource = activeSources.find((s) => s.id === props.selectedDataSourceId)
   if (selectedSource) {
     return selectedSource.name
   }
@@ -98,7 +125,7 @@ const dataSourceLabel = computed(() => {
 // 获取选中的数据源对象
 const selectedDataSource = computed(() => {
   if (!props.selectedDataSourceId) return null
-  return props.dataSources?.find(ds => ds.id === props.selectedDataSourceId)
+  return props.dataSources?.find((ds) => ds.id === props.selectedDataSourceId)
 })
 
 // 是否显示 MCP 按钮
@@ -110,11 +137,11 @@ const showMcpButton = computed(() => {
 // 是否显示数据源按钮
 const showDataSourceButton = computed(() => {
   const sources = props.dataSources ?? []
-  return sources.filter(s => s.status === 'ACTIVE').length > 0
+  return sources.filter((s) => s.status === 'ACTIVE').length > 0
 })
 
 // 是否有上下文正在上传
-const hasUploading = computed(() => props.attachedContexts?.some(c => c.uploading) ?? false)
+const hasUploading = computed(() => props.attachedContexts?.some((c) => c.uploading) ?? false)
 
 // 发送按钮是否禁用：常规禁用 OR 有上下文正在上传
 const sendDisabled = computed(() => props.disabled || hasUploading.value || !input.value.trim())
@@ -134,8 +161,9 @@ function scrollSelectedIntoView() {
   })
 }
 
-function selectSlashCommand(item: SlashCommandItem) {
-  input.value = '/' + item.name + ' '
+function selectCommand(item: SlashCommandItem) {
+  const prefix = item.type === 'agent' ? '@' : '/'
+  input.value = prefix + item.name + ' '
   showSlashMenu.value = false
   inputRef.value?.focus()
 }
@@ -208,14 +236,15 @@ function handleKeydown(e: KeyboardEvent) {
     }
     if (e.key === 'ArrowUp') {
       e.preventDefault()
-      selectedIndex.value = (selectedIndex.value - 1 + slashItems.value.length) % slashItems.value.length
+      selectedIndex.value =
+        (selectedIndex.value - 1 + slashItems.value.length) % slashItems.value.length
       scrollSelectedIntoView()
       return
     }
     if ((e.key === 'Tab' || e.key === 'Enter') && !e.isComposing) {
       e.preventDefault()
       const item = slashItems.value[selectedIndex.value]
-      if (item) selectSlashCommand(item)
+      if (item) selectCommand(item)
       return
     }
     if (e.key === 'Escape') {
@@ -256,6 +285,17 @@ function handleInput(e: Event) {
     const query = val.substring(1).split(/\s/)[0] ?? ''
     if (!val.includes(' ')) {
       slashItems.value = filterCommands(query)
+      showSlashMenu.value = slashItems.value.length > 0
+      selectedIndex.value = 0
+      return
+    }
+  }
+
+  // @ mention detection（仅在输入首位触发）
+  if (val.startsWith('@')) {
+    const query = val.substring(1).split(/\s/)[0] ?? ''
+    if (!val.includes(' ')) {
+      slashItems.value = filterMentions(query)
       showSlashMenu.value = slashItems.value.length > 0
       selectedIndex.value = 0
       return
@@ -303,10 +343,38 @@ function handleClickOutside(e: MouseEvent) {
       showModelSelector.value = false
     }
   }
+
+  // 关闭 Agent 选择器
+  if (showAgentSelector.value) {
+    const selectorEl = document.querySelector('.agent-selector')
+    const toolbarBtn = target.closest('.toolbar-btn')
+    if (selectorEl && !selectorEl.contains(target) && !toolbarBtn) {
+      showAgentSelector.value = false
+    }
+  }
 }
 
 function handleRemoveDataSource() {
   emit('select-datasource', undefined)
+}
+
+function toggleModelSelector() {
+  showModelSelector.value = !showModelSelector.value
+  if (showModelSelector.value) {
+    showAgentSelector.value = false
+  }
+}
+
+function toggleAgentSelector() {
+  showAgentSelector.value = !showAgentSelector.value
+  if (showAgentSelector.value) {
+    showModelSelector.value = false
+  }
+}
+
+function handleSelectAgent(agentId: string) {
+  emit('select-agent', agentId)
+  showAgentSelector.value = false
 }
 
 const isHovered = ref(false)
@@ -327,7 +395,13 @@ function handleMouseLeave() {
   isHovered.value = false
   // 如果没有焦点且没有内容，延迟收起
   setTimeout(() => {
-    if (!isHovered.value && !isFocused.value && !input.value && !props.attachedContexts?.length && !props.selectedDataSourceId) {
+    if (
+      !isHovered.value &&
+      !isFocused.value &&
+      !input.value &&
+      !props.attachedContexts?.length &&
+      !props.selectedDataSourceId
+    ) {
       isExpanded.value = false
     }
   }, 100)
@@ -337,7 +411,12 @@ function handleBlur() {
   isFocused.value = false
   // 延迟收起，避免点击按钮时立即收起
   setTimeout(() => {
-    if (!isHovered.value && !input.value && !props.attachedContexts?.length && !props.selectedDataSourceId) {
+    if (
+      !isHovered.value &&
+      !input.value &&
+      !props.attachedContexts?.length &&
+      !props.selectedDataSourceId
+    ) {
       isExpanded.value = false
     }
   }, 200)
@@ -390,7 +469,7 @@ onMounted(() => {
           :key="item.name"
           class="slash-item"
           :class="{ selected: i === selectedIndex }"
-          @mousedown.prevent="selectSlashCommand(item)"
+          @mousedown.prevent="selectCommand(item)"
           @mouseenter="selectedIndex = i"
         >
           <span class="slash-item-name">{{ item.displayName }}</span>
@@ -432,6 +511,29 @@ onMounted(() => {
         @open-settings="emit('open-model-settings')"
       />
 
+      <!-- Agent selector -->
+      <div v-if="showAgentSelector" class="agent-selector">
+        <div class="agent-header">
+          <span class="agent-title">{{ t('input.tooltipAgent') }}</span>
+          <span class="agent-count">{{ enabledAgents.length }}</span>
+        </div>
+        <div v-if="enabledAgents.length === 0" class="agent-empty">
+          {{ t('input.noAgent') }}
+        </div>
+        <div v-else class="agent-list">
+          <button
+            v-for="agent in enabledAgents"
+            :key="agent.id"
+            class="agent-item"
+            :class="{ selected: agent.id === selectedAgentId }"
+            @click="handleSelectAgent(agent.id)"
+          >
+            <span class="agent-name">{{ agent.displayName || agent.name }}</span>
+            <span class="agent-id">@{{ agent.id }}</span>
+          </button>
+        </div>
+      </div>
+
       <!-- Context attachment chips -->
       <div v-if="attachedContexts && attachedContexts.length > 0" class="attached-contexts">
         <ContextChip
@@ -444,7 +546,14 @@ onMounted(() => {
 
       <div
         class="input-wrap"
-        :class="{ expanded: isExpanded || input.length > 0 || (attachedContexts && attachedContexts.length > 0) || selectedDataSource, dragging: isDragging }"
+        :class="{
+          expanded:
+            isExpanded ||
+            input.length > 0 ||
+            (attachedContexts && attachedContexts.length > 0) ||
+            selectedDataSource,
+          dragging: isDragging,
+        }"
         @mouseenter="handleMouseEnter"
         @mouseleave="handleMouseLeave"
         @dragenter="handleDragEnter"
@@ -455,8 +564,17 @@ onMounted(() => {
         <!-- Drag & drop overlay -->
         <Transition name="drag-fade">
           <div v-if="isDragging" class="drag-overlay">
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
+            <svg
+              width="28"
+              height="28"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12" />
             </svg>
             <span>{{ t('input.dragDrop') }}</span>
           </div>
@@ -473,17 +591,35 @@ onMounted(() => {
         <!-- Main content area -->
         <div class="input-main">
           <!-- Chips container -->
-          <div v-if="selectedDataSource || (attachedContexts && attachedContexts.length > 0)" class="chips-container">
+          <div
+            v-if="selectedDataSource || (attachedContexts && attachedContexts.length > 0)"
+            class="chips-container"
+          >
             <!-- Selected datasource chip -->
             <div v-if="selectedDataSource" class="chip datasource-chip">
               <svg width="12" height="12" viewBox="0 0 12 12" fill="none" class="chip-icon">
-                <path d="M2 3C2 2.44772 2.44772 2 3 2H9C9.55228 2 10 2.44772 10 3V4C10 4.55228 9.55228 5 9 5H3C2.44772 5 2 4.55228 2 4V3Z" fill="currentColor"/>
-                <path d="M2 8C2 7.44772 2.44772 7 3 7H9C9.55228 7 10 7.44772 10 8V9C10 9.55228 9.55228 10 9 10H3C2.44772 10 2 9.55228 2 9V8Z" fill="currentColor"/>
+                <path
+                  d="M2 3C2 2.44772 2.44772 2 3 2H9C9.55228 2 10 2.44772 10 3V4C10 4.55228 9.55228 5 9 5H3C2.44772 5 2 4.55228 2 4V3Z"
+                  fill="currentColor"
+                />
+                <path
+                  d="M2 8C2 7.44772 2.44772 7 3 7H9C9.55228 7 10 7.44772 10 8V9C10 9.55228 9.55228 10 9 10H3C2.44772 10 2 9.55228 2 9V8Z"
+                  fill="currentColor"
+                />
               </svg>
               <span class="chip-label">{{ selectedDataSource.name }}</span>
-              <button class="chip-remove" @click="handleRemoveDataSource" :title="t('common.remove')">
+              <button
+                class="chip-remove"
+                @click="handleRemoveDataSource"
+                :title="t('common.remove')"
+              >
                 <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                  <path d="M3 3L9 9M9 3L3 9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                  <path
+                    d="M3 3L9 9M9 3L3 9"
+                    stroke="currentColor"
+                    stroke-width="1.5"
+                    stroke-linecap="round"
+                  />
                 </svg>
               </button>
             </div>
@@ -502,7 +638,11 @@ onMounted(() => {
             ref="inputRef"
             v-model="input"
             :disabled="disabled"
-            :placeholder="selectedDataSource ? t('input.placeholderDs', { name: selectedDataSource.name }) : t('input.placeholder')"
+            :placeholder="
+              selectedDataSource
+                ? t('input.placeholderDs', { name: selectedDataSource.name })
+                : t('input.placeholder')
+            "
             @keydown="handleKeydown"
             @input="handleInput"
             @focus="handleFocus"
@@ -519,8 +659,19 @@ onMounted(() => {
                 @click="handleAttachClick"
                 :title="t('input.tooltipAttach')"
               >
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M8 3V13M3 8H13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 16 16"
+                  fill="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    d="M8 3V13M3 8H13"
+                    stroke="currentColor"
+                    stroke-width="1.5"
+                    stroke-linecap="round"
+                  />
                 </svg>
               </button>
 
@@ -532,8 +683,20 @@ onMounted(() => {
                 @click="showMcpFilter = !showMcpFilter"
                 :title="t('input.tooltipMcp')"
               >
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M11 5L8 2L5 5M5 11L8 14L11 11M14 8H2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 16 16"
+                  fill="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    d="M11 5L8 2L5 5M5 11L8 14L11 11M14 8H2"
+                    stroke="currentColor"
+                    stroke-width="1.5"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  />
                 </svg>
               </button>
 
@@ -545,25 +708,78 @@ onMounted(() => {
                 @click="showDataSourceSelector = !showDataSourceSelector"
                 :title="t('input.tooltipDataSource')"
               >
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M2 4C2 3.44772 3.34315 3 5 3H11C12.6569 3 14 3.44772 14 4V5.5C14 6.05228 12.6569 6.5 11 6.5H5C3.34315 6.5 2 6.05228 2 5.5V4Z" stroke="currentColor" stroke-width="1.2"/>
-                  <path d="M2 10.5C2 9.94772 3.34315 9.5 5 9.5H11C12.6569 9.5 14 9.94772 14 10.5V12C14 12.5523 12.6569 13 11 13H5C3.34315 13 2 12.5523 2 12V10.5Z" stroke="currentColor" stroke-width="1.2"/>
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 16 16"
+                  fill="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    d="M2 4C2 3.44772 3.34315 3 5 3H11C12.6569 3 14 3.44772 14 4V5.5C14 6.05228 12.6569 6.5 11 6.5H5C3.34315 6.5 2 6.05228 2 5.5V4Z"
+                    stroke="currentColor"
+                    stroke-width="1.2"
+                  />
+                  <path
+                    d="M2 10.5C2 9.94772 3.34315 9.5 5 9.5H11C12.6569 9.5 14 9.94772 14 10.5V12C14 12.5523 12.6569 13 11 13H5C3.34315 13 2 12.5523 2 12V10.5Z"
+                    stroke="currentColor"
+                    stroke-width="1.2"
+                  />
                 </svg>
               </button>
             </div>
 
             <div class="toolbar-right">
+              <!-- Agent selector button -->
+              <button
+                v-if="showAgentButton"
+                class="toolbar-btn model-btn agent-btn"
+                :class="{ active: showAgentSelector }"
+                :disabled="disabled"
+                @click="toggleAgentSelector"
+                :title="t('input.tooltipAgent')"
+              >
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 16 16"
+                  fill="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <circle cx="8" cy="5" r="2.25" stroke="currentColor" stroke-width="1.4" />
+                  <path
+                    d="M3.5 13C3.5 10.7909 5.29086 9 7.5 9H8.5C10.7091 9 12.5 10.7909 12.5 13"
+                    stroke="currentColor"
+                    stroke-width="1.4"
+                    stroke-linecap="round"
+                  />
+                </svg>
+                <span class="toolbar-label model-label">{{ agentLabel }}</span>
+              </button>
+
               <!-- Model selector button -->
               <button
                 v-if="showModelButton"
                 class="toolbar-btn model-btn"
                 :class="{ active: showModelSelector }"
                 :disabled="disabled"
-                @click="showModelSelector = !showModelSelector"
+                @click="toggleModelSelector"
                 :title="t('input.tooltipModel')"
               >
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M4 6L8 10L12 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 16 16"
+                  fill="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    d="M4 6L8 10L12 6"
+                    stroke="currentColor"
+                    stroke-width="1.5"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  />
                 </svg>
                 <span class="toolbar-label model-label">{{ modelLabel }}</span>
               </button>
@@ -576,7 +792,7 @@ onMounted(() => {
                 :title="t('input.tooltipStop')"
               >
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                  <rect x="5" y="5" width="6" height="6" rx="0.5" fill="currentColor"/>
+                  <rect x="5" y="5" width="6" height="6" rx="0.5" fill="currentColor" />
                 </svg>
               </button>
 
@@ -588,7 +804,13 @@ onMounted(() => {
                 :title="hasUploading ? t('input.tooltipWaitUpload') : t('input.tooltipSend')"
               >
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                  <path d="M8 13V3M8 3L5 6M8 3L11 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                  <path
+                    d="M8 13V3M8 3L5 6M8 3L11 6"
+                    stroke="currentColor"
+                    stroke-width="1.8"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  />
                 </svg>
               </button>
             </div>
@@ -637,7 +859,9 @@ onMounted(() => {
   border: 1.5px solid var(--sidebar-panel-border);
   border-radius: 14px;
   background: var(--sidebar-panel-bg);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 4px 12px rgba(0, 0, 0, 0.04);
+  box-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.06),
+    0 4px 12px rgba(0, 0, 0, 0.04);
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   overflow: hidden;
 }
@@ -857,7 +1081,13 @@ textarea:disabled {
   letter-spacing: -0.01em;
 }
 
+.agent-btn {
+  max-width: 180px;
+}
+
 .toolbar-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
@@ -943,7 +1173,8 @@ textarea:disabled {
 }
 
 @keyframes pulse {
-  0%, 100% {
+  0%,
+  100% {
     opacity: 1;
   }
   50% {
@@ -1002,6 +1233,92 @@ textarea:disabled {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.agent-selector {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  right: 0;
+  width: 280px;
+  border: var(--border-strong);
+  border-radius: var(--radius-lg);
+  background: var(--color-white);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+  z-index: 100;
+}
+
+.agent-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-bottom: var(--border);
+  background: var(--color-gray-50);
+}
+
+.agent-title {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--color-gray-600);
+}
+
+.agent-count {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--color-gray-400);
+}
+
+.agent-empty {
+  padding: 18px 12px;
+  text-align: center;
+  color: var(--color-gray-500);
+  font-size: 12px;
+}
+
+.agent-list {
+  max-height: 240px;
+  overflow-y: auto;
+  padding: 4px;
+}
+
+.agent-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border: none;
+  border-radius: var(--radius-md);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-in-out);
+}
+
+.agent-item:hover {
+  background: var(--color-gray-50);
+}
+
+.agent-item.selected {
+  background: var(--color-gray-100);
+}
+
+.agent-name {
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--color-black);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-id {
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--color-gray-400);
 }
 
 /* Drag & drop overlay */

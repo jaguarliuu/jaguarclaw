@@ -35,6 +35,8 @@ class MemoryChunkEntityTest {
                     .lineStart(1)
                     .lineEnd(10)
                     .content("Test content")
+                    .scope(MemoryChunkEntity.SCOPE_AGENT)
+                    .agentId("writer")
                     .createdAt(now)
                     .updatedAt(now)
                     .build();
@@ -44,6 +46,8 @@ class MemoryChunkEntityTest {
             assertEquals(1, entity.getLineStart());
             assertEquals(10, entity.getLineEnd());
             assertEquals("Test content", entity.getContent());
+            assertEquals(MemoryChunkEntity.SCOPE_AGENT, entity.getScope());
+            assertEquals("writer", entity.getAgentId());
             assertEquals(now, entity.getCreatedAt());
             assertEquals(now, entity.getUpdatedAt());
         }
@@ -58,6 +62,8 @@ class MemoryChunkEntityTest {
             assertEquals(0, entity.getLineStart());
             assertEquals(0, entity.getLineEnd());
             assertNull(entity.getContent());
+            assertEquals(MemoryChunkEntity.SCOPE_GLOBAL, entity.getScope());
+            assertNull(entity.getAgentId());
         }
     }
 
@@ -77,12 +83,16 @@ class MemoryChunkEntityTest {
             entity.setLineStart(5);
             entity.setLineEnd(15);
             entity.setContent("Updated content");
+            entity.setScope(MemoryChunkEntity.SCOPE_AGENT);
+            entity.setAgentId("main");
 
             assertEquals("id-123", entity.getId());
             assertEquals("2026-01-15.md", entity.getFilePath());
             assertEquals(5, entity.getLineStart());
             assertEquals(15, entity.getLineEnd());
             assertEquals("Updated content", entity.getContent());
+            assertEquals(MemoryChunkEntity.SCOPE_AGENT, entity.getScope());
+            assertEquals("main", entity.getAgentId());
         }
     }
 
@@ -96,6 +106,7 @@ class MemoryChunkEntityTest {
         @DisplayName("onCreate 设置 createdAt 和 updatedAt")
         void onCreateSetsTimestamps() {
             MemoryChunkEntity entity = new MemoryChunkEntity();
+            entity.setScope(null);
             assertNull(entity.getCreatedAt());
             assertNull(entity.getUpdatedAt());
 
@@ -103,6 +114,7 @@ class MemoryChunkEntityTest {
 
             assertNotNull(entity.getCreatedAt());
             assertNotNull(entity.getUpdatedAt());
+            assertEquals(MemoryChunkEntity.SCOPE_GLOBAL, entity.getScope());
             // createdAt 和 updatedAt 应该相等或非常接近
             assertEquals(entity.getCreatedAt().toLocalDate(), entity.getUpdatedAt().toLocalDate());
         }
@@ -270,6 +282,8 @@ class MemoryChunkEntityTest {
             assertEquals(0, entity.getLineStart());
             assertEquals(0, entity.getLineEnd());
             assertNull(entity.getContent());
+            assertEquals(MemoryChunkEntity.SCOPE_GLOBAL, entity.getScope());
+            assertNull(entity.getAgentId());
             assertNull(entity.getCreatedAt());
             assertNull(entity.getUpdatedAt());
         }
@@ -292,6 +306,8 @@ class MemoryChunkEntityTest {
                     1,
                     20,
                     "full content",
+                    MemoryChunkEntity.SCOPE_AGENT,
+                    "agent-a",
                     now,
                     now
             );
@@ -301,6 +317,8 @@ class MemoryChunkEntityTest {
             assertEquals(1, entity.getLineStart());
             assertEquals(20, entity.getLineEnd());
             assertEquals("full content", entity.getContent());
+            assertEquals(MemoryChunkEntity.SCOPE_AGENT, entity.getScope());
+            assertEquals("agent-a", entity.getAgentId());
             assertEquals(now, entity.getCreatedAt());
             assertEquals(now, entity.getUpdatedAt());
         }

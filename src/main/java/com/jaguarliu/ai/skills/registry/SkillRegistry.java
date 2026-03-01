@@ -1,5 +1,6 @@
 package com.jaguarliu.ai.skills.registry;
 
+import com.jaguarliu.ai.skills.context.SkillScopeResolver;
 import com.jaguarliu.ai.skills.gating.GatingResult;
 import com.jaguarliu.ai.skills.gating.SkillGatingService;
 import com.jaguarliu.ai.skills.model.LoadedSkill;
@@ -7,14 +8,24 @@ import com.jaguarliu.ai.skills.model.SkillEntry;
 import com.jaguarliu.ai.skills.model.SkillMetadata;
 import com.jaguarliu.ai.skills.parser.SkillParseResult;
 import com.jaguarliu.ai.skills.parser.SkillParser;
+import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
-import jakarta.annotation.PostConstruct;
 import java.io.IOException;
-import java.nio.file.*;
-import java.util.*;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -23,15 +34,10 @@ import java.util.stream.Stream;
  * Skill 注册表
  *
  * 职责：
- * 1. 扫描多级目录（项目级 > 用户级 > 内置）
- * 2. 解析 SKILL.md 文件
- * 3. 评估可用性条件（Gating）
- * 4. 缓存 SkillEntry
- * 5. 提供查询接口
- *
- * 优先级规则：
- * - 项目级 (priority=0) 覆盖 用户级 (priority=1) 覆盖 内置 (priority=2)
- * - 同名 skill 只保留最高优先级的版本
+ * 1. 扫描全局目录（项目级 > 用户级 > 内置）；
+ * 2. 扫描 Agent 私有目录（workspace/agents/<agent>/skills）；
+ * 3. 按 Agent 作用域合并可见 skill（agent 覆盖 global 同名）；
+ * 4. 提供索引/激活查询。
  */
 @Slf4j
 @Service
@@ -39,6 +45,7 @@ public class SkillRegistry {
 
     private final SkillParser parser;
     private final SkillGatingService gatingService;
+    private final Optional<SkillScopeResolver> scopeResolver;
 
     @Value("${skills.project-dir:}")
     private String configProjectDir;
@@ -49,23 +56,41 @@ public class SkillRegistry {
     @Value("${skills.builtin-dir:}")
     private String configBuiltinDir;
 
-    // skill name -> SkillEntry 映射（使用 volatile 引用实现原子切换）
+    // global: skill name -> SkillEntry
     private volatile Map<String, SkillEntry> registry = new ConcurrentHashMap<>();
 
-    // skill name -> 完整正文缓存（loadSkill 时预加载，避免重复文件读取）
+    // global body cache: skill name -> body
     private volatile Map<String, String> bodyCache = new ConcurrentHashMap<>();
+
+    // agent scoped registry: agentId -> (skill name -> SkillEntry)
+    private volatile Map<String, Map<String, SkillEntry>> agentRegistry = new ConcurrentHashMap<>();
+
+    // agent scoped body cache: agentId -> (skill name -> body)
+    private volatile Map<String, Map<String, String>> agentBodyCache = new ConcurrentHashMap<>();
+
+    // test override: agentId -> skills dir
+    private volatile Map<String, Path> configuredAgentSkillsDirs = Map.of();
 
     // 快照版本号（每次刷新递增，用于前端缓存控制）
     private volatile long snapshotVersion = 0;
 
-    // 扫描目录配置
+    // 全局扫描目录配置
     private Path projectSkillsDir;
     private Path userSkillsDir;
     private Path builtinSkillsDir;
 
-    public SkillRegistry(SkillParser parser, SkillGatingService gatingService) {
+    @Autowired
+    public SkillRegistry(SkillParser parser,
+                         SkillGatingService gatingService,
+                         Optional<SkillScopeResolver> scopeResolver) {
         this.parser = parser;
         this.gatingService = gatingService;
+        this.scopeResolver = scopeResolver;
+    }
+
+    // 兼容单元测试中的直接构造
+    public SkillRegistry(SkillParser parser, SkillGatingService gatingService) {
+        this(parser, gatingService, Optional.empty());
     }
 
     /**
@@ -73,7 +98,6 @@ public class SkillRegistry {
      */
     @PostConstruct
     public void init() {
-        // 使用配置值（非空时），否则使用默认目录
         projectSkillsDir = configProjectDir != null && !configProjectDir.isBlank()
                 ? Paths.get(configProjectDir)
                 : Paths.get(System.getProperty("user.dir"), ".jaguarclaw", "skills");
@@ -87,12 +111,20 @@ public class SkillRegistry {
         refresh();
     }
 
-    public Path getProjectSkillsDir() { return projectSkillsDir; }
-    public Path getUserSkillsDir() { return userSkillsDir; }
-    public Path getBuiltinSkillsDir() { return builtinSkillsDir; }
+    public Path getProjectSkillsDir() {
+        return projectSkillsDir;
+    }
+
+    public Path getUserSkillsDir() {
+        return userSkillsDir;
+    }
+
+    public Path getBuiltinSkillsDir() {
+        return builtinSkillsDir;
+    }
 
     /**
-     * 配置扫描目录（用于测试）
+     * 配置全局扫描目录（用于测试）
      */
     public void configure(Path projectDir, Path userDir, Path builtinDir) {
         this.projectSkillsDir = projectDir;
@@ -101,40 +133,94 @@ public class SkillRegistry {
     }
 
     /**
+     * 配置 agent skills 目录（用于测试）
+     */
+    public void configureAgentSkills(Map<String, Path> agentSkillsDirs) {
+        if (agentSkillsDirs == null || agentSkillsDirs.isEmpty()) {
+            this.configuredAgentSkillsDirs = Map.of();
+            return;
+        }
+        Map<String, Path> copy = new LinkedHashMap<>();
+        for (Map.Entry<String, Path> entry : agentSkillsDirs.entrySet()) {
+            String agentId = normalizeAgentId(entry.getKey());
+            Path dir = entry.getValue();
+            if (dir != null) {
+                copy.put(agentId, dir.toAbsolutePath().normalize());
+            }
+        }
+        this.configuredAgentSkillsDirs = Map.copyOf(copy);
+    }
+
+    /**
      * 刷新注册表（重新扫描所有目录）
-     * 使用 Copy-on-write 模式保证原子性，避免并发读取到半成品状态
+     * Copy-on-write 原子切换，避免并发读取半成品。
      */
     public void refresh() {
-        // 构建新的 Map（Copy-on-write）
         Map<String, SkillEntry> newRegistry = new ConcurrentHashMap<>();
         Map<String, String> newBodyCache = new ConcurrentHashMap<>();
 
-        // 按优先级从低到高扫描，高优先级覆盖低优先级
-        scanDirectory(builtinSkillsDir, 2, newRegistry, newBodyCache);  // 内置
-        scanDirectory(userSkillsDir, 1, newRegistry, newBodyCache);     // 用户级
-        scanDirectory(projectSkillsDir, 0, newRegistry, newBodyCache);  // 项目级
+        // 全局优先级：project(0) > user(1) > builtin(2)
+        scanDirectory(builtinSkillsDir, 2, newRegistry, newBodyCache);
+        scanDirectory(userSkillsDir, 1, newRegistry, newBodyCache);
+        scanDirectory(projectSkillsDir, 0, newRegistry, newBodyCache);
 
-        // 原子切换引用（对并发读者可见）
+        Map<String, Map<String, SkillEntry>> newAgentRegistry = new ConcurrentHashMap<>();
+        Map<String, Map<String, String>> newAgentBodyCache = new ConcurrentHashMap<>();
+
+        Map<String, Path> agentDirs = resolveAgentSkillsDirs();
+        for (Map.Entry<String, Path> entry : agentDirs.entrySet()) {
+            String agentId = normalizeAgentId(entry.getKey());
+            Map<String, SkillEntry> scopedRegistry = new ConcurrentHashMap<>();
+            Map<String, String> scopedBodyCache = new ConcurrentHashMap<>();
+            scanDirectory(entry.getValue(), 0, scopedRegistry, scopedBodyCache);
+            if (!scopedRegistry.isEmpty()) {
+                newAgentRegistry.put(agentId, scopedRegistry);
+                newAgentBodyCache.put(agentId, scopedBodyCache);
+            }
+        }
+
         this.registry = newRegistry;
         this.bodyCache = newBodyCache;
+        this.agentRegistry = newAgentRegistry;
+        this.agentBodyCache = newAgentBodyCache;
         this.snapshotVersion++;
 
-        log.info("Skill registry refreshed (v{}): {} skills loaded ({} available)",
+        long globalAvailable = newRegistry.values().stream().filter(SkillEntry::isAvailable).count();
+        long agentAvailable = newAgentRegistry.values().stream()
+                .flatMap(m -> m.values().stream())
+                .filter(SkillEntry::isAvailable)
+                .count();
+
+        log.info("Skill registry refreshed (v{}): global={} (available={}), agentScoped={} (available={})",
                 snapshotVersion,
                 newRegistry.size(),
-                newRegistry.values().stream().filter(SkillEntry::isAvailable).count());
+                globalAvailable,
+                newAgentRegistry.values().stream().mapToInt(Map::size).sum(),
+                agentAvailable);
+    }
+
+    private Map<String, Path> resolveAgentSkillsDirs() {
+        if (configuredAgentSkillsDirs != null && !configuredAgentSkillsDirs.isEmpty()) {
+            return configuredAgentSkillsDirs;
+        }
+        if (scopeResolver.isPresent()) {
+            return scopeResolver.get().resolveAllAgentSkillsDirs();
+        }
+        return Map.of();
     }
 
     /**
      * 扫描单个目录
      */
-    private void scanDirectory(Path dir, int priority, Map<String, SkillEntry> targetRegistry,
-                                Map<String, String> targetBodyCache) {
+    private void scanDirectory(Path dir,
+                               int priority,
+                               Map<String, SkillEntry> targetRegistry,
+                               Map<String, String> targetBodyCache) {
         if (dir == null || !Files.exists(dir) || !Files.isDirectory(dir)) {
             return;
         }
 
-        try (Stream<Path> paths = Files.walk(dir, 2)) { // 最多深入 2 层
+        try (Stream<Path> paths = Files.walk(dir, 2)) {
             paths.filter(this::isSkillFile)
                     .forEach(path -> loadSkill(path, priority, targetRegistry, targetBodyCache));
         } catch (IOException e) {
@@ -144,9 +230,6 @@ public class SkillRegistry {
 
     /**
      * 判断是否为 SKILL.md 文件
-     * 支持两种格式：
-     * - skills/<name>/SKILL.md
-     * - skills/<name>.SKILL.md
      */
     private boolean isSkillFile(Path path) {
         if (!Files.isRegularFile(path)) {
@@ -159,14 +242,15 @@ public class SkillRegistry {
     /**
      * 加载单个 skill
      */
-    private void loadSkill(Path path, int priority, Map<String, SkillEntry> targetRegistry,
+    private void loadSkill(Path path,
+                           int priority,
+                           Map<String, SkillEntry> targetRegistry,
                            Map<String, String> targetBodyCache) {
         try {
             String content = Files.readString(path);
             long lastModified = Files.getLastModifiedTime(path).toMillis();
 
             SkillParseResult result = parser.parse(content, path, priority, lastModified);
-
             if (!result.isValid()) {
                 log.warn("Failed to parse skill {}: {}", path, result.getErrorMessage());
                 return;
@@ -175,17 +259,14 @@ public class SkillRegistry {
             SkillMetadata metadata = result.getMetadata();
             String name = metadata.getName();
 
-            // 检查优先级：只有更高优先级（数字更小）才覆盖
             SkillEntry existing = targetRegistry.get(name);
             if (existing != null && existing.getMetadata().getPriority() <= priority) {
                 log.debug("Skill '{}' already registered with higher priority, skipping", name);
                 return;
             }
 
-            // 执行 Gating 检查
             GatingResult gatingResult = gatingService.evaluate(metadata.getRequires());
 
-            // 构建 SkillEntry
             SkillEntry entry = SkillEntry.builder()
                     .metadata(metadata)
                     .available(gatingResult.isAvailable())
@@ -195,112 +276,178 @@ public class SkillRegistry {
                     .build();
 
             targetRegistry.put(name, entry);
-
-            // 预加载正文到缓存（避免重复文件读取）
             targetBodyCache.put(name, result.getBody());
 
-            log.debug("Loaded skill '{}' from {} (available={})",
-                    name, path, gatingResult.isAvailable());
-
+            log.debug("Loaded skill '{}' from {} (available={})", name, path, gatingResult.isAvailable());
         } catch (IOException e) {
             log.warn("Failed to read skill file: {}", path, e);
         }
     }
 
-    /**
-     * 获取所有已注册的 skill
-     */
+    // ==================== Query APIs ====================
+
     public List<SkillEntry> getAll() {
+        return getAll("main");
+    }
+
+    public List<SkillEntry> getGlobalAll() {
         return new ArrayList<>(registry.values());
     }
 
-    /**
-     * 获取所有可用的 skill
-     */
+    public List<SkillEntry> getAll(String agentId) {
+        return new ArrayList<>(mergedRegistry(agentId).values());
+    }
+
     public List<SkillEntry> getAvailable() {
-        return registry.values().stream()
+        return getAvailable("main");
+    }
+
+    public List<SkillEntry> getAvailable(String agentId) {
+        return mergedRegistry(agentId).values().stream()
                 .filter(SkillEntry::isAvailable)
                 .collect(Collectors.toList());
     }
 
-    /**
-     * 获取所有不可用的 skill（用于诊断）
-     */
     public List<SkillEntry> getUnavailable() {
-        return registry.values().stream()
+        return getUnavailable("main");
+    }
+
+    public List<SkillEntry> getUnavailable(String agentId) {
+        return mergedRegistry(agentId).values().stream()
                 .filter(e -> !e.isAvailable())
                 .collect(Collectors.toList());
     }
 
-    /**
-     * 按名称查找 skill
-     */
     public Optional<SkillEntry> getByName(String name) {
-        return Optional.ofNullable(registry.get(name));
+        return getByName(name, "main");
     }
 
-    /**
-     * 检查 skill 是否存在且可用
-     */
+    public Optional<SkillEntry> getByName(String name, String agentId) {
+        return Optional.ofNullable(mergedRegistry(agentId).get(name));
+    }
+
     public boolean isAvailable(String name) {
-        SkillEntry entry = registry.get(name);
+        return isAvailable(name, "main");
+    }
+
+    public boolean isAvailable(String name, String agentId) {
+        SkillEntry entry = mergedRegistry(agentId).get(name);
         return entry != null && entry.isAvailable();
     }
 
     /**
      * 激活 skill（加载完整内容）
-     *
-     * @param name skill 名称
-     * @return 加载后的完整 skill，如果不存在或不可用返回 empty
      */
     public Optional<LoadedSkill> activate(String name) {
+        return activate(name, "main");
+    }
+
+    public Optional<LoadedSkill> activateGlobal(String name) {
         SkillEntry entry = registry.get(name);
         if (entry == null) {
-            log.warn("Skill not found: {}", name);
+            log.warn("Global skill not found: {}", name);
             return Optional.empty();
         }
-
         if (!entry.isAvailable()) {
-            log.warn("Skill not available: {} (reason: {})", name, entry.getUnavailableReason());
+            log.warn("Global skill not available: {} (reason={})", name, entry.getUnavailableReason());
             return Optional.empty();
         }
 
         String body = bodyCache.get(name);
         if (body == null) {
-            // 如果缓存丢失，尝试重新读取
             body = reloadBody(entry.getMetadata().getSourcePath());
             if (body == null) {
                 return Optional.empty();
             }
-            bodyCache.put(name, body);
+            Map<String, String> updated = new ConcurrentHashMap<>(bodyCache);
+            updated.put(name, body);
+            bodyCache = updated;
         }
 
         SkillMetadata meta = entry.getMetadata();
-
-        // 获取 skill 的基础目录
-        Path basePath = null;
-        if (meta.getSourcePath() != null) {
-            basePath = meta.getSourcePath().getParent();
-        }
+        Path basePath = meta.getSourcePath() != null ? meta.getSourcePath().getParent() : null;
 
         LoadedSkill loaded = LoadedSkill.builder()
                 .name(meta.getName())
                 .description(meta.getDescription())
                 .body(body)
                 .basePath(basePath)
-                .allowedTools(meta.getAllowedTools() != null ?
-                        new HashSet<>(meta.getAllowedTools()) : null)
-                .confirmBefore(meta.getConfirmBefore() != null ?
-                        new HashSet<>(meta.getConfirmBefore()) : null)
+                .allowedTools(meta.getAllowedTools() != null ? new HashSet<>(meta.getAllowedTools()) : null)
+                .confirmBefore(meta.getConfirmBefore() != null ? new HashSet<>(meta.getConfirmBefore()) : null)
                 .build();
 
-        log.info("Activated skill: {} (basePath={})", name, basePath);
+        log.info("Activated global skill: {} (basePath={})", name, basePath);
         return Optional.of(loaded);
     }
 
-    /**
-     * 重新读取 skill 正文
-     */
+    public Optional<LoadedSkill> activate(String name, String agentId) {
+        String resolvedAgentId = normalizeAgentId(agentId);
+
+        SkillEntry entry = mergedRegistry(resolvedAgentId).get(name);
+        if (entry == null) {
+            log.warn("Skill not found: {} (agentId={})", name, resolvedAgentId);
+            return Optional.empty();
+        }
+
+        if (!entry.isAvailable()) {
+            log.warn("Skill not available: {} (agentId={}, reason={})",
+                    name, resolvedAgentId, entry.getUnavailableReason());
+            return Optional.empty();
+        }
+
+        String body = resolveBody(name, resolvedAgentId);
+        if (body == null) {
+            body = reloadBody(entry.getMetadata().getSourcePath());
+            if (body == null) {
+                return Optional.empty();
+            }
+            cacheBody(name, resolvedAgentId, entry, body);
+        }
+
+        SkillMetadata meta = entry.getMetadata();
+        Path basePath = meta.getSourcePath() != null ? meta.getSourcePath().getParent() : null;
+
+        LoadedSkill loaded = LoadedSkill.builder()
+                .name(meta.getName())
+                .description(meta.getDescription())
+                .body(body)
+                .basePath(basePath)
+                .allowedTools(meta.getAllowedTools() != null ? new HashSet<>(meta.getAllowedTools()) : null)
+                .confirmBefore(meta.getConfirmBefore() != null ? new HashSet<>(meta.getConfirmBefore()) : null)
+                .build();
+
+        log.info("Activated skill: {} (agentId={}, basePath={})", name, resolvedAgentId, basePath);
+        return Optional.of(loaded);
+    }
+
+    private String resolveBody(String name, String agentId) {
+        Map<String, String> scoped = agentBodyCache.get(agentId);
+        if (scoped != null && scoped.containsKey(name)) {
+            return scoped.get(name);
+        }
+        return bodyCache.get(name);
+    }
+
+    private void cacheBody(String name, String agentId, SkillEntry entry, String body) {
+        Map<String, SkillEntry> scopedEntries = agentRegistry.get(agentId);
+        if (scopedEntries != null) {
+            SkillEntry scoped = scopedEntries.get(name);
+            if (scoped != null && scoped == entry) {
+                Map<String, String> scopedCache = new ConcurrentHashMap<>(
+                        agentBodyCache.getOrDefault(agentId, Map.of())
+                );
+                scopedCache.put(name, body);
+                Map<String, Map<String, String>> updated = new ConcurrentHashMap<>(agentBodyCache);
+                updated.put(agentId, scopedCache);
+                agentBodyCache = updated;
+                return;
+            }
+        }
+        Map<String, String> updated = new ConcurrentHashMap<>(bodyCache);
+        updated.put(name, body);
+        bodyCache = updated;
+    }
+
     private String reloadBody(Path path) {
         if (path == null || !Files.exists(path)) {
             return null;
@@ -315,18 +462,37 @@ public class SkillRegistry {
         }
     }
 
+    private Map<String, SkillEntry> mergedRegistry(String agentId) {
+        String resolvedAgentId = normalizeAgentId(agentId);
+
+        Map<String, SkillEntry> merged = new LinkedHashMap<>(registry);
+        Map<String, SkillEntry> scoped = agentRegistry.get(resolvedAgentId);
+        if (scoped != null && !scoped.isEmpty()) {
+            merged.putAll(scoped);
+        }
+        return merged;
+    }
+
+    private String normalizeAgentId(String agentId) {
+        if (scopeResolver.isPresent()) {
+            return scopeResolver.get().normalizeAgentId(agentId);
+        }
+        if (agentId == null || agentId.isBlank()) {
+            return "main";
+        }
+        return agentId.trim();
+    }
+
     /**
      * 检查是否有 skill 文件变化（修改/新增/删除）
-     * 使用轻量级目录扫描，不进行完整解析
      */
     public boolean hasChanges() {
-        // 构建当前文件系统的快照 (path -> lastModified)
         Map<Path, Long> currentSnapshot = new HashMap<>();
         collectSkillFiles(builtinSkillsDir, currentSnapshot);
         collectSkillFiles(userSkillsDir, currentSnapshot);
         collectSkillFiles(projectSkillsDir, currentSnapshot);
+        resolveAgentSkillsDirs().values().forEach(dir -> collectSkillFiles(dir, currentSnapshot));
 
-        // 构建已注册 skill 的快照
         Map<Path, Long> registeredSnapshot = new HashMap<>();
         for (SkillEntry entry : registry.values()) {
             Path path = entry.getMetadata().getSourcePath();
@@ -334,8 +500,15 @@ public class SkillRegistry {
                 registeredSnapshot.put(path, entry.getLastModified());
             }
         }
+        for (Map<String, SkillEntry> scopedRegistry : agentRegistry.values()) {
+            for (SkillEntry entry : scopedRegistry.values()) {
+                Path path = entry.getMetadata().getSourcePath();
+                if (path != null) {
+                    registeredSnapshot.put(path, entry.getLastModified());
+                }
+            }
+        }
 
-        // 检查新增文件（在 currentSnapshot 但不在 registeredSnapshot）
         for (Path path : currentSnapshot.keySet()) {
             if (!registeredSnapshot.containsKey(path)) {
                 log.debug("Detected new skill file: {}", path);
@@ -343,7 +516,6 @@ public class SkillRegistry {
             }
         }
 
-        // 检查删除文件（在 registeredSnapshot 但不在 currentSnapshot）
         for (Path path : registeredSnapshot.keySet()) {
             if (!currentSnapshot.containsKey(path)) {
                 log.debug("Detected deleted skill file: {}", path);
@@ -351,12 +523,10 @@ public class SkillRegistry {
             }
         }
 
-        // 检查修改文件（lastModified 不同）
         for (Map.Entry<Path, Long> entry : currentSnapshot.entrySet()) {
             Path path = entry.getKey();
             Long currentModified = entry.getValue();
             Long registeredModified = registeredSnapshot.get(path);
-
             if (registeredModified != null && currentModified > registeredModified) {
                 log.debug("Detected modified skill file: {}", path);
                 return true;
@@ -366,72 +536,64 @@ public class SkillRegistry {
         return false;
     }
 
-    /**
-     * 收集指定目录下的所有 skill 文件及其修改时间
-     */
     private void collectSkillFiles(Path dir, Map<Path, Long> snapshot) {
         if (dir == null || !Files.exists(dir) || !Files.isDirectory(dir)) {
             return;
         }
 
         try (Stream<Path> paths = Files.walk(dir, 2)) {
-            paths.filter(this::isSkillFile)
-                    .forEach(path -> {
-                        try {
-                            long lastModified = Files.getLastModifiedTime(path).toMillis();
-                            snapshot.put(path, lastModified);
-                        } catch (IOException e) {
-                            // 忽略无法读取的文件
-                        }
-                    });
+            paths.filter(this::isSkillFile).forEach(path -> {
+                try {
+                    long lastModified = Files.getLastModifiedTime(path).toMillis();
+                    snapshot.put(path, lastModified);
+                } catch (IOException ignored) {
+                    // ignore unreadable files
+                }
+            });
         } catch (IOException e) {
             log.warn("Failed to collect skill files from: {}", dir, e);
         }
     }
 
-    /**
-     * 获取注册表统计信息
-     */
     public RegistryStats getStats() {
-        int total = registry.size();
-        int available = (int) registry.values().stream().filter(SkillEntry::isAvailable).count();
-        int totalTokens = registry.values().stream()
+        return getStats("main");
+    }
+
+    public RegistryStats getStats(String agentId) {
+        Map<String, SkillEntry> merged = mergedRegistry(agentId);
+        int total = merged.size();
+        int available = (int) merged.values().stream().filter(SkillEntry::isAvailable).count();
+        int totalTokens = merged.values().stream()
                 .filter(SkillEntry::isAvailable)
                 .mapToInt(SkillEntry::getTokenCost)
                 .sum();
-
         return new RegistryStats(total, available, total - available, totalTokens);
     }
 
-    /**
-     * 注册表统计
-     */
     public record RegistryStats(
             int totalSkills,
             int availableSkills,
             int unavailableSkills,
             int totalTokenCost
-    ) {}
-
-    /**
-     * 获取已注册 skill 数量
-     */
-    public int size() {
-        return registry.size();
+    ) {
     }
 
-    /**
-     * 获取快照版本号
-     */
+    public int size() {
+        return size("main");
+    }
+
+    public int size(String agentId) {
+        return mergedRegistry(agentId).size();
+    }
+
     public long getSnapshotVersion() {
         return snapshotVersion;
     }
 
-    /**
-     * 清空注册表（用于测试）
-     */
     public void clear() {
         registry.clear();
         bodyCache.clear();
+        agentRegistry.clear();
+        agentBodyCache.clear();
     }
 }

@@ -8,6 +8,7 @@ import com.jaguarliu.ai.skills.selector.SkillSelection;
 import com.jaguarliu.ai.skills.selector.SkillSelector;
 import com.jaguarliu.ai.skills.template.SkillTemplateEngine;
 import com.jaguarliu.ai.tools.ToolRegistry;
+import com.jaguarliu.ai.tools.ToolVisibilityResolver;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -113,7 +114,9 @@ public class ContextBuilder {
         LlmRequest request = build(null, history, userPrompt);
 
         if (enableTools && toolRegistry.size() > 0) {
-            request.setTools(toolRegistry.toOpenAiTools());
+            request.setTools(toolRegistry.toOpenAiTools(
+                    ToolVisibilityResolver.VisibilityRequest.builder().build()
+            ));
             request.setToolChoice("auto");
             log.debug("Enabled {} tools for request", toolRegistry.size());
         }
@@ -131,19 +134,32 @@ public class ContextBuilder {
      * @return LlmRequest
      */
     public LlmRequest buildWithSkillIndex(List<LlmRequest.Message> history, String userPrompt, boolean enableTools) {
+        return buildWithSkillIndex(history, userPrompt, enableTools, "main");
+    }
+
+    public LlmRequest buildWithSkillIndex(List<LlmRequest.Message> history,
+                                          String userPrompt,
+                                          boolean enableTools,
+                                          String agentId) {
         // 使用 SystemPromptBuilder 构建带 skill 索引的完整 system prompt
         // Skills 段落已经包含在 FULL 模式中
-        String systemWithSkills = systemPromptBuilder.build(SystemPromptBuilder.PromptMode.FULL);
+        String systemWithSkills = systemPromptBuilder.build(
+                SystemPromptBuilder.PromptMode.FULL, null, null, null, agentId
+        );
 
         LlmRequest request = build(systemWithSkills, history, userPrompt);
 
         if (enableTools && toolRegistry.size() > 0) {
-            request.setTools(toolRegistry.toOpenAiTools());
+            request.setTools(toolRegistry.toOpenAiTools(
+                    ToolVisibilityResolver.VisibilityRequest.builder()
+                            .agentId(agentId)
+                            .build()
+            ));
             request.setToolChoice("auto");
         }
 
         log.debug("Built context with skill index: {} available skills",
-                skillRegistry.getAvailable().size());
+                skillRegistry.getAvailable(agentId).size());
 
         return request;
     }
@@ -165,6 +181,16 @@ public class ContextBuilder {
             List<LlmRequest.Message> history,
             String userPrompt,
             boolean enableTools) {
+        return buildWithActiveSkill(skill, arguments, history, userPrompt, enableTools, "main");
+    }
+
+    public SkillAwareRequest buildWithActiveSkill(
+            LoadedSkill skill,
+            String arguments,
+            List<LlmRequest.Message> history,
+            String userPrompt,
+            boolean enableTools,
+            String agentId) {
 
         // 使用模板引擎编译 skill body
         SkillTemplateEngine.TemplateContext context = templateEngine.createContext()
@@ -181,7 +207,9 @@ public class ContextBuilder {
 
         // 获取基础 system prompt（SKILL 模式：仅 Identity + Workspace + Runtime，不含工具列表）
         Set<String> allowedTools = skill.getAllowedTools();
-        String basePrompt = systemPromptBuilder.build(SystemPromptBuilder.PromptMode.SKILL, allowedTools);
+        String basePrompt = systemPromptBuilder.build(
+                SystemPromptBuilder.PromptMode.SKILL, allowedTools, null, null, agentId
+        );
 
         // 构建 system prompt
         StringBuilder systemPrompt = new StringBuilder();
@@ -216,15 +244,11 @@ public class ContextBuilder {
 
         // 设置工具（可能需要过滤）
         if (enableTools && toolRegistry.size() > 0) {
-            if (allowedTools != null && !allowedTools.isEmpty()) {
-                // 只包含允许的工具
-                request.setTools(toolRegistry.toOpenAiTools(allowedTools));
-                log.debug("Enabled {} filtered tools for skill '{}'",
-                        allowedTools.size(), skill.getName());
-            } else {
-                // 无限制，使用所有工具
-                request.setTools(toolRegistry.toOpenAiTools());
-            }
+            ToolVisibilityResolver.VisibilityRequest visibilityRequest = ToolVisibilityResolver.VisibilityRequest.builder()
+                    .agentId(agentId)
+                    .skillAllowedTools(allowedTools)
+                    .build();
+            request.setTools(toolRegistry.toOpenAiTools(visibilityRequest));
             request.setToolChoice("auto");
         }
 
@@ -245,26 +269,34 @@ public class ContextBuilder {
      * @return SkillAwareRequest
      */
     public SkillAwareRequest buildSmart(List<LlmRequest.Message> history, String userPrompt, boolean enableTools) {
+        return buildSmart(history, userPrompt, enableTools, "main");
+    }
+
+    public SkillAwareRequest buildSmart(List<LlmRequest.Message> history,
+                                        String userPrompt,
+                                        boolean enableTools,
+                                        String agentId) {
         // 1. 尝试手动 skill 选择
-        SkillSelection selection = skillSelector.tryManualSelection(userPrompt);
+        SkillSelection selection = skillSelector.tryManualSelection(userPrompt, agentId);
 
         if (selection.isSelected()) {
             // 激活 skill
-            Optional<LoadedSkill> loaded = skillRegistry.activate(selection.getSkillName());
+            Optional<LoadedSkill> loaded = skillRegistry.activate(selection.getSkillName(), agentId);
             if (loaded.isPresent()) {
                 return buildWithActiveSkill(
                         loaded.get(),
                         selection.getArguments(),
                         history,
                         selection.getArguments() != null ? selection.getArguments() : userPrompt,
-                        enableTools
+                        enableTools,
+                        agentId
                 );
             }
         }
 
         // 2. 如果启用自动选择，注入 skill 索引
-        if (autoSelectEnabled && !skillRegistry.getAvailable().isEmpty()) {
-            LlmRequest request = buildWithSkillIndex(history, userPrompt, enableTools);
+        if (autoSelectEnabled && !skillRegistry.getAvailable(agentId).isEmpty()) {
+            LlmRequest request = buildWithSkillIndex(history, userPrompt, enableTools, agentId);
             return new SkillAwareRequest(request, null, null, null, null);
         }
 
@@ -288,14 +320,23 @@ public class ContextBuilder {
             String originalInput,
             List<LlmRequest.Message> history,
             boolean enableTools) {
+        return handleAutoSkillSelection(llmResponse, originalInput, history, enableTools, "main");
+    }
 
-        SkillSelection selection = skillSelector.parseFromLlmResponse(llmResponse, originalInput);
+    public Optional<SkillAwareRequest> handleAutoSkillSelection(
+            String llmResponse,
+            String originalInput,
+            List<LlmRequest.Message> history,
+            boolean enableTools,
+            String agentId) {
+
+        SkillSelection selection = skillSelector.parseFromLlmResponse(llmResponse, originalInput, agentId);
 
         if (!selection.isSelected()) {
             return Optional.empty();
         }
 
-        Optional<LoadedSkill> loaded = skillRegistry.activate(selection.getSkillName());
+        Optional<LoadedSkill> loaded = skillRegistry.activate(selection.getSkillName(), agentId);
         if (loaded.isEmpty()) {
             return Optional.empty();
         }
@@ -307,7 +348,8 @@ public class ContextBuilder {
                 selection.getArguments(),
                 history,
                 originalInput,
-                enableTools
+                enableTools,
+                agentId
         ));
     }
 
@@ -325,17 +367,26 @@ public class ContextBuilder {
             String originalInput,
             List<LlmRequest.Message> history,
             boolean enableTools) {
+        return handleSkillActivationByName(skillName, originalInput, history, enableTools, "main");
+    }
+
+    public Optional<SkillAwareRequest> handleSkillActivationByName(
+            String skillName,
+            String originalInput,
+            List<LlmRequest.Message> history,
+            boolean enableTools,
+            String agentId) {
 
         if (skillName == null || skillName.isBlank()) {
             return Optional.empty();
         }
 
-        if (!skillRegistry.isAvailable(skillName)) {
+        if (!skillRegistry.isAvailable(skillName, agentId)) {
             log.warn("Skill activation by name failed: {} not available", skillName);
             return Optional.empty();
         }
 
-        Optional<LoadedSkill> loaded = skillRegistry.activate(skillName);
+        Optional<LoadedSkill> loaded = skillRegistry.activate(skillName, agentId);
         if (loaded.isEmpty()) {
             return Optional.empty();
         }
@@ -347,7 +398,8 @@ public class ContextBuilder {
                 originalInput,  // 原始输入作为参数
                 history,
                 originalInput,
-                enableTools
+                enableTools,
+                agentId
         ));
     }
 
@@ -358,7 +410,7 @@ public class ContextBuilder {
      * @return 消息列表（可变）
      */
     public List<LlmRequest.Message> buildMessages(List<LlmRequest.Message> history, String userPrompt) {
-        return buildMessages(history, userPrompt, null);
+        return buildMessages(history, userPrompt, null, null, "main");
     }
 
     /**
@@ -370,7 +422,7 @@ public class ContextBuilder {
      */
     public List<LlmRequest.Message> buildMessages(List<LlmRequest.Message> history, String userPrompt,
                                                     Set<String> excludedMcpServers) {
-        return buildMessages(history, userPrompt, excludedMcpServers, null);
+        return buildMessages(history, userPrompt, excludedMcpServers, null, "main");
     }
 
     /**
@@ -383,10 +435,20 @@ public class ContextBuilder {
      */
     public List<LlmRequest.Message> buildMessages(List<LlmRequest.Message> history, String userPrompt,
                                                     Set<String> excludedMcpServers, String dataSourceId) {
+        return buildMessages(history, userPrompt, excludedMcpServers, dataSourceId, "main");
+    }
+
+    /**
+     * 构建消息列表（支持排除 MCP 服务器、数据源和 agentId）
+     */
+    public List<LlmRequest.Message> buildMessages(List<LlmRequest.Message> history, String userPrompt,
+                                                  Set<String> excludedMcpServers, String dataSourceId, String agentId) {
         List<LlmRequest.Message> messages = new ArrayList<>();
 
         // 1. System prompt - 使用结构化的完整提示
-        String systemPrompt = systemPromptBuilder.build(SystemPromptBuilder.PromptMode.FULL, null, excludedMcpServers, dataSourceId);
+        String systemPrompt = systemPromptBuilder.build(
+                SystemPromptBuilder.PromptMode.FULL, null, excludedMcpServers, dataSourceId, agentId
+        );
         messages.add(LlmRequest.Message.system(systemPrompt));
 
         // 2. 历史消息

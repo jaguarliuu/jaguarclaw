@@ -25,7 +25,13 @@ const router = useRouter()
 const route = useRoute()
 const { artifact } = useArtifact()
 const { selectedNotification, selectNotification } = useHeartbeat()
-const { contexts: attachedContexts, uploadFile, addContext, removeContext, clearContexts } = useContext()
+const {
+  contexts: attachedContexts,
+  uploadFile,
+  addContext,
+  removeContext,
+  clearContexts,
+} = useContext()
 const { servers: mcpServers, loadServers: loadMcpServers } = useMcpServers()
 const { dataSources, loadDataSources } = useDataSource()
 const { selectedModel, availableModels, activeModelLabel, selectModel } = useModelSelector()
@@ -44,23 +50,26 @@ const {
   streamBlocks,
   isStreaming,
   filteredSessions,
+  agents,
+  selectedAgentId,
   activeSubagentId,
   activeSubagent,
   setActiveSubagent,
   excludedMcpServers,
   toggleMcpServer,
+  setSelectedAgent,
   loadSessions,
   createSession,
   selectSession,
   deleteSession,
   sendMessage,
   confirmToolCall,
-  cancelRun
+  cancelRun,
 } = useChat()
 
 // 只显示 enabled 且已连接（有 toolCount）的 MCP 服务器
 const connectedMcpServers = computed(() =>
-  mcpServers.value.filter(s => s.enabled && (s.toolCount ?? 0) > 0)
+  mcpServers.value.filter((s) => s.enabled && (s.toolCount ?? 0) > 0),
 )
 
 async function handleCreateSession() {
@@ -79,7 +88,7 @@ function handleDeleteSession(id: string) {
 function handleSend(prompt: string, contexts: typeof attachedContexts.value) {
   // 获取选中数据源的名称
   const dataSourceName = selectedDataSourceId.value
-    ? dataSources.value.find(ds => ds.id === selectedDataSourceId.value)?.name
+    ? dataSources.value.find((ds) => ds.id === selectedDataSourceId.value)?.name
     : undefined
 
   // 传递上下文信息、数据源 ID 和模型选择给 sendMessage
@@ -90,7 +99,8 @@ function handleSend(prompt: string, contexts: typeof attachedContexts.value) {
     undefined, // attachedFiles (legacy)
     selectedDataSourceId.value,
     dataSourceName,
-    selectedModel.value ?? undefined
+    selectedModel.value ?? undefined,
+    selectedAgentId.value,
   )
   clearContexts()
 }
@@ -161,6 +171,10 @@ function handleOpenModelSettings() {
   router.push('/settings/llm')
 }
 
+function handleSelectAgent(agentId: string) {
+  setSelectedAgent(agentId)
+}
+
 onMounted(() => {
   // Wait for connection (managed by App.vue), then check LLM config and load sessions
   const checkConnection = setInterval(async () => {
@@ -186,20 +200,21 @@ onMounted(() => {
 })
 
 // Watch for query parameter changes (install/uninstall actions from system settings)
-watch(() => route.query, async (newQuery) => {
-  if (newQuery.action && newQuery.prompt) {
-    await handleInstallAction()
-  }
-})
+watch(
+  () => route.query,
+  async (newQuery) => {
+    if (newQuery.action && newQuery.prompt) {
+      await handleInstallAction()
+    }
+  },
+)
 
 async function handleInstallAction() {
   const { action, env, prompt } = route.query
 
   if (action && prompt && typeof prompt === 'string') {
     // Create a new session for the installation
-    const sessionName = action === 'install'
-      ? `Install ${env}`
-      : `Uninstall ${env}`
+    const sessionName = action === 'install' ? `Install ${env}` : `Uninstall ${env}`
 
     const session = await createSession(sessionName)
     await selectSession(session.id)
@@ -219,12 +234,16 @@ async function handleInstallAction() {
     <SessionSidebar
       :sessions="filteredSessions"
       :current-id="currentSessionId"
+      :agents="agents"
       @select="handleSelectSession"
       @create="handleCreateSession"
       @delete="handleDeleteSession"
     />
 
-    <main class="main-area" @click="selectedNotification && !artifact ? selectNotification(null) : undefined">
+    <main
+      class="main-area"
+      @click="selectedNotification && !artifact ? selectNotification(null) : undefined"
+    >
       <MessageList
         :messages="messages"
         :stream-blocks="streamBlocks"
@@ -247,6 +266,8 @@ async function handleInstallAction() {
         :selected-model="selectedModel"
         :default-model="multiConfig?.defaultModel ?? ''"
         :active-model-label="activeModelLabel"
+        :agents="agents"
+        :selected-agent-id="selectedAgentId"
         @send="handleSend"
         @cancel="handleCancel"
         @attach-file="handleAttachFile"
@@ -255,6 +276,7 @@ async function handleInstallAction() {
         @toggle-mcp-server="toggleMcpServer"
         @select-datasource="handleSelectDataSource"
         @select-model="handleSelectModel"
+        @select-agent="handleSelectAgent"
         @open-model-settings="handleOpenModelSettings"
       />
     </main>
@@ -308,7 +330,9 @@ async function handleInstallAction() {
 /* Panel slide transition */
 .panel-slide-enter-active,
 .panel-slide-leave-active {
-  transition: opacity var(--duration-normal) var(--ease-out), transform var(--duration-normal) var(--ease-out);
+  transition:
+    opacity var(--duration-normal) var(--ease-out),
+    transform var(--duration-normal) var(--ease-out);
 }
 
 .panel-slide-enter-from,

@@ -20,6 +20,7 @@ import java.util.UUID;
 public class RunService {
 
     public static final String DEFAULT_PRINCIPAL_ID = "local-default";
+    public static final String DEFAULT_AGENT_ID = "main";
 
     private final RunRepository runRepository;
 
@@ -28,7 +29,7 @@ public class RunService {
      */
     @Transactional
     public RunEntity create(String sessionId, String prompt) {
-        return create(sessionId, prompt, "main", DEFAULT_PRINCIPAL_ID);
+        return create(sessionId, prompt, DEFAULT_AGENT_ID, DEFAULT_PRINCIPAL_ID);
     }
 
     /**
@@ -44,12 +45,13 @@ public class RunService {
      */
     @Transactional
     public RunEntity create(String sessionId, String prompt, String agentId, String ownerPrincipalId) {
+        String resolvedAgentId = normalizeAgentId(agentId);
         RunEntity run = RunEntity.builder()
                 .id(UUID.randomUUID().toString())
                 .sessionId(sessionId)
                 .status(RunStatus.QUEUED.getValue())
                 .prompt(prompt)
-                .agentId(agentId)
+                .agentId(resolvedAgentId)
                 .runKind("main")
                 .lane("main")
                 .deliver(false)
@@ -58,7 +60,7 @@ public class RunService {
 
         run = runRepository.save(run);
         log.info("Created run: id={}, sessionId={}, agentId={}, status={}",
-                run.getId(), sessionId, agentId, run.getStatus());
+                run.getId(), sessionId, resolvedAgentId, run.getStatus());
         return run;
     }
 
@@ -189,5 +191,12 @@ public class RunService {
      */
     public List<RunEntity> listByRequesterSession(String requesterSessionId) {
         return runRepository.findByRequesterSessionIdOrderByCreatedAtDesc(requesterSessionId);
+    }
+
+    private String normalizeAgentId(String agentId) {
+        if (agentId == null || agentId.isBlank()) {
+            return DEFAULT_AGENT_ID;
+        }
+        return agentId;
     }
 }

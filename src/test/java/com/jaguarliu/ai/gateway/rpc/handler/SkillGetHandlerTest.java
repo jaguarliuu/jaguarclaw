@@ -49,7 +49,7 @@ class SkillGetHandlerTest {
                 .confirmBefore(Set.of("write_file"))
                 .build();
 
-        when(skillRegistry.activate("code-review")).thenReturn(Optional.of(skill));
+        when(skillRegistry.activate("code-review", "main")).thenReturn(Optional.of(skill));
 
         RpcRequest request = RpcRequest.builder()
                 .id("req-1")
@@ -74,7 +74,7 @@ class SkillGetHandlerTest {
     @Test
     @DisplayName("skill 不存在时返回错误")
     void handleNotFound() {
-        when(skillRegistry.activate("nonexistent")).thenReturn(Optional.empty());
+        when(skillRegistry.activate("nonexistent", "main")).thenReturn(Optional.empty());
 
         RpcRequest request = RpcRequest.builder()
                 .id("req-1")
@@ -133,7 +133,7 @@ class SkillGetHandlerTest {
                 .confirmBefore(null)
                 .build();
 
-        when(skillRegistry.activate("simple")).thenReturn(Optional.of(skill));
+        when(skillRegistry.activate("simple", "main")).thenReturn(Optional.of(skill));
 
         RpcRequest request = RpcRequest.builder()
                 .id("req-1")

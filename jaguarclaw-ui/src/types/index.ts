@@ -7,6 +7,26 @@
 export interface Session {
   id: string
   name: string
+  agentId?: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface AgentProfile {
+  id: string
+  name: string
+  displayName: string
+  description: string
+  workspacePath: string
+  model: string
+  enabled: boolean
+  isDefault: boolean
+  allowedTools: string
+  excludedTools: string
+  heartbeatInterval: number
+  heartbeatActiveHours: string
+  dailyTokenLimit: number
+  monthlyCostLimit: number
   createdAt: string
   updatedAt: string
 }
@@ -17,13 +37,13 @@ export interface Message {
   sessionId: string
   runId: string
   role: 'user' | 'assistant'
-  content: string                 // 纯文本内容（用于用户消息或简单显示）
+  content: string // 纯文本内容（用于用户消息或简单显示）
   createdAt: string
-  blocks?: StreamBlock[]          // 交错的内容块（用于 assistant 消息的详细显示）
-  attachedFiles?: AttachedFile[]  // 用户消息附带的文件（仅前端展示用）- 向后兼容
-  attachedContexts?: AttachedContext[]  // 用户消息附带的上下文（新字段）
-  dataSourceId?: string           // 用户消息选择的数据源 ID
-  dataSourceName?: string         // 数据源名称（用于显示）
+  blocks?: StreamBlock[] // 交错的内容块（用于 assistant 消息的详细显示）
+  attachedFiles?: AttachedFile[] // 用户消息附带的文件（仅前端展示用）- 向后兼容
+  attachedContexts?: AttachedContext[] // 用户消息附带的上下文（新字段）
+  dataSourceId?: string // 用户消息选择的数据源 ID
+  dataSourceName?: string // 数据源名称（用于显示）
 }
 
 // Run
@@ -50,11 +70,11 @@ export interface ToolCall {
 export interface StreamBlock {
   id: string
   type: 'text' | 'tool' | 'skill' | 'subagent' | 'file'
-  content?: string      // type === 'text' 时的文本内容
-  toolCall?: ToolCall   // type === 'tool' 时的工具调用
-  skillActivation?: SkillActivation  // type === 'skill' 时的技能激活
-  subagent?: SubagentInfo            // type === 'subagent' 时的子代理信息
-  file?: SessionFile                 // type === 'file' 时的文件信息
+  content?: string // type === 'text' 时的文本内容
+  toolCall?: ToolCall // type === 'tool' 时的工具调用
+  skillActivation?: SkillActivation // type === 'skill' 时的技能激活
+  subagent?: SubagentInfo // type === 'subagent' 时的子代理信息
+  file?: SessionFile // type === 'file' 时的文件信息
 }
 
 // Skill Activation (技能激活信息)
@@ -68,7 +88,7 @@ export interface SessionFile {
   id: string
   sessionId: string
   runId: string
-  filePath: string    // 相对路径 e.g. "report.pdf"
+  filePath: string // 相对路径 e.g. "report.pdf"
   fileName: string
   fileSize: number
   createdAt: string
@@ -224,7 +244,7 @@ export interface SubagentInfo {
   result?: string
   error?: string
   durationMs?: number
-  startedAt?: number    // timestamp ms
+  startedAt?: number // timestamp ms
   streamBlocks?: StreamBlock[]
   toolCallIndex?: Record<string, ToolCall>
 }
@@ -399,7 +419,7 @@ export interface ScheduleCreatePayload {
 
 export interface LlmConfig {
   endpoint: string
-  apiKey: string    // 脱敏值
+  apiKey: string // 脱敏值
   model: string
   configured: boolean
 }
@@ -422,7 +442,7 @@ export interface LlmProviderConfig {
   id: string
   name: string
   endpoint: string
-  apiKey: string       // 脱敏值
+  apiKey: string // 脱敏值
   models: string[]
 }
 
@@ -469,47 +489,55 @@ export interface ToolConfig {
 export interface SearchProviderEntry {
   type: string
   displayName: string
-  apiKey: string      // GET 响应中为脱敏值
+  apiKey: string // GET 响应中为脱敏值
   enabled: boolean
   keyRequired: boolean
-  apiKeyUrl?: string  // API key获取地址
+  apiKeyUrl?: string // API key获取地址
 }
 
 // Slash Command Autocomplete
 export interface SlashCommandItem {
-  type: 'tool' | 'skill'
-  name: string           // e.g. "read_file", "web_search"
-  description: string    // from backend
-  displayName: string    // formatted: "/read_file" or "/skillname"
+  type: 'tool' | 'skill' | 'agent'
+  name: string // e.g. "read_file", "web_search"
+  description: string // from backend
+  displayName: string // formatted: "/read_file" or "@coder"
 }
 
 // ==================== Context Attachment Types ====================
 
 /** 上下文类型 */
-export type ContextType = 'file' | 'folder' | 'web' | 'doc' | 'code' | 'rule' | 'workspace' | 'problems'
+export type ContextType =
+  | 'file'
+  | 'folder'
+  | 'web'
+  | 'doc'
+  | 'code'
+  | 'rule'
+  | 'workspace'
+  | 'problems'
 
 /** 附加的上下文（统一接口，支持多种类型） */
 export interface AttachedContext {
-  id: string              // 前端唯一标识
-  type: ContextType       // 上下文类型
-  displayName: string     // 显示名称
-  uploading?: boolean     // 上传中
+  id: string // 前端唯一标识
+  type: ContextType // 上下文类型
+  displayName: string // 显示名称
+  uploading?: boolean // 上传中
 
   // File 类型字段
-  filePath?: string       // workspace 相对路径（后端返回）
-  filename?: string       // 原始文件名
-  size?: number           // 文件大小（字节）
+  filePath?: string // workspace 相对路径（后端返回）
+  filename?: string // 原始文件名
+  size?: number // 文件大小（字节）
 
   // Folder 类型字段
-  folderPath?: string     // 文件夹路径
+  folderPath?: string // 文件夹路径
 
   // Web 类型字段
-  url?: string            // 网页 URL
+  url?: string // 网页 URL
 
   // 预留字段（未来实现）
-  docId?: string          // Doc 类型的文档 ID
-  codeSnippet?: string    // Code 类型的代码片段
-  ruleContent?: string    // Rule 类型的规则内容
+  docId?: string // Doc 类型的文档 ID
+  codeSnippet?: string // Code 类型的代码片段
+  ruleContent?: string // Rule 类型的规则内容
 }
 
 /** 向后兼容：AttachedFile 类型别名 */

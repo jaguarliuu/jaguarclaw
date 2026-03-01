@@ -2,6 +2,7 @@ import { ref, computed } from 'vue'
 import { useWebSocket } from './useWebSocket'
 import { useArtifact } from './useArtifact'
 import { useHeartbeat } from './useHeartbeat'
+import { useAgents } from './useAgents'
 import type {
   Session,
   Message,
@@ -22,8 +23,10 @@ import type {
   AttachedFile,
   AttachedContext,
   SessionFile,
-  FileCreatedPayload
+  FileCreatedPayload,
 } from '@/types'
+
+const FALLBACK_AGENT_ID = 'main'
 
 const sessions = ref<Session[]>([])
 const currentSessionId = ref<string | null>(null)
@@ -49,18 +52,25 @@ const excludedMcpServers = ref<Set<string>>(new Set())
 // Session 文件列表
 const sessionFiles = ref<SessionFile[]>([])
 
+// 当前选中的 Agent（用于新会话创建和 agent.run）
+const selectedAgentId = ref<string>(FALLBACK_AGENT_ID)
+
 // 事件监听器清理函数
 let eventCleanups: (() => void)[] = []
 let isSetup = false
 
 const { request, onEvent } = useWebSocket()
-const { artifact, openArtifact, closeArtifact, startStreaming, appendContent, finishStreaming } = useArtifact()
+const { artifact, openArtifact, closeArtifact, startStreaming, appendContent, finishStreaming } =
+  useArtifact()
 const { addNotification } = useHeartbeat()
+const { agents, enabledAgents, defaultAgent, loadAgents, resolveAgentId, findAgent } = useAgents()
 
 // Computed
-const currentSession = computed(() =>
-  sessions.value.find((s) => s.id === currentSessionId.value) ?? null
+const currentSession = computed(
+  () => sessions.value.find((s) => s.id === currentSessionId.value) ?? null,
 )
+
+const selectedAgent = computed(() => findAgent(selectedAgentId.value) ?? defaultAgent.value ?? null)
 
 // 当前选中的 subagent（从 subagentIndex 或已保存 messages 的 blocks 中查找）
 const activeSubagent = computed<SubagentInfo | null>(() => {
@@ -103,8 +113,35 @@ const subagentSessionIds = computed<Set<string>>(() => {
 
 // 过滤掉 subagent 子会话的会话列表
 const filteredSessions = computed(() =>
-  sessions.value.filter(s => !subagentSessionIds.value.has(s.id))
+  sessions.value.filter((s) => !subagentSessionIds.value.has(s.id)),
 )
+
+function normalizeSession(session: Session, fallbackAgentId?: string): Session {
+  return {
+    ...session,
+    agentId: resolveAgentId(session.agentId ?? fallbackAgentId),
+  }
+}
+
+function updateSessionAgent(sessionId: string, agentId: string) {
+  const resolved = resolveAgentId(agentId)
+  sessions.value = sessions.value.map((session) =>
+    session.id === sessionId ? { ...session, agentId: resolved } : session,
+  )
+}
+
+function syncSelectedAgentFromSession(sessionId: string | null) {
+  if (!sessionId) {
+    selectedAgentId.value = resolveAgentId(defaultAgent.value?.id)
+    return
+  }
+  const session = sessions.value.find((item) => item.id === sessionId)
+  selectedAgentId.value = resolveAgentId(session?.agentId)
+}
+
+function setSelectedAgent(agentId: string) {
+  selectedAgentId.value = resolveAgentId(agentId)
+}
 
 function setActiveSubagent(id: string | null) {
   activeSubagentId.value = id
@@ -122,18 +159,29 @@ function toggleMcpServer(name: string) {
 
 // Session API
 async function loadSessions() {
+  if (agents.value.length === 0) {
+    await loadAgents()
+  }
   const result = await request<{ sessions: Session[] }>('session.list')
-  sessions.value = result.sessions
+  sessions.value = result.sessions.map((session) => normalizeSession(session))
+  syncSelectedAgentFromSession(currentSessionId.value)
 }
 
-async function createSession(title?: string) {
-  const result = await request<Session>('session.create', { name: title })
-  sessions.value.unshift(result)
-  return result
+async function createSession(title?: string, agentId?: string) {
+  const resolvedAgentId = resolveAgentId(agentId ?? selectedAgentId.value)
+  const result = await request<Session>('session.create', {
+    name: title,
+    agentId: resolvedAgentId,
+  })
+  const normalized = normalizeSession(result, resolvedAgentId)
+  sessions.value.unshift(normalized)
+  selectedAgentId.value = normalized.agentId ?? resolvedAgentId
+  return normalized
 }
 
 async function selectSession(sessionId: string) {
   currentSessionId.value = sessionId
+  syncSelectedAgentFromSession(sessionId)
   isStreaming.value = false
   currentRun.value = null
   streamBlocks.value = []
@@ -152,10 +200,11 @@ async function deleteSession(sessionId: string) {
   try {
     await request('session.delete', { sessionId })
     // Remove from local state
-    sessions.value = sessions.value.filter(s => s.id !== sessionId)
+    sessions.value = sessions.value.filter((s) => s.id !== sessionId)
     // If deleted current session, clear selection
     if (currentSessionId.value === sessionId) {
       currentSessionId.value = null
+      syncSelectedAgentFromSession(null)
       messages.value = []
       streamBlocks.value = []
       toolCallIndex.value = {}
@@ -173,7 +222,9 @@ async function deleteSession(sessionId: string) {
 // Message API
 async function loadMessages(sessionId: string) {
   try {
-    const result = await request<{ messages: Message[]; files?: SessionFile[] }>('message.list', { sessionId })
+    const result = await request<{ messages: Message[]; files?: SessionFile[] }>('message.list', {
+      sessionId,
+    })
 
     // 保存 session files
     sessionFiles.value = result.files || []
@@ -188,7 +239,7 @@ async function loadMessages(sessionId: string) {
     }
 
     // 过滤 subagent_announce 消息，转化为带 SubagentCard 块的消息
-    messages.value = result.messages.map(msg => {
+    messages.value = result.messages.map((msg) => {
       if (msg.role === 'assistant' && msg.content.startsWith('{"type":"subagent_announce"')) {
         try {
           const data = JSON.parse(msg.content)
@@ -206,32 +257,37 @@ async function loadMessages(sessionId: string) {
           }
           return {
             ...msg,
-            content: '',  // 清空原始 JSON
-            blocks: [{
-              id: `subagent-${info.subRunId}`,
-              type: 'subagent' as const,
-              subagent: info
-            }]
+            content: '', // 清空原始 JSON
+            blocks: [
+              {
+                id: `subagent-${info.subRunId}`,
+                type: 'subagent' as const,
+                subagent: info,
+              },
+            ],
           }
-        } catch { return msg }
+        } catch {
+          return msg
+        }
       }
       return msg
     })
 
     // 对每个 assistant message，如果其 runId 有文件，追加 file blocks
-    messages.value.forEach(msg => {
+    messages.value.forEach((msg) => {
       if (msg.role === 'assistant' && msg.runId && filesByRun[msg.runId]) {
         const existingBlocks = msg.blocks || []
         // 如果消息原本没有 blocks，需要先将 content 包装为 text block
         // 否则 MessageItem 的 hasBlocks 分支会跳过纯文本内容的渲染
-        const baseBlocks: StreamBlock[] = existingBlocks.length === 0 && msg.content
-          ? [{ id: `text-${msg.id}`, type: 'text' as const, content: msg.content }]
-          : existingBlocks
+        const baseBlocks: StreamBlock[] =
+          existingBlocks.length === 0 && msg.content
+            ? [{ id: `text-${msg.id}`, type: 'text' as const, content: msg.content }]
+            : existingBlocks
         const files = filesByRun[msg.runId]
-        const fileBlocks: StreamBlock[] = (files || []).map(f => ({
+        const fileBlocks: StreamBlock[] = (files || []).map((f) => ({
           id: `file-${f.id}`,
           type: 'file' as const,
-          file: f
+          file: f,
         }))
         msg.blocks = [...baseBlocks, ...fileBlocks]
       }
@@ -251,27 +307,31 @@ function buildContextPrompt(contexts: AttachedContext[]): string {
   if (!contexts || contexts.length === 0) return ''
 
   // 按类型分组
-  const fileContexts = contexts.filter(c => c.type === 'file' && c.filePath)
-  const folderContexts = contexts.filter(c => c.type === 'folder' && c.folderPath)
-  const webContexts = contexts.filter(c => c.type === 'web' && c.url)
+  const fileContexts = contexts.filter((c) => c.type === 'file' && c.filePath)
+  const folderContexts = contexts.filter((c) => c.type === 'folder' && c.folderPath)
+  const webContexts = contexts.filter((c) => c.type === 'web' && c.url)
 
   const sections: string[] = []
 
   // 文件上下文
   if (fileContexts.length > 0) {
-    const fileList = fileContexts.map(c => `- ${c.filePath}`).join('\n')
+    const fileList = fileContexts.map((c) => `- ${c.filePath}`).join('\n')
     sections.push(`[Attached Files]\n${fileList}`)
   }
 
   // 文件夹上下文
   if (folderContexts.length > 0) {
-    const folderList = folderContexts.map(c => `- ${c.folderPath} (explore using glob/grep/read_file)`).join('\n')
+    const folderList = folderContexts
+      .map((c) => `- ${c.folderPath} (explore using glob/grep/read_file)`)
+      .join('\n')
     sections.push(`[Attached Folders]\n${folderList}`)
   }
 
   // Web 上下文
   if (webContexts.length > 0) {
-    const webList = webContexts.map(c => `- ${c.url} (fetch using http_get or web_search)`).join('\n')
+    const webList = webContexts
+      .map((c) => `- ${c.url} (fetch using http_get or web_search)`)
+      .join('\n')
     sections.push(`[Attached Web Resources]\n${webList}`)
   }
 
@@ -286,17 +346,23 @@ async function sendMessage(
   attachedFiles?: AttachedFile[],
   dataSourceId?: string,
   dataSourceName?: string,
-  modelSelection?: string
+  modelSelection?: string,
+  agentId?: string,
 ) {
   if (!prompt.trim()) return
 
   let sessionId = currentSessionId.value
+  const effectiveAgentId = resolveAgentId(
+    agentId ?? selectedAgentId.value ?? currentSession.value?.agentId,
+  )
 
   // Create session if none selected
   if (!sessionId) {
-    const session = await createSession('New Conversation')
+    const session = await createSession('New Conversation', effectiveAgentId)
     sessionId = session.id
     currentSessionId.value = sessionId
+  } else {
+    updateSessionAgent(sessionId, effectiveAgentId)
   }
 
   // 优先使用新的 attachedContexts，如果为空则向后兼容旧的 filePaths
@@ -306,7 +372,7 @@ async function sendMessage(
     fullPrompt = contextPrefix + prompt
   } else if (filePaths && filePaths.length > 0) {
     // 向后兼容旧的 filePaths 参数
-    const fileList = filePaths.map(p => `- ${p}`).join('\n')
+    const fileList = filePaths.map((p) => `- ${p}`).join('\n')
     fullPrompt = `[Attached Files]\n${fileList}\n\n${prompt}`
   }
 
@@ -318,10 +384,11 @@ async function sendMessage(
     role: 'user',
     content: prompt,
     createdAt: new Date().toISOString(),
-    attachedContexts: attachedContexts && attachedContexts.length > 0 ? [...attachedContexts] : undefined,
-    attachedFiles: attachedFiles && attachedFiles.length > 0 ? [...attachedFiles] : undefined,  // 向后兼容
+    attachedContexts:
+      attachedContexts && attachedContexts.length > 0 ? [...attachedContexts] : undefined,
+    attachedFiles: attachedFiles && attachedFiles.length > 0 ? [...attachedFiles] : undefined, // 向后兼容
     dataSourceId,
-    dataSourceName
+    dataSourceName,
   }
   messages.value.push(userMessage)
 
@@ -332,7 +399,11 @@ async function sendMessage(
   subagentIndex.value = {}
 
   try {
-    const payload: Record<string, unknown> = { sessionId, prompt: fullPrompt }
+    const payload: Record<string, unknown> = {
+      sessionId,
+      prompt: fullPrompt,
+      agentId: effectiveAgentId,
+    }
 
     // 添加排除的 MCP 服务器
     if (excludedMcpServers.value.size > 0) {
@@ -349,10 +420,16 @@ async function sendMessage(
       payload.model = modelSelection
     }
 
-    const result = await request<{ runId: string; sessionId: string; status: string }>(
-      'agent.run',
-      payload
-    )
+    const result = await request<{
+      runId: string
+      sessionId: string
+      status: string
+      agentId?: string
+    }>('agent.run', payload)
+
+    const resolvedRunAgentId = resolveAgentId(result.agentId ?? effectiveAgentId)
+    selectedAgentId.value = resolvedRunAgentId
+    updateSessionAgent(result.sessionId, resolvedRunAgentId)
 
     currentRun.value = {
       id: result.runId,
@@ -360,7 +437,7 @@ async function sendMessage(
       prompt,
       status: result.status as Run['status'],
       createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
+      updatedAt: new Date().toISOString(),
     }
   } catch (e) {
     isStreaming.value = false
@@ -391,19 +468,21 @@ async function confirmToolCall(callId: string, decision: 'approve' | 'reject') {
  * 在 lifecycle.end 和 cancelRun 中复用
  */
 function deepCopyBlocks(blocks: StreamBlock[]): StreamBlock[] {
-  return blocks.map(block => ({
+  return blocks.map((block) => ({
     ...block,
     toolCall: block.toolCall ? { ...block.toolCall } : undefined,
     skillActivation: block.skillActivation ? { ...block.skillActivation } : undefined,
     file: block.file ? { ...block.file } : undefined,
-    subagent: block.subagent ? {
-      ...block.subagent,
-      streamBlocks: block.subagent.streamBlocks?.map(sb => ({
-        ...sb,
-        toolCall: sb.toolCall ? { ...sb.toolCall } : undefined
-      })),
-      toolCallIndex: undefined  // 不需要保存索引
-    } : undefined
+    subagent: block.subagent
+      ? {
+          ...block.subagent,
+          streamBlocks: block.subagent.streamBlocks?.map((sb) => ({
+            ...sb,
+            toolCall: sb.toolCall ? { ...sb.toolCall } : undefined,
+          })),
+          toolCallIndex: undefined, // 不需要保存索引
+        }
+      : undefined,
   }))
 }
 
@@ -427,8 +506,8 @@ async function cancelRun() {
     if (streamBlocks.value.length > 0) {
       // 保存已有 streamBlocks 为 assistant message（复用深拷贝逻辑）
       const textContent = streamBlocks.value
-        .filter(b => b.type === 'text')
-        .map(b => b.content || '')
+        .filter((b) => b.type === 'text')
+        .map((b) => b.content || '')
         .join('')
 
       const savedBlocks = deepCopyBlocks(streamBlocks.value)
@@ -440,7 +519,7 @@ async function cancelRun() {
         role: 'assistant',
         content: textContent + '\n\n---\n_Cancelled by user_',
         createdAt: new Date().toISOString(),
-        blocks: savedBlocks
+        blocks: savedBlocks,
       }
       messages.value.push(assistantMessage)
     } else {
@@ -451,7 +530,7 @@ async function cancelRun() {
         runId: runIdToCancel,
         role: 'assistant',
         content: '_Cancelled by user_',
-        createdAt: new Date().toISOString()
+        createdAt: new Date().toISOString(),
       }
       messages.value.push(cancelMessage)
     }
@@ -480,7 +559,7 @@ function getOrCreateTextBlock(): StreamBlock {
   const newBlock: StreamBlock = {
     id: `text-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
     type: 'text',
-    content: ''
+    content: '',
   }
   streamBlocks.value.push(newBlock)
   return newBlock
@@ -493,7 +572,7 @@ function createToolBlock(toolCall: ToolCall): StreamBlock {
   const block: StreamBlock = {
     id: `tool-${toolCall.callId}`,
     type: 'tool',
-    toolCall
+    toolCall,
   }
   streamBlocks.value.push(block)
   toolCallIndex.value[toolCall.callId] = toolCall
@@ -507,7 +586,7 @@ function createSkillBlock(activation: SkillActivation): StreamBlock {
   const block: StreamBlock = {
     id: `skill-${activation.skillName}-${Date.now()}`,
     type: 'skill',
-    skillActivation: activation
+    skillActivation: activation,
   }
   streamBlocks.value.push(block)
   return block
@@ -522,7 +601,7 @@ function createSubagentBlock(info: SubagentInfo): StreamBlock {
   const block: StreamBlock = {
     id: `subagent-${info.subRunId}`,
     type: 'subagent',
-    subagent: info
+    subagent: info,
   }
   streamBlocks.value.push(block)
   subagentIndex.value[info.subRunId] = info
@@ -577,74 +656,101 @@ function setupEventListeners() {
   isSetup = true
 
   // 清理之前的监听器（以防万一）
-  eventCleanups.forEach(cleanup => cleanup())
+  eventCleanups.forEach((cleanup) => cleanup())
   eventCleanups = []
 
   // Handle streaming deltas - 追加到当前文本块
-  eventCleanups.push(onEvent('assistant.delta', (event: RpcEvent) => {
-    if (event.payload && typeof event.payload === 'object' && 'content' in event.payload) {
-      const content = (event.payload as { content: string }).content
+  eventCleanups.push(
+    onEvent('assistant.delta', (event: RpcEvent) => {
+      if (event.payload && typeof event.payload === 'object' && 'content' in event.payload) {
+        const content = (event.payload as { content: string }).content
 
-      // 检查是否属于 subagent
-      const subagent = findSubagentByRunId(event.runId)
-      if (subagent && subagent.streamBlocks) {
-        const lastBlock = subagent.streamBlocks[subagent.streamBlocks.length - 1]
-        if (lastBlock && lastBlock.type === 'text') {
-          lastBlock.content = (lastBlock.content || '') + content
-        } else {
-          subagent.streamBlocks.push({
-            id: `text-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-            type: 'text',
-            content
-          })
+        // 检查是否属于 subagent
+        const subagent = findSubagentByRunId(event.runId)
+        if (subagent && subagent.streamBlocks) {
+          const lastBlock = subagent.streamBlocks[subagent.streamBlocks.length - 1]
+          if (lastBlock && lastBlock.type === 'text') {
+            lastBlock.content = (lastBlock.content || '') + content
+          } else {
+            subagent.streamBlocks.push({
+              id: `text-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+              type: 'text',
+              content,
+            })
+          }
+          return
         }
-        return
-      }
 
-      // 路由到主流
-      const textBlock = getOrCreateTextBlock()
-      textBlock.content = (textBlock.content || '') + content
-    }
-  }))
+        // 路由到主流
+        const textBlock = getOrCreateTextBlock()
+        textBlock.content = (textBlock.content || '') + content
+      }
+    }),
+  )
 
   // Handle tool.confirm_request (HITL tool needs approval) - 创建新的工具块
-  eventCleanups.push(onEvent('tool.confirm_request', (event: RpcEvent) => {
-    const payload = event.payload as ToolConfirmRequestPayload
-    if (payload) {
-      const toolCall: ToolCall = {
-        callId: payload.callId,
-        toolName: payload.toolName,
-        arguments: payload.arguments,
-        status: 'pending',
-        requiresConfirm: true
-      }
+  eventCleanups.push(
+    onEvent('tool.confirm_request', (event: RpcEvent) => {
+      const payload = event.payload as ToolConfirmRequestPayload
+      if (payload) {
+        const toolCall: ToolCall = {
+          callId: payload.callId,
+          toolName: payload.toolName,
+          arguments: payload.arguments,
+          status: 'pending',
+          requiresConfirm: true,
+        }
 
-      // 检查是否属于 subagent
-      const subagent = findSubagentByRunId(event.runId)
-      if (subagent && subagent.streamBlocks) {
-        subagent.streamBlocks.push({
-          id: `tool-${payload.callId}`,
-          type: 'tool',
-          toolCall
-        })
-        subagent.toolCallIndex![payload.callId] = toolCall
-        // 注意：confirm 仍需放入主 toolCallIndex 以便 confirmToolCall 能找到
-        toolCallIndex.value[payload.callId] = toolCall
-        return
-      }
+        // 检查是否属于 subagent
+        const subagent = findSubagentByRunId(event.runId)
+        if (subagent && subagent.streamBlocks) {
+          subagent.streamBlocks.push({
+            id: `tool-${payload.callId}`,
+            type: 'tool',
+            toolCall,
+          })
+          subagent.toolCallIndex![payload.callId] = toolCall
+          // 注意：confirm 仍需放入主 toolCallIndex 以便 confirmToolCall 能找到
+          toolCallIndex.value[payload.callId] = toolCall
+          return
+        }
 
-      createToolBlock(toolCall)
-    }
-  }))
+        createToolBlock(toolCall)
+      }
+    }),
+  )
 
   // Handle tool.call (tool execution started) - 创建或更新工具块
-  eventCleanups.push(onEvent('tool.call', (event: RpcEvent) => {
-    const payload = event.payload as ToolCallPayload
-    if (payload) {
-      // 检查是否属于 subagent
-      const subagent = findSubagentByRunId(event.runId)
-      if (subagent && subagent.streamBlocks) {
-        const existingCall = subagent.toolCallIndex?.[payload.callId]
+  eventCleanups.push(
+    onEvent('tool.call', (event: RpcEvent) => {
+      const payload = event.payload as ToolCallPayload
+      if (payload) {
+        // 检查是否属于 subagent
+        const subagent = findSubagentByRunId(event.runId)
+        if (subagent && subagent.streamBlocks) {
+          const existingCall = subagent.toolCallIndex?.[payload.callId]
+          if (existingCall) {
+            existingCall.status = 'executing'
+          } else {
+            const toolCall: ToolCall = {
+              callId: payload.callId,
+              toolName: payload.toolName,
+              arguments: payload.arguments,
+              status: 'executing',
+              requiresConfirm: false,
+            }
+            subagent.streamBlocks.push({
+              id: `tool-${payload.callId}`,
+              type: 'tool',
+              toolCall,
+            })
+            subagent.toolCallIndex![payload.callId] = toolCall
+          }
+          return
+        }
+
+        // 路由到主流
+        const existingCall = toolCallIndex.value[payload.callId]
         if (existingCall) {
           existingCall.status = 'executing'
         } else {
@@ -653,252 +759,258 @@ function setupEventListeners() {
             toolName: payload.toolName,
             arguments: payload.arguments,
             status: 'executing',
-            requiresConfirm: false
+            requiresConfirm: false,
           }
-          subagent.streamBlocks.push({
-            id: `tool-${payload.callId}`,
-            type: 'tool',
-            toolCall
-          })
-          subagent.toolCallIndex![payload.callId] = toolCall
+          createToolBlock(toolCall)
         }
-        return
-      }
 
-      // 路由到主流
-      const existingCall = toolCallIndex.value[payload.callId]
-      if (existingCall) {
-        existingCall.status = 'executing'
-      } else {
-        const toolCall: ToolCall = {
-          callId: payload.callId,
-          toolName: payload.toolName,
-          arguments: payload.arguments,
-          status: 'executing',
-          requiresConfirm: false
-        }
-        createToolBlock(toolCall)
-      }
-
-      // Detect write_file and open artifact panel
-      if (payload.toolName === 'write_file' && payload.arguments) {
-        const args = payload.arguments as Record<string, unknown>
-        const path = (args.path || args.filePath) as string | undefined
-        const content = args.content as string | undefined
-        if (path && content) {
-          // If already streaming, finish with final content; otherwise open directly (fallback)
-          if (artifact.value?.streaming) {
-            finishStreaming(content)
-          } else {
-            openArtifact(path, content)
+        // Detect write_file and open artifact panel
+        if (payload.toolName === 'write_file' && payload.arguments) {
+          const args = payload.arguments as Record<string, unknown>
+          const path = (args.path || args.filePath) as string | undefined
+          const content = args.content as string | undefined
+          if (path && content) {
+            // If already streaming, finish with final content; otherwise open directly (fallback)
+            if (artifact.value?.streaming) {
+              finishStreaming(content)
+            } else {
+              openArtifact(path, content)
+            }
           }
         }
       }
-    }
-  }))
+    }),
+  )
 
   // Handle tool.result - 更新工具块
-  eventCleanups.push(onEvent('tool.result', (event: RpcEvent) => {
-    const payload = event.payload as ToolResultPayload
-    if (payload) {
-      // 检查是否属于 subagent
-      const subagent = findSubagentByRunId(event.runId)
-      if (subagent && subagent.toolCallIndex?.[payload.callId]) {
-        const toolCall = subagent.toolCallIndex[payload.callId]!
-        toolCall.status = payload.success ? 'success' : 'error'
-        toolCall.result = payload.content
-        return
-      }
+  eventCleanups.push(
+    onEvent('tool.result', (event: RpcEvent) => {
+      const payload = event.payload as ToolResultPayload
+      if (payload) {
+        // 检查是否属于 subagent
+        const subagent = findSubagentByRunId(event.runId)
+        if (subagent && subagent.toolCallIndex?.[payload.callId]) {
+          const toolCall = subagent.toolCallIndex[payload.callId]!
+          toolCall.status = payload.success ? 'success' : 'error'
+          toolCall.result = payload.content
+          return
+        }
 
-      // 路由到主流
-      updateToolBlock(payload.callId, (toolCall) => {
-        toolCall.status = payload.success ? 'success' : 'error'
-        toolCall.result = payload.content
-      })
-    }
-  }))
+        // 路由到主流
+        updateToolBlock(payload.callId, (toolCall) => {
+          toolCall.status = payload.success ? 'success' : 'error'
+          toolCall.result = payload.content
+        })
+      }
+    }),
+  )
 
   // Handle skill.activated - 创建技能激活块
-  eventCleanups.push(onEvent('skill.activated', (event: RpcEvent) => {
-    const payload = event.payload as SkillActivatedPayload
-    if (payload) {
-      createSkillBlock({
-        skillName: payload.skillName,
-        source: payload.source
-      })
-    }
-  }))
+  eventCleanups.push(
+    onEvent('skill.activated', (event: RpcEvent) => {
+      const payload = event.payload as SkillActivatedPayload
+      if (payload) {
+        createSkillBlock({
+          skillName: payload.skillName,
+          source: payload.source,
+        })
+      }
+    }),
+  )
 
   // Handle session.renamed - 更新会话名称
-  eventCleanups.push(onEvent('session.renamed', (event: RpcEvent) => {
-    const payload = event.payload as { sessionId: string; name: string }
-    if (payload?.sessionId) {
-      const session = sessions.value.find(s => s.id === payload.sessionId)
-      if (session) {
-        session.name = payload.name
+  eventCleanups.push(
+    onEvent('session.renamed', (event: RpcEvent) => {
+      const payload = event.payload as { sessionId: string; name: string }
+      if (payload?.sessionId) {
+        const session = sessions.value.find((s) => s.id === payload.sessionId)
+        if (session) {
+          session.name = payload.name
+        }
       }
-    }
-  }))
+    }),
+  )
 
   // Handle artifact.open - AI 开始写文件，打开流式预览面板
-  eventCleanups.push(onEvent('artifact.open', (event: RpcEvent) => {
-    if (currentRun.value && event.runId === currentRun.value.id) {
-      const payload = event.payload as { path: string }
-      if (payload?.path) {
-        startStreaming(payload.path)
+  eventCleanups.push(
+    onEvent('artifact.open', (event: RpcEvent) => {
+      if (currentRun.value && event.runId === currentRun.value.id) {
+        const payload = event.payload as { path: string }
+        if (payload?.path) {
+          startStreaming(payload.path)
+        }
       }
-    }
-  }))
+    }),
+  )
 
   // Handle artifact.delta - 文件内容增量到达
-  eventCleanups.push(onEvent('artifact.delta', (event: RpcEvent) => {
-    if (currentRun.value && event.runId === currentRun.value.id) {
-      const payload = event.payload as { content: string }
-      if (payload?.content) {
-        appendContent(payload.content)
+  eventCleanups.push(
+    onEvent('artifact.delta', (event: RpcEvent) => {
+      if (currentRun.value && event.runId === currentRun.value.id) {
+        const payload = event.payload as { content: string }
+        if (payload?.content) {
+          appendContent(payload.content)
+        }
       }
-    }
-  }))
+    }),
+  )
 
   // Handle file.created - 文件创建完成，添加 file block
-  eventCleanups.push(onEvent('file.created', (event: RpcEvent) => {
-    const payload = event.payload as FileCreatedPayload
-    if (payload) {
-      const fileInfo: SessionFile = {
-        id: payload.fileId || `tmp-${Date.now()}`,
-        sessionId: currentSessionId.value || '',
-        runId: event.runId,
-        filePath: payload.path,
-        fileName: payload.fileName,
-        fileSize: payload.size,
-        createdAt: new Date().toISOString()
+  eventCleanups.push(
+    onEvent('file.created', (event: RpcEvent) => {
+      const payload = event.payload as FileCreatedPayload
+      if (payload) {
+        const fileInfo: SessionFile = {
+          id: payload.fileId || `tmp-${Date.now()}`,
+          sessionId: currentSessionId.value || '',
+          runId: event.runId,
+          filePath: payload.path,
+          fileName: payload.fileName,
+          fileSize: payload.size,
+          createdAt: new Date().toISOString(),
+        }
+        streamBlocks.value.push({
+          id: `file-${fileInfo.id}`,
+          type: 'file',
+          file: fileInfo,
+        })
+        sessionFiles.value.push(fileInfo)
       }
-      streamBlocks.value.push({
-        id: `file-${fileInfo.id}`,
-        type: 'file',
-        file: fileInfo
-      })
-      sessionFiles.value.push(fileInfo)
-    }
-  }))
+    }),
+  )
 
   // Handle subagent.spawned - 创建子代理块
-  eventCleanups.push(onEvent('subagent.spawned', (event: RpcEvent) => {
-    const payload = event.payload as SubagentSpawnedPayload
-    if (payload) {
-      createSubagentBlock({
-        subRunId: payload.subRunId,
-        subSessionId: payload.subSessionId,
-        sessionKey: payload.sessionKey,
-        agentId: payload.agentId,
-        task: payload.task,
-        lane: payload.lane,
-        status: 'queued'
-      })
-    }
-  }))
+  eventCleanups.push(
+    onEvent('subagent.spawned', (event: RpcEvent) => {
+      const payload = event.payload as SubagentSpawnedPayload
+      if (payload) {
+        createSubagentBlock({
+          subRunId: payload.subRunId,
+          subSessionId: payload.subSessionId,
+          sessionKey: payload.sessionKey,
+          agentId: payload.agentId,
+          task: payload.task,
+          lane: payload.lane,
+          status: 'queued',
+        })
+      }
+    }),
+  )
 
   // Handle subagent.started - 更新状态为 running
-  eventCleanups.push(onEvent('subagent.started', (event: RpcEvent) => {
-    const payload = event.payload as SubagentStartedPayload
-    if (payload) {
-      updateSubagentBlock(payload.subRunId, (info) => {
-        info.status = 'running'
-        info.startedAt = Date.now()
-      })
-    }
-  }))
+  eventCleanups.push(
+    onEvent('subagent.started', (event: RpcEvent) => {
+      const payload = event.payload as SubagentStartedPayload
+      if (payload) {
+        updateSubagentBlock(payload.subRunId, (info) => {
+          info.status = 'running'
+          info.startedAt = Date.now()
+        })
+      }
+    }),
+  )
 
   // Handle subagent.announced - 更新为完成状态
-  eventCleanups.push(onEvent('subagent.announced', (event: RpcEvent) => {
-    const payload = event.payload as SubagentAnnouncedPayload
-    if (payload) {
-      updateSubagentBlock(payload.subRunId, (info) => {
-        info.status = payload.status === 'completed' ? 'completed' : 'failed'
-        info.result = payload.result
-        info.error = payload.error
-        info.durationMs = payload.durationMs
-      })
-    }
-  }))
+  eventCleanups.push(
+    onEvent('subagent.announced', (event: RpcEvent) => {
+      const payload = event.payload as SubagentAnnouncedPayload
+      if (payload) {
+        updateSubagentBlock(payload.subRunId, (info) => {
+          info.status = payload.status === 'completed' ? 'completed' : 'failed'
+          info.result = payload.result
+          info.error = payload.error
+          info.durationMs = payload.durationMs
+        })
+      }
+    }),
+  )
 
   // Handle subagent.failed - 更新为失败状态
-  eventCleanups.push(onEvent('subagent.failed', (event: RpcEvent) => {
-    const payload = event.payload as SubagentFailedPayload
-    if (payload) {
-      updateSubagentBlock(payload.subRunId, (info) => {
-        info.status = 'failed'
-        info.error = payload.error
-      })
-    }
-  }))
+  eventCleanups.push(
+    onEvent('subagent.failed', (event: RpcEvent) => {
+      const payload = event.payload as SubagentFailedPayload
+      if (payload) {
+        updateSubagentBlock(payload.subRunId, (info) => {
+          info.status = 'failed'
+          info.error = payload.error
+        })
+      }
+    }),
+  )
 
   // Handle heartbeat.notify - 转发到独立通知系统，不注入 session 消息列表
-  eventCleanups.push(onEvent('heartbeat.notify', (event: RpcEvent) => {
-    const payload = event.payload as { content: string; sessionId: string; runId: string }
-    if (payload) {
-      addNotification(payload.content, payload.sessionId, payload.runId)
-    }
-  }))
+  eventCleanups.push(
+    onEvent('heartbeat.notify', (event: RpcEvent) => {
+      const payload = event.payload as { content: string; sessionId: string; runId: string }
+      if (payload) {
+        addNotification(payload.content, payload.sessionId, payload.runId)
+      }
+    }),
+  )
 
   // Handle lifecycle end - 保存到消息
-  eventCleanups.push(onEvent('lifecycle.end', (event: RpcEvent) => {
-    if (currentRun.value && event.runId === currentRun.value.id) {
-      // 收集所有文本内容（用于简单显示和搜索）
-      const textContent = streamBlocks.value
-        .filter(b => b.type === 'text')
-        .map(b => b.content || '')
-        .join('')
+  eventCleanups.push(
+    onEvent('lifecycle.end', (event: RpcEvent) => {
+      if (currentRun.value && event.runId === currentRun.value.id) {
+        // 收集所有文本内容（用于简单显示和搜索）
+        const textContent = streamBlocks.value
+          .filter((b) => b.type === 'text')
+          .map((b) => b.content || '')
+          .join('')
 
-      // 复制 blocks 用于保存（深拷贝避免引用问题）
-      const savedBlocks = deepCopyBlocks(streamBlocks.value)
+        // 复制 blocks 用于保存（深拷贝避免引用问题）
+        const savedBlocks = deepCopyBlocks(streamBlocks.value)
 
-      // Add assistant message with blocks
-      const assistantMessage: Message = {
-        id: `msg-${Date.now()}`,
-        sessionId: currentRun.value.sessionId,
-        runId: event.runId,
-        role: 'assistant',
-        content: textContent,
-        createdAt: new Date().toISOString(),
-        blocks: savedBlocks.length > 0 ? savedBlocks : undefined
+        // Add assistant message with blocks
+        const assistantMessage: Message = {
+          id: `msg-${Date.now()}`,
+          sessionId: currentRun.value.sessionId,
+          runId: event.runId,
+          role: 'assistant',
+          content: textContent,
+          createdAt: new Date().toISOString(),
+          blocks: savedBlocks.length > 0 ? savedBlocks : undefined,
+        }
+        messages.value.push(assistantMessage)
+
+        // Reset streaming state
+        isStreaming.value = false
+        streamBlocks.value = []
+        toolCallIndex.value = {}
+        subagentIndex.value = {}
+        currentRun.value = null
       }
-      messages.value.push(assistantMessage)
-
-      // Reset streaming state
-      isStreaming.value = false
-      streamBlocks.value = []
-      toolCallIndex.value = {}
-      subagentIndex.value = {}
-      currentRun.value = null
-    }
-  }))
+    }),
+  )
 
   // Handle errors
-  eventCleanups.push(onEvent('lifecycle.error', (event: RpcEvent) => {
-    if (currentRun.value && event.runId === currentRun.value.id) {
-      const errorMsg = event.payload && typeof event.payload === 'object' && 'message' in event.payload
-        ? (event.payload as { message: string }).message
-        : 'Unknown error'
+  eventCleanups.push(
+    onEvent('lifecycle.error', (event: RpcEvent) => {
+      if (currentRun.value && event.runId === currentRun.value.id) {
+        const errorMsg =
+          event.payload && typeof event.payload === 'object' && 'message' in event.payload
+            ? (event.payload as { message: string }).message
+            : 'Unknown error'
 
-      // Add error as assistant message
-      const errorMessage: Message = {
-        id: `msg-${Date.now()}`,
-        sessionId: currentRun.value.sessionId,
-        runId: event.runId,
-        role: 'assistant',
-        content: `Error: ${errorMsg}`,
-        createdAt: new Date().toISOString()
+        // Add error as assistant message
+        const errorMessage: Message = {
+          id: `msg-${Date.now()}`,
+          sessionId: currentRun.value.sessionId,
+          runId: event.runId,
+          role: 'assistant',
+          content: `Error: ${errorMsg}`,
+          createdAt: new Date().toISOString(),
+        }
+        messages.value.push(errorMessage)
+
+        isStreaming.value = false
+        streamBlocks.value = []
+        toolCallIndex.value = {}
+        subagentIndex.value = {}
+        currentRun.value = null
       }
-      messages.value.push(errorMessage)
-
-      isStreaming.value = false
-      streamBlocks.value = []
-      toolCallIndex.value = {}
-      subagentIndex.value = {}
-      currentRun.value = null
-    }
-  }))
+    }),
+  )
 }
 
 export function useChat() {
@@ -911,6 +1023,10 @@ export function useChat() {
     messages,
     streamBlocks,
     isStreaming,
+    agents,
+    enabledAgents,
+    selectedAgent,
+    selectedAgentId,
     subagentIndex,
     sessionFiles,
 
@@ -922,12 +1038,14 @@ export function useChat() {
     // MCP server filtering
     excludedMcpServers,
     toggleMcpServer,
+    setSelectedAgent,
 
     // Filtered sessions (excludes subagent child sessions)
     filteredSessions,
 
     // Actions
     loadSessions,
+    loadAgents,
     createSession,
     selectSession,
     deleteSession,
@@ -935,6 +1053,6 @@ export function useChat() {
     sendMessage,
     confirmToolCall,
     cancelRun,
-    setupEventListeners
+    setupEventListeners,
   }
 }

@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import type { Session } from '@/types'
-import { ref, watch } from 'vue'
+import type { Session, AgentProfile } from '@/types'
+import { ref, watch, computed } from 'vue'
 import { useConfirm } from '@/composables/useConfirm'
 import { useI18n } from '@/i18n'
 import { useHeartbeat } from '@/composables/useHeartbeat'
@@ -8,12 +8,14 @@ import { useWebSocket } from '@/composables/useWebSocket'
 
 const { confirm } = useConfirm()
 const { t } = useI18n()
-const { notifications, unreadCount, markAsRead, markAllAsRead, clearAll, selectNotification } = useHeartbeat()
+const { notifications, unreadCount, markAsRead, markAllAsRead, clearAll, selectNotification } =
+  useHeartbeat()
 const { state: connectionState } = useWebSocket()
 
-defineProps<{
+const props = defineProps<{
   sessions: Session[]
   currentId: string | null
+  agents?: AgentProfile[]
 }>()
 
 const emit = defineEmits<{
@@ -24,6 +26,14 @@ const emit = defineEmits<{
 
 const collapsed = ref(localStorage.getItem('sidebar-collapsed') === 'true')
 const notificationsOpen = ref(false)
+
+const agentLabelMap = computed(() => {
+  const map = new Map<string, string>()
+  for (const agent of props.agents ?? []) {
+    map.set(agent.id, agent.displayName || agent.name || agent.id)
+  }
+  return map
+})
 
 watch(collapsed, (v) => localStorage.setItem('sidebar-collapsed', String(v)))
 
@@ -57,11 +67,16 @@ async function handleDelete(e: Event, sessionId: string) {
     message: t('session.deleteMessage'),
     confirmText: t('common.delete'),
     cancelText: t('common.cancel'),
-    danger: true
+    danger: true,
   })
   if (confirmed) {
     emit('delete', sessionId)
   }
+}
+
+function sessionAgentLabel(session: Session): string {
+  const id = session.agentId || 'main'
+  return agentLabelMap.value.get(id) ?? id
 }
 </script>
 
@@ -80,7 +95,13 @@ async function handleDelete(e: Event, sessionId: string) {
           :title="t('session.expand')"
         >
           <svg width="15" height="15" viewBox="0 0 15 15" fill="none">
-            <path d="M6 3L10 7.5L6 12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <path
+              d="M6 3L10 7.5L6 12"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
           </svg>
         </button>
 
@@ -92,18 +113,53 @@ async function handleDelete(e: Event, sessionId: string) {
           :title="t('session.notifications')"
         >
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-            <line x1="8" y1="1.5" x2="8" y2="3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
-            <path d="M4 11V8a4 4 0 0 0 8 0v3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
-            <line x1="2" y1="11" x2="14" y2="11" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
-            <path d="M6.5 13a1.5 1.5 0 0 0 3 0" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+            <line
+              x1="8"
+              y1="1.5"
+              x2="8"
+              y2="3"
+              stroke="currentColor"
+              stroke-width="1.4"
+              stroke-linecap="round"
+            />
+            <path
+              d="M4 11V8a4 4 0 0 0 8 0v3"
+              stroke="currentColor"
+              stroke-width="1.4"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+            <line
+              x1="2"
+              y1="11"
+              x2="14"
+              y2="11"
+              stroke="currentColor"
+              stroke-width="1.4"
+              stroke-linecap="round"
+            />
+            <path
+              d="M6.5 13a1.5 1.5 0 0 0 3 0"
+              stroke="currentColor"
+              stroke-width="1.4"
+              stroke-linecap="round"
+            />
           </svg>
-          <span v-if="unreadCount > 0" class="notif-badge">{{ unreadCount > 9 ? '9+' : unreadCount }}</span>
+          <span v-if="unreadCount > 0" class="notif-badge">{{
+            unreadCount > 9 ? '9+' : unreadCount
+          }}</span>
         </button>
 
         <RouterLink to="/settings/llm" class="rail-btn" :title="t('common.settings')">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-            <path d="M12.22 2h-.44a2 2 0 00-2 2v.18a2 2 0 01-1 1.73l-.43.25a2 2 0 01-2 0l-.15-.08a2 2 0 00-2.73.73l-.22.38a2 2 0 00.73 2.73l.15.1a2 2 0 011 1.72v.51a2 2 0 01-1 1.74l-.15.09a2 2 0 00-.73 2.73l.22.38a2 2 0 002.73.73l.15-.08a2 2 0 012 0l.43.25a2 2 0 011 1.73V20a2 2 0 002 2h.44a2 2 0 002-2v-.18a2 2 0 011-1.73l.43-.25a2 2 0 012 0l.15.08a2 2 0 002.73-.73l.22-.39a2 2 0 00-.73-2.73l-.15-.08a2 2 0 01-1-1.74v-.5a2 2 0 011-1.74l.15-.09a2 2 0 00.73-2.73l-.22-.38a2 2 0 00-2.73-.73l-.15.08a2 2 0 01-2 0l-.43-.25a2 2 0 01-1-1.73V4a2 2 0 00-2-2z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-            <circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.5"/>
+            <path
+              d="M12.22 2h-.44a2 2 0 00-2 2v.18a2 2 0 01-1 1.73l-.43.25a2 2 0 01-2 0l-.15-.08a2 2 0 00-2.73.73l-.22.38a2 2 0 00.73 2.73l.15.1a2 2 0 011 1.72v.51a2 2 0 01-1 1.74l-.15.09a2 2 0 00-.73 2.73l.22.38a2 2 0 002.73.73l.15-.08a2 2 0 012 0l.43.25a2 2 0 011 1.73V20a2 2 0 002 2h.44a2 2 0 002-2v-.18a2 2 0 011-1.73l.43-.25a2 2 0 012 0l.15.08a2 2 0 002.73-.73l.22-.39a2 2 0 00-.73-2.73l-.15-.08a2 2 0 01-1-1.74v-.5a2 2 0 011-1.74l.15-.09a2 2 0 00.73-2.73l-.22-.38a2 2 0 00-2.73-.73l-.15.08a2 2 0 01-2 0l-.43-.25a2 2 0 01-1-1.73V4a2 2 0 00-2-2z"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+            <circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.5" />
           </svg>
         </RouterLink>
       </div>
@@ -111,12 +167,16 @@ async function handleDelete(e: Event, sessionId: string) {
 
     <!-- Session / Notification Panel (220px, collapsible) -->
     <div class="session-panel" :class="{ collapsed }">
-
       <!-- Session mode header -->
       <div class="panel-header" v-if="!notificationsOpen">
         <button class="new-session-btn" @click="emit('create')" :title="t('session.new')">
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-            <path d="M7 2V12M2 7H12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            <path
+              d="M7 2V12M2 7H12"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+            />
           </svg>
           {{ t('session.new') }}
         </button>
@@ -141,7 +201,12 @@ async function handleDelete(e: Event, sessionId: string) {
             :title="t('session.clearAll')"
           >
             <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-              <path d="M2 2L10 10M10 2L2 10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+              <path
+                d="M2 2L10 10M10 2L2 10"
+                stroke="currentColor"
+                stroke-width="1.5"
+                stroke-linecap="round"
+              />
             </svg>
           </button>
         </div>
@@ -161,11 +226,21 @@ async function handleDelete(e: Event, sessionId: string) {
         >
           <div class="session-content">
             <span class="session-title">{{ session.name || t('session.untitled') }}</span>
+            <span class="session-agent">{{ sessionAgentLabel(session) }}</span>
             <span class="session-date">{{ formatDate(session.createdAt) }}</span>
           </div>
-          <button class="delete-btn" @click="(e) => handleDelete(e, session.id)" :title="t('common.delete')">
+          <button
+            class="delete-btn"
+            @click="(e) => handleDelete(e, session.id)"
+            :title="t('common.delete')"
+          >
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-              <path d="M3 3L11 11M11 3L3 11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+              <path
+                d="M3 3L11 11M11 3L3 11"
+                stroke="currentColor"
+                stroke-width="1.5"
+                stroke-linecap="round"
+              />
             </svg>
           </button>
         </div>
@@ -195,7 +270,13 @@ async function handleDelete(e: Event, sessionId: string) {
       <div class="panel-footer">
         <button class="collapse-toggle" @click="collapsed = true" :title="t('session.collapse')">
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-            <path d="M9 2L5 7L9 12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <path
+              d="M9 2L5 7L9 12"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
           </svg>
         </button>
       </div>
@@ -329,7 +410,9 @@ async function handleDelete(e: Event, sessionId: string) {
   border-right: 1px solid var(--sidebar-panel-border);
   background: var(--sidebar-panel-bg);
   overflow: hidden;
-  transition: width 0.25s var(--ease-in-out), opacity 0.2s var(--ease-in-out);
+  transition:
+    width 0.25s var(--ease-in-out),
+    opacity 0.2s var(--ease-in-out);
 }
 
 .session-panel.collapsed {
@@ -470,10 +553,32 @@ async function handleDelete(e: Event, sessionId: string) {
   white-space: nowrap;
 }
 
+.session-agent {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  max-width: 100%;
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  background: rgba(0, 0, 0, 0.05);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 1.3;
+  color: var(--color-gray-600);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .session-date {
   font-family: var(--font-mono);
   font-size: 11px;
   color: var(--color-gray-400);
+}
+
+.session-item.active .session-agent {
+  background: rgba(255, 255, 255, 0.18);
+  color: rgba(255, 255, 255, 0.88);
 }
 
 .session-item.active .session-date {
@@ -595,7 +700,9 @@ async function handleDelete(e: Event, sessionId: string) {
   background: transparent;
   color: var(--color-gray-400);
   cursor: pointer;
-  transition: background var(--duration-fast) var(--ease-in-out), color var(--duration-fast) var(--ease-in-out);
+  transition:
+    background var(--duration-fast) var(--ease-in-out),
+    color var(--duration-fast) var(--ease-in-out);
 }
 
 .collapse-toggle:hover {

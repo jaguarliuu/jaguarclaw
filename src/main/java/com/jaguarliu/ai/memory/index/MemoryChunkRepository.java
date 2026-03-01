@@ -23,11 +23,27 @@ public interface MemoryChunkRepository extends JpaRepository<MemoryChunkEntity, 
     List<MemoryChunkEntity> findByFilePath(String filePath);
 
     /**
+     * 按作用域和 agent 维度查找 chunks（Task07 使用）
+     */
+    List<MemoryChunkEntity> findByScope(String scope);
+    List<MemoryChunkEntity> findByScopeAndAgentId(String scope, String agentId);
+    List<MemoryChunkEntity> findByFilePathAndScope(String filePath, String scope);
+    List<MemoryChunkEntity> findByFilePathAndScopeAndAgentId(String filePath, String scope, String agentId);
+
+    /**
      * 删除指定文件的所有 chunks
      */
     @Transactional
     @Modifying
     void deleteByFilePath(String filePath);
+
+    @Transactional
+    @Modifying
+    void deleteByFilePathAndScope(String filePath, String scope);
+
+    @Transactional
+    @Modifying
+    void deleteByFilePathAndScopeAndAgentId(String filePath, String scope, String agentId);
 
     /**
      * 删除所有 chunks（重建索引时使用）
@@ -36,4 +52,12 @@ public interface MemoryChunkRepository extends JpaRepository<MemoryChunkEntity, 
     @Modifying
     @Query("DELETE FROM MemoryChunkEntity")
     void deleteAllChunks();
+
+    @Transactional
+    @Modifying
+    void deleteByScope(String scope);
+
+    @Transactional
+    @Modifying
+    void deleteByScopeAndAgentId(String scope, String agentId);
 }

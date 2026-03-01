@@ -51,7 +51,7 @@ public class SkillActivator {
 
         // 使用 SkillSelector 解析
         SkillSelection selection = skillSelector.parseFromLlmResponse(
-                llmResponse, context.getOriginalInput());
+                llmResponse, context.getOriginalInput(), context.getAgentId());
 
         if (!selection.isSelected()) {
             return Optional.empty();
@@ -138,7 +138,8 @@ public class SkillActivator {
     public Optional<SkillAwareRequest> applyActivation(
             SkillActivation activation,
             List<LlmRequest.Message> history,
-            String originalInput
+            String originalInput,
+            String agentId
     ) {
         String skillName = activation.skillName();
 
@@ -151,7 +152,8 @@ public class SkillActivator {
                             skillName,
                             originalInput,
                             history,
-                            "auto".equals(activation.triggerType()));
+                            "auto".equals(activation.triggerType()),
+                            agentId);
 
             if (skillRequest.isEmpty()) {
                 log.warn("Failed to activate skill: skill={}", skillName);

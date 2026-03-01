@@ -52,6 +52,16 @@ public class McpProperties {
     @Data
     public static class ServerConfig {
         /**
+         * 作用域：global / agent
+         */
+        private String scope = "global";
+
+        /**
+         * 当 scope=agent 时绑定的 agentId
+         */
+        private String agentId;
+
+        /**
          * Server 名称（唯一标识）
          */
         private String name;

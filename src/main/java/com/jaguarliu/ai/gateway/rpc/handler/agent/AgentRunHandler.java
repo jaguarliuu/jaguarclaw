@@ -13,6 +13,7 @@ import com.jaguarliu.ai.llm.model.LlmRequest;
 import com.jaguarliu.ai.llm.model.LlmResponse;
 import com.jaguarliu.ai.runtime.AgentRuntime;
 import com.jaguarliu.ai.runtime.CancellationManager;
+import com.jaguarliu.ai.runtime.ChatRouter;
 import com.jaguarliu.ai.runtime.ContextBuilder;
 import com.jaguarliu.ai.runtime.LoopConfig;
 import com.jaguarliu.ai.runtime.RunContext;
@@ -65,6 +66,7 @@ public class AgentRunHandler implements RpcHandler {
     private final AgentStrategyResolver strategyResolver;
     private final LoopConfig loopConfig;
     private final CancellationManager cancellationManager;
+    private final ChatRouter chatRouter;
     private final ConnectionManager connectionManager;
     private final TokenBudgetService tokenBudgetService;
     private final AuditLogService auditLogService;
@@ -94,6 +96,7 @@ public class AgentRunHandler implements RpcHandler {
 
         String sessionId = extractSessionId(request.getPayload());
         String prompt = extractPrompt(request.getPayload());
+        String requestedAgentId = extractAgentId(request.getPayload());
         Set<String> excludedMcpServers = extractExcludedMcpServers(request.getPayload());
         String dataSourceId = extractDataSourceId(request.getPayload());
         String modelSelection = extractModelSelection(request.getPayload());
@@ -115,7 +118,7 @@ public class AgentRunHandler implements RpcHandler {
         }
 
         // 同步创建 run 并获取序号
-        PrepareResult result = prepareRun(sessionId, prompt, request.getId(), principalId);
+        PrepareResult result = prepareRun(sessionId, prompt, requestedAgentId, request.getId(), principalId);
         if (result.error != null) {
             return Mono.just(result.error);
         }
@@ -124,6 +127,7 @@ public class AgentRunHandler implements RpcHandler {
         RpcResponse response = RpcResponse.success(request.getId(), Map.of(
                 "runId", result.run.getId(),
                 "sessionId", result.sessionId,
+                "agentId", result.run.getAgentId(),
                 "status", RunStatus.QUEUED.getValue()
         ));
 
@@ -141,23 +145,44 @@ public class AgentRunHandler implements RpcHandler {
         return Mono.just(response);
     }
 
-    private PrepareResult prepareRun(String sessionId, String prompt, String requestId, String principalId) {
+    private PrepareResult prepareRun(String sessionId, String prompt, String requestedAgentId, String requestId, String principalId) {
         String resolvedSessionId;
+        String resolvedAgentId;
+        String routedPrompt;
+        ChatRouter.RouteDecision routeDecision;
         if (sessionId == null || sessionId.isBlank()) {
-            SessionEntity session = sessionService.create("New Session", "main", principalId);
+            routeDecision = chatRouter.route(prompt, requestedAgentId, null);
+            resolvedAgentId = routeDecision.agentId();
+            routedPrompt = routeDecision.prompt();
+            SessionEntity session = sessionService.create("New Session", resolvedAgentId, principalId);
             resolvedSessionId = session.getId();
         } else {
-            if (sessionService.get(sessionId, principalId).isEmpty()) {
+            var sessionOpt = sessionService.get(sessionId, principalId);
+            if (sessionOpt.isEmpty()) {
                 return new PrepareResult(null, null, 0,
                         RpcResponse.error(requestId, "NOT_FOUND", "Session not found: " + sessionId));
             }
+            SessionEntity session = sessionOpt.get();
+            routeDecision = chatRouter.route(prompt, requestedAgentId, session.getAgentId());
+            resolvedAgentId = routeDecision.agentId();
+            routedPrompt = routeDecision.prompt();
             resolvedSessionId = sessionId;
+        }
+
+        if (routedPrompt == null || routedPrompt.isBlank()) {
+            return new PrepareResult(null, null, 0,
+                    RpcResponse.error(requestId, "INVALID_PARAMS", "Missing prompt"));
+        }
+
+        if (routeDecision.mentionedAgentId() != null && !routeDecision.mentionResolved()) {
+            log.warn("Mentioned agent not found or disabled, fallback to default: mention={}, resolved={}",
+                    routeDecision.mentionedAgentId(), resolvedAgentId);
         }
 
         Object lock = sessionLocks.computeIfAbsent(resolvedSessionId, k -> new Object());
         synchronized (lock) {
             long sequence = sessionLaneManager.nextSequence(resolvedSessionId);
-            RunEntity run = runService.create(resolvedSessionId, prompt, "main", principalId);
+            RunEntity run = runService.create(resolvedSessionId, routedPrompt, resolvedAgentId, principalId);
             log.info("Prepared run: sessionId={}, runId={}, seq={}", resolvedSessionId, run.getId(), sequence);
             return new PrepareResult(resolvedSessionId, run, sequence, null);
         }
@@ -192,6 +217,7 @@ public class AgentRunHandler implements RpcHandler {
                     .sessionId(sessionId)
                     .runId(runId)
                     .connectionId(connectionId)
+                    .agentId(run.getAgentId())
                     .prompt(prompt)
                     .dataSourceId(dataSourceId)
                     .excludedMcpServers(excludedMcpServers)
@@ -215,14 +241,9 @@ public class AgentRunHandler implements RpcHandler {
                     ? LoopConfig.withMaxSteps(plan.getMaxStepsOverride(), loopConfig)
                     : loopConfig;
             RunContext context = RunContext.create(runId, connectionId, sessionId,
-                    effectiveConfig, cancellationManager);
+                    run.getAgentId(), effectiveConfig, cancellationManager);
             context.setExcludedMcpServers(plan.getExcludedMcpServers());
-            if (plan.getAllowedTools() != null) {
-                // 复用 SkillAwareRequest 机制传递工具白名单
-                // activeSkillName 传 null：策略不是 skill，不应阻止 use_skill 调用
-                context.setActiveSkill(new ContextBuilder.SkillAwareRequest(
-                        null, null, plan.getAllowedTools(), null, null));
-            }
+            context.setStrategyAllowedTools(plan.getAllowedTools());
             context.setOriginalInput(prompt);
             if (modelSelection != null && !modelSelection.isBlank()) {
                 context.setModelSelection(modelSelection);
@@ -344,6 +365,14 @@ public class AgentRunHandler implements RpcHandler {
         if (payload instanceof Map) {
             Object prompt = ((Map<?, ?>) payload).get("prompt");
             return prompt != null ? prompt.toString() : null;
+        }
+        return null;
+    }
+
+    private String extractAgentId(Object payload) {
+        if (payload instanceof Map) {
+            Object agentId = ((Map<?, ?>) payload).get("agentId");
+            return agentId != null ? agentId.toString() : null;
         }
         return null;
     }

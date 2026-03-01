@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { useMcpServers, type McpServer } from '@/composables/useMcpServers'
+import { useAgents } from '@/composables/useAgents'
 import { useI18n } from '@/i18n'
 import Select from '@/components/common/Select.vue'
 import type { SelectOption } from '@/components/common/Select.vue'
@@ -10,11 +11,14 @@ const { t } = useI18n()
 const props = defineProps<{
   mode: 'create' | 'edit'
   server: McpServer | null
+  defaultScope?: 'GLOBAL' | 'AGENT'
+  defaultAgentId?: string
 }>()
 
 const emit = defineEmits(['close', 'success'])
 
 const { testConnection, createServer, updateServer } = useMcpServers()
+const { agents, enabledAgents, defaultAgent, loadAgents } = useAgents()
 
 const activeTab = ref<'basic' | 'connection' | 'advanced'>('basic')
 
@@ -24,7 +28,26 @@ const transportOptions: SelectOption<string>[] = [
   { label: t('sections.mcp.modal.transport.http'), value: 'HTTP' }
 ]
 
+const scopeOptions: SelectOption<'global' | 'agent'>[] = [
+  { label: t('sections.mcp.scope.global'), value: 'global' },
+  { label: t('sections.mcp.scope.agent'), value: 'agent' },
+]
+
+const agentOptions = computed(() => {
+  const list = enabledAgents.value.length > 0 ? enabledAgents.value : agents.value
+  return list.map((agent) => ({
+    label: agent.displayName || agent.name,
+    value: agent.id,
+  }))
+})
+
+function toEditScope(scope?: string): 'global' | 'agent' {
+  return scope?.toUpperCase() === 'AGENT' ? 'agent' : 'global'
+}
+
 const config = ref<Partial<McpServer>>({
+  scope: toEditScope(props.server?.scope || props.defaultScope),
+  agentId: props.server?.agentId || props.defaultAgentId || '',
   name: props.server?.name || '',
   transportType: props.server?.transportType || 'STDIO',
   command: props.server?.command || '',
@@ -52,7 +75,8 @@ const canTest = computed(() => {
 })
 
 const canSave = computed(() => {
-  return testResult.value?.success === true
+  const scopeOk = config.value.scope !== 'agent' || !!config.value.agentId
+  return testResult.value?.success === true && scopeOk
 })
 
 async function handleTestConnection() {
@@ -105,10 +129,30 @@ function removeEnv(index: number) {
   config.value.env?.splice(index, 1)
 }
 
+watch(
+  () => config.value.scope,
+  (scope) => {
+    if (scope === 'global') {
+      config.value.agentId = ''
+      return
+    }
+    if (!config.value.agentId) {
+      config.value.agentId = props.defaultAgentId || defaultAgent.value?.id || agentOptions.value[0]?.value || ''
+    }
+  },
+)
+
 // Reset test result when config changes
 watch(config, () => {
   testResult.value = null
 }, { deep: true })
+
+onMounted(async () => {
+  await loadAgents()
+  if (config.value.scope === 'agent' && !config.value.agentId) {
+    config.value.agentId = props.defaultAgentId || defaultAgent.value?.id || agentOptions.value[0]?.value || ''
+  }
+})
 </script>
 
 <template>
@@ -146,6 +190,25 @@ watch(config, () => {
       <div class="modal-body">
         <!-- Tab 1: Basic Info -->
         <div v-show="activeTab === 'basic'" class="tab-content">
+          <div class="form-group">
+            <label class="form-label">{{ t('sections.mcp.modal.scopeLabel') }} <span class="required">*</span></label>
+            <Select
+              v-model="config.scope!"
+              :options="scopeOptions"
+            />
+            <p class="form-help">{{ t('sections.mcp.modal.scopeHelp') }}</p>
+          </div>
+
+          <div v-if="config.scope === 'agent'" class="form-group">
+            <label class="form-label">{{ t('sections.mcp.modal.agentLabel') }} <span class="required">*</span></label>
+            <Select
+              v-model="config.agentId!"
+              :options="agentOptions"
+              :placeholder="t('sections.mcp.modal.agentPlaceholder')"
+            />
+            <p class="form-help">{{ t('sections.mcp.modal.agentHelp') }}</p>
+          </div>
+
           <div class="form-group">
             <label class="form-label">{{ t('sections.mcp.modal.nameLabel') }} <span class="required">*</span></label>
             <input

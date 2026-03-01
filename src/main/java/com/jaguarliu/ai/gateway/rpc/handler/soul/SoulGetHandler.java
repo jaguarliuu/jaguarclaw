@@ -10,6 +10,8 @@ import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
+import java.util.Map;
+
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -24,7 +26,18 @@ public class SoulGetHandler implements RpcHandler {
 
     @Override
     public Mono<RpcResponse> handle(String connectionId, RpcRequest request) {
-        return Mono.fromCallable(() -> RpcResponse.success(request.getId(), soulConfigService.getConfig()))
+        return Mono.fromCallable(() -> {
+                    String agentId = extractAgentId(request.getPayload());
+                    return RpcResponse.success(request.getId(), soulConfigService.getConfig(agentId));
+                })
                 .subscribeOn(Schedulers.boundedElastic());
+    }
+
+    private String extractAgentId(Object payload) {
+        if (payload instanceof Map<?, ?> map) {
+            Object agentId = map.get("agentId");
+            return agentId != null ? agentId.toString() : "main";
+        }
+        return "main";
     }
 }

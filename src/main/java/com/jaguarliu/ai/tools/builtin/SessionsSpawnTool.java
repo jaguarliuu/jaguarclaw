@@ -18,10 +18,10 @@ import java.util.Map;
 
 /**
  * sessions_spawn 工具
- * 派生子代理执行异步任务
+ * 派发 worker 执行异步任务
  *
  * 安全约束：
- * - 禁止嵌套派生（subagent 不能再 spawn）
+ * - 禁止嵌套派生（worker 不能再 spawn）
  * - 需要在 main run 中调用
  */
 @Slf4j
@@ -37,10 +37,10 @@ public class SessionsSpawnTool implements Tool {
         return ToolDefinition.builder()
                 .name("sessions_spawn")
                 .description("""
-                        派生子代理执行异步任务。子代理在独立会话中运行，不阻塞当前对话。
+                        派发 worker 执行异步任务。worker 在独立会话中运行，不阻塞当前对话。
                         适用于：长耗时任务、可并行任务、需要隔离上下文的任务。
                         完成后结果会自动回传到当前会话。
-                        注意：子代理不能再派生子代理（禁止嵌套）。
+                        注意：worker 不能再派生 worker（禁止嵌套）。
                         """)
                 .parameters(Map.of(
                         "type", "object",
@@ -85,11 +85,11 @@ public class SessionsSpawnTool implements Tool {
             return Mono.just(ToolResult.error("Internal error: execution context not available"));
         }
 
-        // 2. 检查是否为 subagent（禁止嵌套）
-        if (context.isSubagent()) {
-            log.warn("Nested spawn rejected: runId={}, runKind={}", context.getRunId(), context.getRunKind());
+        // 2. 检查是否为 worker（禁止嵌套）
+        if (context.isWorker()) {
+            log.warn("Nested worker spawn rejected: runId={}, runKind={}", context.getRunId(), context.getRunKind());
             return Mono.just(ToolResult.error(
-                    "Nested spawn is not allowed. SubAgent cannot spawn another SubAgent."
+                    "Nested spawn is not allowed. Worker task cannot spawn another worker task."
             ));
         }
 
@@ -137,18 +137,18 @@ public class SessionsSpawnTool implements Tool {
                         "subRunId", result.getSubRunId(),
                         "sessionKey", result.getSessionKey(),
                         "lane", result.getLane(),
-                        "message", "SubAgent spawned successfully. Results will be announced when complete."
+                        "message", "Worker task accepted. Results will be announced when complete."
                 ));
-                log.info("SubAgent spawned: parentRunId={}, subRunId={}, task={}",
+                log.info("Worker task spawned: parentRunId={}, subRunId={}, task={}",
                         context.getRunId(), result.getSubRunId(), truncateTask(task));
                 return Mono.just(ToolResult.success(json));
             } catch (Exception e) {
                 return Mono.just(ToolResult.success(
-                        "SubAgent spawned: subRunId=" + result.getSubRunId()
+                        "Worker task spawned: subRunId=" + result.getSubRunId()
                 ));
             }
         } else {
-            log.warn("SubAgent spawn failed: parentRunId={}, error={}", context.getRunId(), result.getError());
+            log.warn("Worker task spawn failed: parentRunId={}, error={}", context.getRunId(), result.getError());
             return Mono.just(ToolResult.error("Spawn failed: " + result.getError()));
         }
     }

@@ -18,6 +18,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * 工具执行器
@@ -75,10 +76,12 @@ public class ToolExecutor {
                 toolName, callId, context.getRunId(), context.getCurrentStep());
 
         Map<String, Object> arguments = parseArguments(argumentsJson);
+        Set<String> resolvedToolNames = context.getResolvedToolNames();
+        Set<String> confirmBefore = resolveConfirmBefore(context);
 
         // 定时任务运行时跳过所有 HITL 确认
         boolean isScheduledRun = "scheduled".equals(context.getRunKind());
-        boolean requiresHitl = !isScheduledRun && toolDispatcher.requiresHitl(toolName, null, arguments);
+        boolean requiresHitl = !isScheduledRun && toolDispatcher.requiresHitl(toolName, confirmBefore, arguments);
 
         if (requiresHitl) {
             log.info("Tool requires HITL confirmation: name={}, callId={}", toolName, callId);
@@ -131,7 +134,7 @@ public class ToolExecutor {
         // 执行工具
         ToolResult result;
         try {
-            result = toolDispatcher.dispatch(toolName, arguments).block();
+            result = toolDispatcher.dispatch(toolName, arguments, resolvedToolNames).block();
         } finally {
             ToolExecutionContext.clear();
         }
@@ -157,6 +160,14 @@ public class ToolExecutor {
                 toolName, result.isSuccess(), context.getRunId());
 
         return new ToolExecutionResult(callId, result);
+    }
+
+    private Set<String> resolveConfirmBefore(RunContext context) {
+        ContextBuilder.SkillAwareRequest activeSkill = context.getActiveSkill();
+        if (activeSkill != null && activeSkill.hasActiveSkill()) {
+            return activeSkill.confirmBefore();
+        }
+        return null;
     }
 
     /**

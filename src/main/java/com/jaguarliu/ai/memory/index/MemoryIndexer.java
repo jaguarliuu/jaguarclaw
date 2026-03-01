@@ -4,6 +4,7 @@ import com.jaguarliu.ai.memory.MemoryProperties;
 import com.jaguarliu.ai.memory.embedding.EmbeddingModel;
 import com.jaguarliu.ai.memory.embedding.EmbeddingModelFactory;
 import com.jaguarliu.ai.memory.embedding.NoOpEmbeddingModel;
+import com.jaguarliu.ai.memory.model.MemoryScope;
 import com.jaguarliu.ai.memory.store.MemoryStore;
 import jakarta.annotation.PostConstruct;
 import lombok.Getter;
@@ -71,13 +72,22 @@ public class MemoryIndexer {
      * @param relativePath 相对于 memory 目录的文件路径
      */
     public void indexFile(String relativePath) {
-        log.info("Indexing global memory file: {}", relativePath);
+        indexFile(relativePath, MemoryScope.GLOBAL, null);
+    }
+
+    /**
+     * 索引指定作用域文件
+     */
+    public void indexFile(String relativePath, MemoryScope scope, String agentId) {
+        MemoryScope resolvedScope = normalizeIndexScope(scope);
+        String resolvedAgentId = normalizeAgentId(agentId);
+        log.info("Indexing {} memory file: {} (agentId={})", resolvedScope, relativePath, resolvedAgentId);
 
         try {
-            String content = memoryStore.read(relativePath);
+            String content = memoryStore.read(relativePath, resolvedAgentId, resolvedScope);
 
             // 1. 删除旧 chunks
-            chunkRepository.deleteByFilePath(relativePath);
+            deleteByScope(relativePath, resolvedScope, resolvedAgentId);
 
             // 2. 分块
             List<MemoryChunk> chunks = chunker.chunk(relativePath, content);
@@ -94,11 +104,14 @@ public class MemoryIndexer {
                             .lineStart(c.getLineStart())
                             .lineEnd(c.getLineEnd())
                             .content(c.getContent())
+                            .scope(resolvedScope == MemoryScope.AGENT ? MemoryChunkEntity.SCOPE_AGENT : MemoryChunkEntity.SCOPE_GLOBAL)
+                            .agentId(resolvedScope == MemoryScope.AGENT ? resolvedAgentId : null)
                             .build())
                     .toList();
 
             chunkRepository.saveAll(entities);
-            log.info("Indexed {} chunks for global memory: {}", entities.size(), relativePath);
+            log.info("Indexed {} chunks for {} memory: {} (agentId={})",
+                    entities.size(), resolvedScope, relativePath, resolvedAgentId);
 
             // 4. 如果有 embedding provider，生成向量
             if (vectorSearchEnabled) {
@@ -115,18 +128,30 @@ public class MemoryIndexer {
      * 从 Markdown 文件重新生成所有 chunks
      */
     public void rebuild() {
-        log.info("Rebuilding global memory index from Markdown source...");
+        rebuild(MemoryScope.GLOBAL, null);
+    }
+
+    public void rebuild(MemoryScope scope, String agentId) {
+        MemoryScope resolvedScope = normalizeIndexScope(scope);
+        String resolvedAgentId = normalizeAgentId(agentId);
+        log.info("Rebuilding {} memory index from Markdown source... (agentId={})",
+                resolvedScope, resolvedAgentId);
 
         // 1. 清空所有 chunks
-        chunkRepository.deleteAllChunks();
+        if (resolvedScope == MemoryScope.AGENT) {
+            chunkRepository.deleteByScopeAndAgentId(MemoryChunkEntity.SCOPE_AGENT, resolvedAgentId);
+        } else {
+            chunkRepository.deleteByScope(MemoryChunkEntity.SCOPE_GLOBAL);
+        }
 
         // 2. 列出所有记忆文件并索引
         try {
-            List<MemoryStore.MemoryFileInfo> files = memoryStore.listFiles();
+            List<MemoryStore.MemoryFileInfo> files = memoryStore.listFiles(resolvedScope, resolvedAgentId);
             for (MemoryStore.MemoryFileInfo file : files) {
-                indexFile(file.relativePath());
+                indexFile(file.relativePath(), resolvedScope, resolvedAgentId);
             }
-            log.info("Global memory index rebuild complete: {} files processed", files.size());
+            log.info("{} memory index rebuild complete: {} files processed (agentId={})",
+                    resolvedScope, files.size(), resolvedAgentId);
         } catch (IOException e) {
             log.error("Failed to rebuild memory index", e);
         }
@@ -138,8 +163,14 @@ public class MemoryIndexer {
      * @param relativePath 相对于 memory 目录的文件路径
      */
     public void removeFile(String relativePath) {
-        chunkRepository.deleteByFilePath(relativePath);
-        log.info("Removed index for: {}", relativePath);
+        removeFile(relativePath, MemoryScope.GLOBAL, null);
+    }
+
+    public void removeFile(String relativePath, MemoryScope scope, String agentId) {
+        MemoryScope resolvedScope = normalizeIndexScope(scope);
+        String resolvedAgentId = normalizeAgentId(agentId);
+        deleteByScope(relativePath, resolvedScope, resolvedAgentId);
+        log.info("Removed {} memory index for: {} (agentId={})", resolvedScope, relativePath, resolvedAgentId);
     }
 
     /**
@@ -264,4 +295,27 @@ public class MemoryIndexer {
             String embeddingProvider,
             String embeddingModel
     ) {}
+
+    private void deleteByScope(String relativePath, MemoryScope scope, String agentId) {
+        if (scope == MemoryScope.AGENT) {
+            chunkRepository.deleteByFilePathAndScopeAndAgentId(relativePath, MemoryChunkEntity.SCOPE_AGENT, agentId);
+            return;
+        }
+        chunkRepository.deleteByFilePathAndScope(relativePath, MemoryChunkEntity.SCOPE_GLOBAL);
+    }
+
+    private MemoryScope normalizeIndexScope(MemoryScope scope) {
+        MemoryScope resolvedScope = scope == null ? MemoryScope.GLOBAL : scope;
+        if (resolvedScope == MemoryScope.BOTH) {
+            throw new IllegalArgumentException("BOTH scope is invalid for index write operations");
+        }
+        return resolvedScope;
+    }
+
+    private String normalizeAgentId(String agentId) {
+        if (agentId == null || agentId.isBlank()) {
+            return "main";
+        }
+        return agentId;
+    }
 }

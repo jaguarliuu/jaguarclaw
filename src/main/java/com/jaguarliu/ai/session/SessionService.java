@@ -23,6 +23,7 @@ import java.util.UUID;
 public class SessionService {
 
     public static final String DEFAULT_PRINCIPAL_ID = "local-default";
+    public static final String DEFAULT_AGENT_ID = "main";
 
     private final SessionRepository sessionRepository;
     private final RunRepository runRepository;
@@ -34,7 +35,7 @@ public class SessionService {
      */
     @Transactional
     public SessionEntity create(String name) {
-        return create(name, "main", DEFAULT_PRINCIPAL_ID);
+        return create(name, DEFAULT_AGENT_ID, DEFAULT_PRINCIPAL_ID);
     }
 
     /**
@@ -50,16 +51,17 @@ public class SessionService {
      */
     @Transactional
     public SessionEntity create(String name, String agentId, String ownerPrincipalId) {
+        String resolvedAgentId = normalizeAgentId(agentId);
         SessionEntity session = SessionEntity.builder()
                 .id(UUID.randomUUID().toString())
                 .name(name != null ? name : "New Session")
-                .agentId(agentId)
+                .agentId(resolvedAgentId)
                 .sessionKind("main")
                 .ownerPrincipalId(ownerPrincipalId)
                 .build();
 
         session = sessionRepository.save(session);
-        log.info("Created session: id={}, name={}, agentId={}", session.getId(), session.getName(), agentId);
+        log.info("Created session: id={}, name={}, agentId={}", session.getId(), session.getName(), resolvedAgentId);
         return session;
     }
 
@@ -243,5 +245,12 @@ public class SessionService {
 
         log.info("Deleted session and related data: id={}", id);
         return true;
+    }
+
+    private String normalizeAgentId(String agentId) {
+        if (agentId == null || agentId.isBlank()) {
+            return DEFAULT_AGENT_ID;
+        }
+        return agentId;
     }
 }

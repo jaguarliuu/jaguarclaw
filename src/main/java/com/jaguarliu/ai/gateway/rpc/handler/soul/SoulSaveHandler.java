@@ -31,8 +31,25 @@ public class SoulSaveHandler implements RpcHandler {
                 return RpcResponse.error(request.getId(), "INVALID_PAYLOAD", "Expected object payload");
             }
             @SuppressWarnings("unchecked")
-            Map<String, Object> config = (Map<String, Object>) payload;
-            soulConfigService.saveConfig(config);
+            Map<String, Object> payloadMap = (Map<String, Object>) payload;
+
+            String agentId = "main";
+            Object agentIdRaw = payloadMap.get("agentId");
+            if (agentIdRaw != null && !agentIdRaw.toString().isBlank()) {
+                agentId = agentIdRaw.toString();
+            }
+
+            Map<String, Object> config;
+            Object nestedConfig = payloadMap.get("config");
+            if (nestedConfig instanceof Map<?, ?> nested) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> casted = (Map<String, Object>) nested;
+                config = casted;
+            } else {
+                config = new java.util.LinkedHashMap<>(payloadMap);
+                config.remove("agentId");
+            }
+            soulConfigService.saveConfig(agentId, config);
 
 
             return RpcResponse.success(request.getId(), Map.of("success", true));

@@ -77,12 +77,17 @@ public class McpToolRegistry implements SmartInitializingSingleton {
         try {
             // List and register tools
             McpSchema.ListToolsResult listToolsResult = client.getClient().listTools();
+            String scope = client.getConfig().getScope() != null
+                    ? client.getConfig().getScope()
+                    : "global";
+            String agentId = client.getConfig().getAgentId();
 
             if (listToolsResult.tools() != null && !listToolsResult.tools().isEmpty()) {
                 for (McpSchema.Tool mcpTool : listToolsResult.tools()) {
                     var adapter = new McpToolAdapter(mcpTool, client);
                     toolRegistry.register(adapter);
-                    log.debug("Registered MCP tool: {}", adapter.getDefinition().getName());
+                    log.debug("Registered MCP tool: {} (scope={}, agentId={})",
+                            adapter.getDefinition().getName(), scope, agentId);
                     count++;
                 }
             }
@@ -93,7 +98,8 @@ public class McpToolRegistry implements SmartInitializingSingleton {
                 if (listResourcesResult.resources() != null && !listResourcesResult.resources().isEmpty()) {
                     var resourceTool = new McpResourceTool(client);
                     toolRegistry.register(resourceTool);
-                    log.debug("Registered MCP resource tool: {}", resourceTool.getDefinition().getName());
+                    log.debug("Registered MCP resource tool: {} (scope={}, agentId={})",
+                            resourceTool.getDefinition().getName(), scope, agentId);
                     count++;
                 }
             } catch (Exception e) {
