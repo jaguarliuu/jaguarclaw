@@ -38,7 +38,7 @@ public class AgentDeleteHandler implements RpcHandler {
                 return RpcResponse.error(request.getId(), "UNAUTHORIZED", "Missing authenticated principal");
             }
 
-            String agentId = extractString(request.getPayload(), "agentId");
+            String agentId = AgentDtoMapper.extractString(request.getPayload(), "agentId");
             if (agentId == null || agentId.isBlank()) {
                 return RpcResponse.error(request.getId(), "INVALID_PARAMS", "Missing agentId");
             }
@@ -65,12 +65,5 @@ public class AgentDeleteHandler implements RpcHandler {
         return principal != null ? principal.getPrincipalId() : null;
     }
 
-    private String extractString(Object payload, String key) {
-        if (payload instanceof Map<?, ?> map) {
-            Object value = map.get(key);
-            return value != null ? value.toString() : null;
-        }
-        return null;
-    }
 }
 
