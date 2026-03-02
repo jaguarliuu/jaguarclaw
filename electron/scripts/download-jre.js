@@ -155,6 +155,25 @@ async function tryFetchAsset(version, imageType) {
 }
 
 async function main() {
+  // When not cross-compiling, reuse JAVA_HOME if available (e.g. CI runners with pre-installed Java)
+  if (!FORCE_WIN) {
+    const javaHome = process.env.JAVA_HOME;
+    if (javaHome) {
+      const javaBin = path.join(javaHome, 'bin', JAVA_BIN);
+      if (fs.existsSync(javaBin)) {
+        console.log(`JAVA_HOME detected: ${javaHome}`);
+        console.log('Copying to resources/jre/ instead of downloading...');
+        fs.mkdirSync(RESOURCES_DIR, { recursive: true });
+        if (fs.existsSync(JRE_DIR)) {
+          fs.rmSync(JRE_DIR, { recursive: true });
+        }
+        fs.cpSync(javaHome, JRE_DIR, { recursive: true });
+        console.log(`\nJava runtime installed to: ${JRE_DIR}`);
+        return;
+      }
+    }
+  }
+
   // Try each fallback option
   let asset = null;
   for (const { version, imageType } of FALLBACK_CHAIN) {
