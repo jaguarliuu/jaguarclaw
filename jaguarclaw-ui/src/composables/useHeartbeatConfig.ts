@@ -12,7 +12,7 @@ export interface HeartbeatConfig {
 
 const { request } = useWebSocket()
 
-export function useHeartbeatConfig() {
+export function useHeartbeatConfig(agentId: string = 'main') {
   const config = ref<HeartbeatConfig | null>(null)
   const loading = ref(false)
   const error = ref<string | null>(null)
@@ -21,7 +21,7 @@ export function useHeartbeatConfig() {
     loading.value = true
     error.value = null
     try {
-      const result = await request<HeartbeatConfig>('heartbeat.config.get')
+      const result = await request<HeartbeatConfig>('heartbeat.config.get', { agentId })
       config.value = result
     } catch (e) {
       error.value = e instanceof Error ? e.message : 'Unknown error'
@@ -35,7 +35,7 @@ export function useHeartbeatConfig() {
     loading.value = true
     error.value = null
     try {
-      await request('heartbeat.config.save', newConfig)
+      await request('heartbeat.config.save', { agentId, config: newConfig })
       await fetchConfig()
     } catch (e) {
       error.value = e instanceof Error ? e.message : 'Unknown error'

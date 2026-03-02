@@ -82,7 +82,7 @@ class ChatRouterMentionTest {
                 .id(id)
                 .name(id)
                 .displayName(id)
-                .workspacePath("workspace/agents/" + id)
+                .workspacePath("workspace/workspace-" + id)
                 .enabled(enabled)
                 .isDefault(isDefault)
                 .build();

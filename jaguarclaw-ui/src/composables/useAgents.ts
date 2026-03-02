@@ -5,7 +5,7 @@ import type { AgentProfile } from '@/types'
 const FALLBACK_AGENT_ID = 'main'
 
 export interface AgentProfilePayload {
-  name: string
+  name?: string
   displayName?: string
   description?: string
   workspacePath?: string

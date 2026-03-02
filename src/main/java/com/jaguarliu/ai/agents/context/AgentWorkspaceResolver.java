@@ -42,12 +42,11 @@ public class AgentWorkspaceResolver {
             }
         }
 
-        Path agentsRoot = workspaceRootPath.resolve("agents").toAbsolutePath().normalize();
-        Path resolved = agentsRoot
-                .resolve(resolvedAgentId)
+        Path resolved = workspaceRootPath
+                .resolve("workspace-" + resolvedAgentId)
                 .toAbsolutePath()
                 .normalize();
-        assertWithinBase(resolved, agentsRoot, "agent workspace");
+        assertWithinBase(resolved, workspaceRootPath, "agent workspace");
         return resolved;
     }
 

@@ -81,8 +81,8 @@ class AgentScopedSoulConfigServiceTest {
         Map<String, Object> payloadB = (Map<String, Object>) getRespB.getPayload();
         assertEquals("Agent B", payloadB.get("agentName"));
 
-        Path soulMdA = tempDir.resolve("agents").resolve("agent-a").resolve("SOUL.md");
-        Path soulMdB = tempDir.resolve("agents").resolve("agent-b").resolve("SOUL.md");
+        Path soulMdA = tempDir.resolve("workspace-agent-a").resolve("SOUL.md");
+        Path soulMdB = tempDir.resolve("workspace-agent-b").resolve("SOUL.md");
         assertTrue(Files.exists(soulMdA));
         assertTrue(Files.exists(soulMdB));
     }

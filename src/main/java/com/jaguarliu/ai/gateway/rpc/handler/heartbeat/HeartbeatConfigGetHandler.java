@@ -24,7 +24,15 @@ public class HeartbeatConfigGetHandler implements RpcHandler {
 
     @Override
     public Mono<RpcResponse> handle(String connectionId, RpcRequest request) {
-        return Mono.fromCallable(() -> RpcResponse.success(request.getId(), heartbeatConfigService.getConfig()))
-                .subscribeOn(Schedulers.boundedElastic());
+        return Mono.fromCallable(() -> {
+            String agentId = "main";
+            if (request.getPayload() instanceof java.util.Map<?, ?> payload) {
+                Object id = payload.get("agentId");
+                if (id instanceof String s && !s.isBlank()) {
+                    agentId = s;
+                }
+            }
+            return RpcResponse.success(request.getId(), heartbeatConfigService.getConfig(agentId));
+        }).subscribeOn(Schedulers.boundedElastic());
     }
 }

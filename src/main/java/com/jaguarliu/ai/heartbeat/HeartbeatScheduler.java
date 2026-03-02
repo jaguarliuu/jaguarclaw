@@ -134,15 +134,15 @@ public class HeartbeatScheduler {
             }
 
             // 9. Broadcast to all connections
-            broadcastHeartbeat(trimmed, session.getId(), run.getId());
+            broadcastHeartbeat(agentId, trimmed, session.getId(), run.getId());
         } catch (Exception e) {
             log.error("Heartbeat tick failed for agentId={}", agentId, e);
         }
     }
 
-    private void broadcastHeartbeat(String content, String sessionId, String runId) {
+    private void broadcastHeartbeat(String agentId, String content, String sessionId, String runId) {
         connectionManager.getAllConnectionIds().forEach(connId ->
-                eventBus.publish(AgentEvent.heartbeatNotify(connId, content, sessionId, runId))
+                eventBus.publish(AgentEvent.heartbeatNotify(connId, agentId, content, sessionId, runId))
         );
         log.info("Heartbeat broadcast to {} connections", connectionManager.getConnectionCount());
     }

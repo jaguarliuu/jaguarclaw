@@ -53,8 +53,8 @@ class SkillScopeRegistryTest {
         indexBuilder.setIndexTokenBudget(2000);
 
         globalSkillsDir = tempDir.resolve("global-skills");
-        architectSkillsDir = tempDir.resolve("workspace/agents/architect/skills");
-        writerSkillsDir = tempDir.resolve("workspace/agents/writer/skills");
+        architectSkillsDir = tempDir.resolve("workspace/workspace-architect/skills");
+        writerSkillsDir = tempDir.resolve("workspace/workspace-writer/skills");
 
         Files.createDirectories(globalSkillsDir);
         Files.createDirectories(architectSkillsDir);

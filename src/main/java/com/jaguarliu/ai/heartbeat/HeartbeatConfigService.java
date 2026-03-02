@@ -7,8 +7,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
-import jakarta.annotation.PostConstruct;
-
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -28,11 +26,6 @@ public class HeartbeatConfigService {
 
     private static final String HEARTBEAT_JSON = "heartbeat.json";
     private static final String HEARTBEAT_MD = "HEARTBEAT.md";
-
-    @PostConstruct
-    void init() {
-        ensureAgentDefaults("main");
-    }
 
     public Map<String, Object> getConfig() {
         return getConfig("main");
@@ -100,7 +93,7 @@ public class HeartbeatConfigService {
         }
     }
 
-    private void ensureAgentDefaults(String agentId) {
+    public void ensureAgentDefaults(String agentId) {
         Path configPath = configPath(agentId);
         if (!Files.exists(configPath)) {
             saveConfig(agentId, defaultConfig());

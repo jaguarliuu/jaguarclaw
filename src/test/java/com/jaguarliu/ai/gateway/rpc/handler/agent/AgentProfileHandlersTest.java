@@ -255,7 +255,7 @@ class AgentProfileHandlersTest {
                 .name(name)
                 .displayName(name)
                 .description("")
-                .workspacePath("workspace/agents/" + name)
+                .workspacePath("workspace/workspace-" + name)
                 .model("deepseek-chat")
                 .enabled(true)
                 .isDefault(isDefault)

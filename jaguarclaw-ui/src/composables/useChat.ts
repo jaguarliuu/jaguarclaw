@@ -941,9 +941,9 @@ function setupEventListeners() {
   // Handle heartbeat.notify - 转发到独立通知系统，不注入 session 消息列表
   eventCleanups.push(
     onEvent('heartbeat.notify', (event: RpcEvent) => {
-      const payload = event.payload as { content: string; sessionId: string; runId: string }
+      const payload = event.payload as { agentId: string; content: string; sessionId: string; runId: string }
       if (payload) {
-        addNotification(payload.content, payload.sessionId, payload.runId)
+        addNotification(payload.agentId || 'main', payload.content, payload.sessionId, payload.runId)
       }
     }),
   )

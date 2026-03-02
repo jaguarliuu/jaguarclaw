@@ -22,14 +22,14 @@ class AgentWorkspaceResolverTest {
     Path tempDir;
 
     @Test
-    @DisplayName("默认 workspace 在 tools.workspace/agents/<agentId> 下")
+    @DisplayName("默认 workspace 在 tools.workspace/workspace-<agentId> 下")
     void resolveAgentWorkspaceShouldStayUnderAgentsRoot() {
         AgentWorkspaceResolver resolver = new AgentWorkspaceResolver(Optional.empty());
         ReflectionTestUtils.setField(resolver, "workspaceRoot", tempDir.toString());
 
         Path resolved = resolver.resolveAgentWorkspace("agent-a");
 
-        assertEquals(tempDir.resolve("agents").resolve("agent-a").toAbsolutePath().normalize(), resolved);
+        assertEquals(tempDir.resolve("workspace-agent-a").toAbsolutePath().normalize(), resolved);
     }
 
     @Test
