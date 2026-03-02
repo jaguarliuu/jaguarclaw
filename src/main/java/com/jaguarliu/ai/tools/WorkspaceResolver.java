@@ -12,15 +12,15 @@ public final class WorkspaceResolver {
     }
 
     /**
-     * 解析当前 session 的 workspace 路径。
-     * 有 sessionId 时返回 workspace/{sessionId}/，
-     * 无 sessionId 时返回全局 workspace/。
+     * 解析当前 agent 的 workspace 路径。
+     * 有 agentId 时返回 workspace/workspace-{agentId}/，
+     * 无 agentId 时返回全局 workspace/。
      */
     public static Path resolveSessionWorkspace(ToolsProperties properties) {
         Path base = resolveGlobalWorkspace(properties);
         ToolExecutionContext ctx = ToolExecutionContext.current();
-        if (ctx != null && ctx.getSessionId() != null) {
-            return base.resolve(ctx.getSessionId()).normalize();
+        if (ctx != null && ctx.getAgentId() != null) {
+            return base.resolve("workspace-" + ctx.getAgentId()).normalize();
         }
         return base;
     }

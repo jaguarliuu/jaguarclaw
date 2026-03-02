@@ -142,17 +142,15 @@ export default {
         persona: 'Persona',
       },
       form: {
-        nameLabel: 'Agent ID',
-        namePlaceholder: 'e.g. planner',
-        displayNameLabel: 'Display Name',
-        displayNamePlaceholder: 'e.g. Planner Agent',
+        nameLabel: 'Name',
+        namePlaceholder: 'e.g. Planner Agent or 规划助手',
         modelLabel: 'Preferred Model',
         modelPlaceholder: 'e.g. gpt-4o-mini',
         descriptionLabel: 'Description',
         descriptionPlaceholder: 'Optional notes about this agent',
         enabledLabel: 'Enabled',
         defaultLabel: 'Set as default agent',
-        nameRequired: 'Agent ID is required',
+        nameRequired: 'Name is required',
         saveFailed: 'Failed to save agent',
       },
       wizard: {
@@ -880,6 +878,7 @@ export default {
     },
     heartbeat: {
       subtitle: 'Configure periodic Agent check-ins and proactive notifications',
+      agentLabel: 'Agent',
       loading: 'Loading configuration...',
       savedSuccess: 'Heartbeat configuration saved successfully',
       savingBtn: 'Saving...',

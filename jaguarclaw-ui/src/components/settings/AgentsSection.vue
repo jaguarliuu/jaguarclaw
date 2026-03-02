@@ -6,6 +6,8 @@ import { useAgents, type AgentProfilePayload } from '@/composables/useAgents'
 import { useLlmConfig } from '@/composables/useLlmConfig'
 import { useI18n } from '@/i18n'
 import type { AgentProfile } from '@/types'
+import Select from '@/components/common/Select.vue'
+import type { SelectOption } from '@/components/common/Select.vue'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -20,7 +22,6 @@ const formError = ref<string | null>(null)
 const modelLoading = ref(false)
 
 const form = ref({
-  name: '',
   displayName: '',
   model: '',
   enabled: true,
@@ -35,7 +36,7 @@ const sortedAgents = computed(() =>
   }),
 )
 
-const modelOptions = computed(() =>
+const modelOptions = computed<SelectOption[]>(() =>
   getAllModelOptions().map((option) => ({
     value: `${option.providerId}:${option.modelName}`,
     label: `${option.providerName} / ${option.modelName}`,
@@ -59,7 +60,6 @@ async function refreshModelOptions() {
 
 function resetForm() {
   form.value = {
-    name: '',
     displayName: '',
     model: '',
     enabled: true,
@@ -80,8 +80,7 @@ async function openEditModal(agent: AgentProfile) {
   modalMode.value = 'edit'
   editingAgentId.value = agent.id
   form.value = {
-    name: agent.name,
-    displayName: agent.displayName || '',
+    displayName: agent.displayName || agent.name,
     model: agent.model || '',
     enabled: agent.enabled,
     isDefault: agent.isDefault,
@@ -117,15 +116,14 @@ async function handleDelete(agent: AgentProfile) {
 }
 
 async function handleSave() {
-  const name = form.value.name.trim()
-  if (!name) {
+  const displayName = form.value.displayName.trim()
+  if (!displayName) {
     formError.value = t('sections.agents.form.nameRequired')
     return
   }
 
   const payload: AgentProfilePayload = {
-    name,
-    displayName: form.value.displayName.trim() || name,
+    displayName,
     model: form.value.model.trim() || undefined,
     enabled: form.value.enabled,
     isDefault: form.value.isDefault,
@@ -213,26 +211,16 @@ async function handleSave() {
         <div class="modal-body">
           <div class="form-group">
             <label>{{ t('sections.agents.form.nameLabel') }}</label>
-            <input v-model="form.name" class="form-input" :placeholder="t('sections.agents.form.namePlaceholder')" />
-          </div>
-
-          <div class="form-group">
-            <label>{{ t('sections.agents.form.displayNameLabel') }}</label>
             <input
               v-model="form.displayName"
               class="form-input"
-              :placeholder="t('sections.agents.form.displayNamePlaceholder')"
+              :placeholder="t('sections.agents.form.namePlaceholder')"
             />
           </div>
 
           <div class="form-group">
             <label>{{ t('sections.agents.form.modelLabel') }}</label>
-            <select v-model="form.model" class="form-input" :disabled="modelLoading">
-              <option value="">{{ t('sections.agents.form.modelPlaceholder') }}</option>
-              <option v-for="option in modelOptions" :key="option.value" :value="option.value">
-                {{ option.label }}
-              </option>
-            </select>
+            <Select v-model="form.model" :options="modelOptions" :placeholder="t('sections.agents.form.modelPlaceholder')" :disabled="modelLoading" />
           </div>
 
           <label class="checkbox-row">

@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import type { HeartbeatNotification } from '@/composables/useHeartbeat'
 import { useHeartbeat } from '@/composables/useHeartbeat'
 import { useMarkdown } from '@/composables/useMarkdown'
+import { useAgents } from '@/composables/useAgents'
 
 defineProps<{
   notification: HeartbeatNotification
@@ -10,6 +11,12 @@ defineProps<{
 
 const { selectNotification } = useHeartbeat()
 const { render } = useMarkdown()
+const { agents } = useAgents()
+
+function agentDisplayName(agentId: string): string {
+  const agent = agents.value.find(a => a.id === agentId)
+  return agent ? (agent.displayName || agent.name) : agentId
+}
 
 function formatTime(dateStr: string): string {
   const date = new Date(dateStr)
@@ -36,7 +43,7 @@ function formatTime(dateStr: string): string {
           <line x1="2" y1="11" x2="14" y2="11" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
           <path d="M6.5 13a1.5 1.5 0 0 0 3 0" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
         </svg>
-        <span class="panel-title">Notification</span>
+        <span class="panel-title">{{ agentDisplayName(notification.agentId) }}</span>
         <span class="panel-time">{{ formatTime(notification.createdAt) }}</span>
         <button class="panel-close" @click="selectNotification(null)" title="Close">
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none">

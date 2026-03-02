@@ -231,12 +231,12 @@ public class AgentEvent {
     /**
      * 创建 heartbeat.notify 事件
      */
-    public static AgentEvent heartbeatNotify(String connectionId, String content, String sessionId, String runId) {
+    public static AgentEvent heartbeatNotify(String connectionId, String agentId, String content, String sessionId, String runId) {
         return AgentEvent.builder()
                 .type(EventType.HEARTBEAT_NOTIFY)
                 .connectionId(connectionId)
                 .runId(runId)
-                .data(new HeartbeatNotifyData(content, sessionId, runId))
+                .data(new HeartbeatNotifyData(agentId, content, sessionId, runId))
                 .build();
     }
 
@@ -423,6 +423,7 @@ public class AgentEvent {
     @Data
     @AllArgsConstructor
     public static class HeartbeatNotifyData {
+        private String agentId;
         private String content;
         private String sessionId;
         private String runId;

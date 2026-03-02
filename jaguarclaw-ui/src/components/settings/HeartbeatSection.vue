@@ -1,10 +1,27 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { useHeartbeatConfig, type HeartbeatConfig } from '@/composables/useHeartbeatConfig'
+import { ref, watch, onMounted, computed } from 'vue'
+import { useWebSocket } from '@/composables/useWebSocket'
+import type { HeartbeatConfig } from '@/composables/useHeartbeatConfig'
+import { useAgents } from '@/composables/useAgents'
 import { useI18n } from '@/i18n'
+import Select from '@/components/common/Select.vue'
+import type { SelectOption } from '@/components/common/Select.vue'
 
 const { t } = useI18n()
-const { config, loading, error, fetchConfig, saveConfig } = useHeartbeatConfig()
+const { agents, loadAgents } = useAgents()
+const { request } = useWebSocket()
+
+const selectedAgentId = ref('main')
+
+const agentOptions = computed<SelectOption[]>(() =>
+  agents.value.map(a => ({ label: a.displayName || a.name, value: a.id }))
+)
+const config = ref<HeartbeatConfig | null>(null)
+const loading = ref(false)
+const error = ref<string | null>(null)
+const saving = ref(false)
+const saveSuccess = ref(false)
+const saveError = ref<string | null>(null)
 
 const editConfig = ref<HeartbeatConfig>({
   enabled: true,
@@ -15,26 +32,31 @@ const editConfig = ref<HeartbeatConfig>({
   ackMaxChars: 300
 })
 
-const saving = ref(false)
-const saveSuccess = ref(false)
-const saveError = ref<string | null>(null)
-
-function syncFormFromConfig() {
-  if (!config.value) return
-  editConfig.value = { ...config.value }
+async function fetchConfig() {
+  loading.value = true
+  error.value = null
+  config.value = null
+  try {
+    const result = await request<HeartbeatConfig>('heartbeat.config.get', { agentId: selectedAgentId.value })
+    config.value = result
+    editConfig.value = { ...result }
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : 'Unknown error'
+  } finally {
+    loading.value = false
+  }
 }
+
+watch(selectedAgentId, fetchConfig)
 
 async function handleSave() {
   saving.value = true
   saveError.value = null
   saveSuccess.value = false
-
   try {
-    await saveConfig(editConfig.value)
+    await request('heartbeat.config.save', { agentId: selectedAgentId.value, config: editConfig.value })
     saveSuccess.value = true
-    setTimeout(() => {
-      saveSuccess.value = false
-    }, 3000)
+    setTimeout(() => { saveSuccess.value = false }, 3000)
   } catch (e) {
     saveError.value = e instanceof Error ? e.message : 'Failed to save'
   } finally {
@@ -43,8 +65,12 @@ async function handleSave() {
 }
 
 onMounted(async () => {
+  await loadAgents()
+  // 默认选中第一个可用 agent
+  if (agents.value.length > 0) {
+    selectedAgentId.value = agents.value[0].id
+  }
   await fetchConfig()
-  syncFormFromConfig()
 })
 </script>
 
@@ -56,6 +82,12 @@ onMounted(async () => {
         <p class="section-subtitle">{{ t('sections.heartbeat.subtitle') }}</p>
       </div>
     </header>
+
+    <!-- Agent 选择器 -->
+    <div class="agent-selector-row" v-if="agents.length > 1">
+      <label class="agent-selector-label">{{ t('sections.heartbeat.agentLabel') }}</label>
+      <Select v-model="selectedAgentId" :options="agentOptions" class="agent-selector" />
+    </div>
 
     <div v-if="loading && !config" class="loading-state">{{ t('sections.heartbeat.loading') }}</div>
 
@@ -194,6 +226,29 @@ onMounted(async () => {
 .section-subtitle {
   font-size: 14px;
   color: var(--color-gray-dark);
+}
+
+.agent-selector-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 24px;
+  padding: 12px 16px;
+  background: var(--color-gray-50, #f9fafb);
+  border: var(--border);
+  border-radius: var(--radius-md);
+  max-width: 800px;
+}
+
+.agent-selector-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-gray-700);
+  white-space: nowrap;
+}
+
+.agent-selector {
+  min-width: 180px;
 }
 
 .loading-state,

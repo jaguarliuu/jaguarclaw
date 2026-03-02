@@ -32,8 +32,20 @@ public class HeartbeatConfigSaveHandler implements RpcHandler {
                 return RpcResponse.error(request.getId(), "INVALID_PAYLOAD", "Expected object payload");
             }
             @SuppressWarnings("unchecked")
-            Map<String, Object> config = (Map<String, Object>) payload;
-            heartbeatConfigService.saveConfig(config);
+            Map<String, Object> body = (Map<String, Object>) payload;
+
+            String agentId = "main";
+            Object id = body.get("agentId");
+            if (id instanceof String s && !s.isBlank()) {
+                agentId = s;
+            }
+
+            @SuppressWarnings("unchecked")
+            Map<String, Object> config = body.containsKey("config")
+                    ? (Map<String, Object>) body.get("config")
+                    : body;
+
+            heartbeatConfigService.saveConfig(agentId, config);
             return RpcResponse.success(request.getId(), Map.of("success", true));
         }).subscribeOn(Schedulers.boundedElastic());
     }

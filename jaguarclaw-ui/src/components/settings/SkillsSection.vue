@@ -7,6 +7,8 @@ import { useI18n } from '@/i18n'
 import SkillRow from './SkillRow.vue'
 import SkillDetailPanel from './SkillDetail.vue'
 import SlidePanel from '@/components/common/SlidePanel.vue'
+import Select from '@/components/common/Select.vue'
+import type { SelectOption } from '@/components/common/Select.vue'
 
 const {
   skills, loading, selectedSkill, selectedSkillDetail, detailLoading,
@@ -30,6 +32,15 @@ const effectiveAgentId = computed(() => {
 })
 
 const agentOptions = computed(() => enabledAgents.value.length > 0 ? enabledAgents.value : agents.value)
+
+const scopeOptions = computed<SelectOption[]>(() => [
+  { label: t('sections.skills.scope.effective'), value: 'effective' },
+  { label: t('sections.skills.scope.global'), value: 'global' }
+])
+
+const agentSelectOptions = computed<SelectOption[]>(() =>
+  agentOptions.value.map(a => ({ label: a.displayName || a.name, value: a.id }))
+)
 
 const scopeHint = computed(() => {
   if (selectedScope.value === 'global') {
@@ -106,19 +117,12 @@ onMounted(async () => {
     <div class="scope-bar">
       <label class="scope-field">
         <span class="scope-label">{{ t('sections.skills.scope.label') }}</span>
-        <select v-model="selectedScope" class="scope-select">
-          <option value="effective">{{ t('sections.skills.scope.effective') }}</option>
-          <option value="global">{{ t('sections.skills.scope.global') }}</option>
-        </select>
+        <Select v-model="selectedScope" :options="scopeOptions" class="scope-select" />
       </label>
 
       <label class="scope-field">
         <span class="scope-label">{{ t('sections.skills.scope.agentLabel') }}</span>
-        <select v-model="selectedAgentId" class="scope-select" :disabled="selectedScope === 'global' || agentOptions.length === 0">
-          <option v-for="agent in agentOptions" :key="agent.id" :value="agent.id">
-            {{ agent.displayName || agent.name }}
-          </option>
-        </select>
+        <Select v-model="selectedAgentId" :options="agentSelectOptions" class="scope-select" :disabled="selectedScope === 'global' || agentOptions.length === 0" />
       </label>
 
       <span class="scope-hint">{{ scopeHint }}</span>
@@ -245,12 +249,6 @@ onMounted(async () => {
 
 .scope-select {
   min-width: 128px;
-  padding: 6px 8px;
-  border: var(--border);
-  border-radius: var(--radius-md);
-  background: var(--color-white);
-  font-family: var(--font-mono);
-  font-size: 12px;
 }
 
 .scope-select:disabled {

@@ -4,6 +4,8 @@ import { useRoute } from 'vue-router'
 import { useSoulConfig, type SoulConfig } from '@/composables/useSoulConfig'
 import { useAgents } from '@/composables/useAgents'
 import { useI18n } from '@/i18n'
+import Select from '@/components/common/Select.vue'
+import type { SelectOption } from '@/components/common/Select.vue'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -53,6 +55,10 @@ const sortedAgents = computed(() => {
     return a.createdAt.localeCompare(b.createdAt)
   })
 })
+
+const agentSelectOptions = computed<SelectOption[]>(() =>
+  sortedAgents.value.map(a => ({ label: a.displayName || a.name, value: a.id }))
+)
 
 function syncFormFromConfig() {
   if (!config.value) return
@@ -168,11 +174,7 @@ watch(
       </div>
       <div class="header-agent-select">
         <label class="form-label" for="soul-agent-selector">{{ t('sections.soul.agentScopeLabel') }}</label>
-        <select id="soul-agent-selector" v-model="selectedAgentId" class="form-select">
-          <option v-for="agent in sortedAgents" :key="agent.id" :value="agent.id">
-            {{ agent.displayName || agent.name }}
-          </option>
-        </select>
+        <Select v-model="selectedAgentId" :options="agentSelectOptions" />
       </div>
     </header>
 
@@ -457,7 +459,6 @@ watch(
 }
 
 .form-input,
-.form-select,
 .form-textarea {
   width: 100%;
   padding: 10px 12px;
@@ -470,7 +471,6 @@ watch(
 }
 
 .form-input:focus,
-.form-select:focus,
 .form-textarea:focus {
   outline: none;
   border-color: var(--color-black);

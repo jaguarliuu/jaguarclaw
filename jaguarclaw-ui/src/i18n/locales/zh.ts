@@ -141,17 +141,15 @@ export default {
         persona: '角色配置',
       },
       form: {
-        nameLabel: 'Agent ID',
-        namePlaceholder: '如 planner',
-        displayNameLabel: '显示名称',
-        displayNamePlaceholder: '如 规划 Agent',
+        nameLabel: '名称',
+        namePlaceholder: '输入 Agent 名称，支持中文',
         modelLabel: '默认模型',
         modelPlaceholder: '如 gpt-4o-mini',
         descriptionLabel: '描述',
         descriptionPlaceholder: '可选补充说明（不填会自动生成）',
         enabledLabel: '启用',
         defaultLabel: '设为默认 Agent',
-        nameRequired: 'Agent ID 不能为空',
+        nameRequired: '名称不能为空',
         saveFailed: '保存 Agent 失败',
       },
       wizard: {
@@ -878,6 +876,7 @@ export default {
     },
     heartbeat: {
       subtitle: '配置 Agent 定期自检与主动通知',
+      agentLabel: '选择 Agent',
       loading: '加载配置中...',
       savedSuccess: '心跳配置保存成功',
       savingBtn: '保存中...',

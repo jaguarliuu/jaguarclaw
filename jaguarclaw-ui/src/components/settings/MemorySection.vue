@@ -3,6 +3,8 @@ import { onMounted, computed, ref } from 'vue'
 import { useMemory } from '@/composables/useMemory'
 import { useAgents } from '@/composables/useAgents'
 import { useI18n } from '@/i18n'
+import Select from '@/components/common/Select.vue'
+import type { SelectOption } from '@/components/common/Select.vue'
 
 const { status, loading, rebuilding, error, loadStatus, rebuildIndex } = useMemory()
 const { agents, enabledAgents, defaultAgent, loadAgents } = useAgents()
@@ -22,6 +24,10 @@ const embeddingInfo = computed(() => {
 })
 
 const agentOptions = computed(() => enabledAgents.value.length > 0 ? enabledAgents.value : agents.value)
+
+const agentSelectOptions = computed<SelectOption[]>(() =>
+  agentOptions.value.map(a => ({ label: a.displayName || a.name, value: a.id }))
+)
 
 const activeAgentName = computed(() => {
   const agent = agentOptions.value.find((item) => item.id === selectedAgentId.value)
@@ -56,11 +62,7 @@ onMounted(async () => {
       </label>
       <label class="scope-field">
         <span class="scope-label">{{ t('sections.memory.scope.agentLabel') }}</span>
-        <select v-model="selectedAgentId" class="scope-select">
-          <option v-for="agent in agentOptions" :key="agent.id" :value="agent.id">
-            {{ agent.displayName || agent.name }}
-          </option>
-        </select>
+        <Select v-model="selectedAgentId" :options="agentSelectOptions" class="scope-select" />
       </label>
       <span class="scope-hint">{{ t('sections.memory.scope.agentHint', { agent: activeAgentName }) }}</span>
     </div>
@@ -201,12 +203,6 @@ onMounted(async () => {
 
 .scope-select {
   min-width: 150px;
-  padding: 6px 8px;
-  border: var(--border);
-  border-radius: var(--radius-md);
-  background: var(--color-white);
-  font-family: var(--font-mono);
-  font-size: 12px;
 }
 
 .scope-hint {

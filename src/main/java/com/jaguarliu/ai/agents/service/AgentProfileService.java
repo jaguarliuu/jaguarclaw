@@ -1,9 +1,12 @@
 package com.jaguarliu.ai.agents.service;
 
+import com.jaguarliu.ai.soul.SoulConfigService;
+import com.jaguarliu.ai.heartbeat.HeartbeatConfigService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jaguarliu.ai.agents.AgentConstants;
 import com.jaguarliu.ai.agents.AgentRegistry;
+import com.jaguarliu.ai.agents.PinyinUtils;
 import com.jaguarliu.ai.agents.entity.AgentProfileEntity;
 import com.jaguarliu.ai.agents.repository.AgentProfileRepository;
 import com.jaguarliu.ai.mcp.persistence.McpServerRepository;
@@ -11,6 +14,7 @@ import com.jaguarliu.ai.memory.index.MemoryChunkEntity;
 import com.jaguarliu.ai.memory.index.MemoryChunkRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -38,6 +42,10 @@ public class AgentProfileService {
     private final MemoryChunkRepository memoryChunkRepository;
     private final McpServerRepository mcpServerRepository;
     private final ObjectMapper objectMapper;
+    // ObjectProvider used to break circular dependency:
+    // AgentProfileService → SoulConfigService → AgentWorkspaceResolver → Optional<AgentProfileService>
+    private final ObjectProvider<SoulConfigService> soulConfigServiceProvider;
+    private final ObjectProvider<HeartbeatConfigService> heartbeatConfigServiceProvider;
 
     @Transactional(readOnly = true)
     public List<AgentProfileEntity> list() {
@@ -81,9 +89,10 @@ public class AgentProfileService {
     public AgentProfileEntity create(CreateAgentProfileRequest request) {
         validateCreateRequest(request);
 
-        if (repository.existsByName(request.name())) {
-            throw new IllegalArgumentException("Agent name already exists: " + request.name());
-        }
+        // 从 displayName 推导内部 name（拼音 slug），处理重名冲突
+        String displayName = request.displayName().trim();
+        String baseName = PinyinUtils.toSlug(displayName);
+        String name = resolveUniqueName(baseName);
 
         boolean shouldBeDefault = request.isDefault() != null
                 ? request.isDefault()
@@ -93,14 +102,12 @@ public class AgentProfileService {
             clearCurrentDefault();
         }
 
-        String workspacePath = normalizeWorkspacePath(request.name(), request.workspacePath());
+        String workspacePath = normalizeWorkspacePath(name, request.workspacePath());
         ensureWorkspaceDirectories(workspacePath);
 
         AgentProfileEntity entity = AgentProfileEntity.builder()
-                .name(request.name().trim())
-                .displayName(request.displayName() != null && !request.displayName().isBlank()
-                        ? request.displayName().trim()
-                        : request.name().trim())
+                .name(name)
+                .displayName(displayName)
                 .description(trimToNull(request.description()))
                 .workspacePath(workspacePath)
                 .model(trimToNull(request.model()))
@@ -115,6 +122,11 @@ public class AgentProfileService {
                 .build();
 
         AgentProfileEntity saved = repository.save(entity);
+
+        // Initialize soul and heartbeat defaults for the new agent
+        soulConfigServiceProvider.getObject().ensureAgentDefaults(saved.getId(), saved.getDisplayName());
+        heartbeatConfigServiceProvider.getObject().ensureAgentDefaults(saved.getId());
+
         agentRegistry.refresh();
         log.info("Created agent profile: id={}, name={}, default={}, enabled={}",
                 saved.getId(), saved.getName(), saved.getIsDefault(), saved.getEnabled());
@@ -221,10 +233,23 @@ public class AgentProfileService {
         if (request == null) {
             throw new IllegalArgumentException("request is required");
         }
-        if (request.name() == null || request.name().isBlank()) {
-            throw new IllegalArgumentException("name is required");
+        if (request.displayName() == null || request.displayName().isBlank()) {
+            throw new IllegalArgumentException("displayName is required");
         }
-        validateAgentName(request.name().trim());
+    }
+
+    private String resolveUniqueName(String baseName) {
+        if (!repository.existsByName(baseName)) {
+            return baseName;
+        }
+        int suffix = 2;
+        while (true) {
+            String candidate = baseName + "-" + suffix;
+            if (!repository.existsByName(candidate)) {
+                return candidate;
+            }
+            suffix++;
+        }
     }
 
     private void validateAgentName(String name) {
@@ -245,7 +270,7 @@ public class AgentProfileService {
     private String normalizeWorkspacePath(String name, String inputPath) {
         Path path = (inputPath != null && !inputPath.isBlank())
                 ? Path.of(inputPath.trim())
-                : Path.of("workspace", "agents", name);
+                : Path.of("workspace", "workspace-" + name);
 
         // 如果是相对路径，基于 workspace root 解析
         Path resolved = path.isAbsolute()

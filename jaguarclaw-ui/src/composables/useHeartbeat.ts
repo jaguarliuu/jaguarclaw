@@ -2,6 +2,7 @@ import { ref, computed, watch } from 'vue'
 
 export interface HeartbeatNotification {
   id: string
+  agentId: string
   content: string
   sessionId: string
   runId: string
@@ -38,10 +39,11 @@ watch(notifications, (val) => {
 }, { deep: true })
 
 export function useHeartbeat() {
-  function addNotification(content: string, sessionId: string, runId: string) {
+  function addNotification(agentId: string, content: string, sessionId: string, runId: string) {
     if (notifications.value.some(n => n.id === runId)) return
     notifications.value.unshift({
       id: runId,
+      agentId,
       content,
       sessionId,
       runId,

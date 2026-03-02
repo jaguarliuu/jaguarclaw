@@ -222,7 +222,7 @@ public class ReadFileTool implements Tool {
     /**
      * 解析并验证文件路径
      * 优先级：
-     * 1. workspace 内的相对路径（session workspace 优先）
+     * 1. workspace 内的相对路径（agent workspace 优先）
      * 2. skill 资源目录的相对路径（技能激活时）
      * 3. 全局 workspace（兜底相对路径）
      * 4. 绝对路径在 workspace 或 skill 允许路径内
@@ -234,12 +234,12 @@ public class ReadFileTool implements Tool {
         ToolExecutionContext ctx = ToolExecutionContext.current();
         boolean isRelative = !Path.of(pathStr).isAbsolute();
 
-        // 1. 尝试 session workspace（相对路径且文件存在）
-        if (isRelative && ctx != null && ctx.getSessionId() != null) {
-            Path sessionWorkspace = globalWorkspace.resolve(ctx.getSessionId()).normalize();
-            Path sessionPath = sessionWorkspace.resolve(pathStr).normalize();
-            if (sessionPath.startsWith(sessionWorkspace) && Files.exists(sessionPath)) {
-                return sessionPath;
+        // 1. 尝试 agent workspace（相对路径且文件存在）
+        if (isRelative && ctx != null && ctx.getAgentId() != null) {
+            Path agentWorkspace = globalWorkspace.resolve("workspace-" + ctx.getAgentId()).normalize();
+            Path agentPath = agentWorkspace.resolve(pathStr).normalize();
+            if (agentPath.startsWith(agentWorkspace) && Files.exists(agentPath)) {
+                return agentPath;
             }
         }
 

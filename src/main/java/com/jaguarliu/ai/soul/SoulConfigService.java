@@ -7,8 +7,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
-import jakarta.annotation.PostConstruct;
-
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -28,11 +26,6 @@ public class SoulConfigService {
 
     private static final String SOUL_JSON_FILE = "soul.json";
     private static final String SOUL_MD_FILE = "SOUL.md";
-
-    @PostConstruct
-    void init() {
-        ensureAgentDefaults("main");
-    }
 
     /**
      * 获取配置 Map；文件不存在时返回默认值
@@ -158,11 +151,22 @@ public class SoulConfigService {
         return prompt.toString();
     }
 
-    private void ensureAgentDefaults(String agentId) {
+    public void ensureAgentDefaults(String agentId) {
+        ensureAgentDefaults(agentId, null);
+    }
+
+    /**
+     * 确保指定 agent 的 soul 文件已初始化，displayName 用于设置默认 agentName
+     */
+    public void ensureAgentDefaults(String agentId, String displayName) {
         String resolvedAgentId = workspaceResolver.normalizeAgentId(agentId);
         Path jsonPath = soulJsonPath(resolvedAgentId);
         if (!Files.exists(jsonPath)) {
-            saveConfig(resolvedAgentId, defaultConfig(resolvedAgentId));
+            Map<String, Object> config = defaultConfig(resolvedAgentId);
+            if (displayName != null && !displayName.isBlank()) {
+                config.put("agentName", displayName);
+            }
+            saveConfig(resolvedAgentId, config);
             log.info("Initialized default soul.json at {}", jsonPath);
             return;
         }
