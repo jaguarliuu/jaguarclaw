@@ -9,6 +9,7 @@
     "prestart": "node -e \"const fs=require('fs'); if(!fs.existsSync('resources')) fs.mkdirSync('resources'); fs.copyFileSync('assets/icon.png', 'resources/icon.png');\"",
     "dist": "electron-builder",
     "download-jre": "node scripts/download-jre.js",
+    "download-jre-win": "node scripts/download-jre.js --win",
     "build": "node scripts/build.js",
     "release": "electron-builder --publish always"
   },

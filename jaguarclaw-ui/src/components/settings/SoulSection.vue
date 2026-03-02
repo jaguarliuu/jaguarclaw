@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { useSoulConfig, type SoulConfig } from '@/composables/useSoulConfig'
+import { useSoulConfig } from '@/composables/useSoulConfig'
 import { useAgents } from '@/composables/useAgents'
 import { useI18n } from '@/i18n'
 import Select from '@/components/common/Select.vue'
@@ -10,43 +10,19 @@ import type { SelectOption } from '@/components/common/Select.vue'
 const { t } = useI18n()
 const route = useRoute()
 
-const { config, loading, error, fetchConfig, saveConfig, watchSoulUpdates } = useSoulConfig()
+const { persona, loading, error, fetchPersona, saveFile, watchPersonaUpdates } = useSoulConfig()
 const { agents, defaultAgent, loadAgents } = useAgents()
 
 let stopWatcher: (() => void) | null = null
 const selectedAgentId = ref('main')
 
-const editConfig = ref<SoulConfig>({
-  agentName: '',
-  personality: '',
-  traits: [],
-  responseStyle: 'balanced',
-  detailLevel: 'balanced',
-  expertise: [],
-  forbiddenTopics: [],
-  customPrompt: '',
-  enabled: true
-})
-
-const newTrait = ref('')
-const newExpertise = ref('')
-const newForbiddenTopic = ref('')
+const editSoul = ref('')
+const editRule = ref('')
+const editProfile = ref('')
 
 const saving = ref(false)
 const saveSuccess = ref(false)
 const saveError = ref<string | null>(null)
-
-const responseStyleOptions = computed(() => [
-  { value: 'formal', label: t('sections.soul.tone.formal') },
-  { value: 'balanced', label: t('sections.soul.tone.balanced') },
-  { value: 'casual', label: t('sections.soul.tone.casual') }
-])
-
-const detailLevelOptions = computed(() => [
-  { value: 'concise', label: t('sections.soul.detail.concise') },
-  { value: 'balanced', label: t('sections.soul.detail.balanced') },
-  { value: 'detailed', label: t('sections.soul.detail.detailed') }
-])
 
 const sortedAgents = computed(() => {
   return [...agents.value].sort((a, b) => {
@@ -60,73 +36,16 @@ const agentSelectOptions = computed<SelectOption[]>(() =>
   sortedAgents.value.map(a => ({ label: a.displayName || a.name, value: a.id }))
 )
 
-function syncFormFromConfig() {
-  if (!config.value) return
-  editConfig.value = {
-    ...config.value,
-    traits: [...(config.value.traits || [])],
-    expertise: [...(config.value.expertise || [])],
-    forbiddenTopics: [...(config.value.forbiddenTopics || [])]
-  }
-}
-
-function addTrait() {
-  const trait = newTrait.value.trim()
-  if (!trait) return
-  if (editConfig.value.traits.includes(trait)) return
-  editConfig.value.traits.push(trait)
-  newTrait.value = ''
-}
-
-function removeTrait(trait: string) {
-  editConfig.value.traits = editConfig.value.traits.filter(t => t !== trait)
-}
-
-function addExpertise() {
-  const expertise = newExpertise.value.trim()
-  if (!expertise) return
-  if (editConfig.value.expertise.includes(expertise)) return
-  editConfig.value.expertise.push(expertise)
-  newExpertise.value = ''
-}
-
-function removeExpertise(expertise: string) {
-  editConfig.value.expertise = editConfig.value.expertise.filter(e => e !== expertise)
-}
-
-function addForbiddenTopic() {
-  const topic = newForbiddenTopic.value.trim()
-  if (!topic) return
-  if (editConfig.value.forbiddenTopics.includes(topic)) return
-  editConfig.value.forbiddenTopics.push(topic)
-  newForbiddenTopic.value = ''
-}
-
-function removeForbiddenTopic(topic: string) {
-  editConfig.value.forbiddenTopics = editConfig.value.forbiddenTopics.filter(t => t !== topic)
-}
-
-async function handleSave() {
-  saving.value = true
-  saveError.value = null
-  saveSuccess.value = false
-
-  try {
-    await saveConfig(editConfig.value, selectedAgentId.value)
-    saveSuccess.value = true
-    setTimeout(() => {
-      saveSuccess.value = false
-    }, 3000)
-  } catch (e) {
-    saveError.value = e instanceof Error ? e.message : 'Failed to save'
-  } finally {
-    saving.value = false
-  }
+function syncFormFromPersona() {
+  if (!persona.value) return
+  editSoul.value = persona.value.soul
+  editRule.value = persona.value.rule
+  editProfile.value = persona.value.profile
 }
 
 async function loadAgentSoul(agentId: string) {
-  await fetchConfig(agentId)
-  syncFormFromConfig()
+  await fetchPersona(agentId)
+  syncFormFromPersona()
 }
 
 function resolveRouteAgentId() {
@@ -137,11 +56,28 @@ function resolveRouteAgentId() {
   return defaultAgent.value?.id || 'main'
 }
 
+async function handleSave() {
+  saving.value = true
+  saveError.value = null
+  saveSuccess.value = false
+  try {
+    await saveFile(selectedAgentId.value, 'soul', editSoul.value)
+    await saveFile(selectedAgentId.value, 'rule', editRule.value)
+    await saveFile(selectedAgentId.value, 'profile', editProfile.value)
+    saveSuccess.value = true
+    setTimeout(() => { saveSuccess.value = false }, 3000)
+  } catch (e) {
+    saveError.value = e instanceof Error ? e.message : 'Failed to save'
+  } finally {
+    saving.value = false
+  }
+}
+
 onMounted(async () => {
   await loadAgents()
   selectedAgentId.value = resolveRouteAgentId()
   await loadAgentSoul(selectedAgentId.value)
-  stopWatcher = watchSoulUpdates(() => {
+  stopWatcher = watchPersonaUpdates(selectedAgentId.value, () => {
     void loadAgentSoul(selectedAgentId.value)
   })
 })
@@ -173,188 +109,47 @@ watch(
         <p class="section-subtitle">{{ t('sections.soul.subtitle') }}</p>
       </div>
       <div class="header-agent-select">
-        <label class="form-label" for="soul-agent-selector">{{ t('sections.soul.agentScopeLabel') }}</label>
+        <label class="form-label">{{ t('sections.soul.agentScopeLabel') }}</label>
         <Select v-model="selectedAgentId" :options="agentSelectOptions" />
       </div>
     </header>
 
-    <div v-if="loading && !config" class="loading-state">{{ t('sections.soul.loading') }}</div>
+    <div v-if="loading && !persona" class="loading-state">{{ t('sections.soul.loading') }}</div>
 
-    <div v-if="error && !config" class="error-state">
+    <div v-if="error && !persona" class="error-state">
       <p>{{ error }}</p>
-      <button class="retry-btn" @click="fetchConfig(selectedAgentId)">{{ t('common.retry') }}</button>
+      <button class="retry-btn" @click="fetchPersona(selectedAgentId)">{{ t('common.retry') }}</button>
     </div>
 
-    <template v-if="config">
+    <template v-if="persona">
       <div class="config-blocks">
-        <!-- Identity -->
+        <!-- SOUL.md -->
         <div class="config-block">
-          <h3 class="block-title">{{ t('sections.soul.blocks.identity') }}</h3>
-          <p class="block-desc">{{ t('sections.soul.blocks.identityDesc') }}</p>
-
-          <div class="form-group">
-            <label class="form-label">{{ t('sections.soul.fields.agentNameLabel') }}</label>
-            <input
-              v-model="editConfig.agentName"
-              class="form-input"
-              :placeholder="t('sections.soul.fields.agentNamePlaceholder')"
-            />
-            <p class="form-help">{{ t('sections.soul.fields.agentNameHelp') }}</p>
-          </div>
-
-          <div class="form-group">
-            <label class="form-label">{{ t('sections.soul.fields.personalityLabel') }}</label>
-            <textarea
-              v-model="editConfig.personality"
-              class="form-textarea"
-              rows="4"
-              :placeholder="t('sections.soul.fields.personalityPlaceholder')"
-            />
-            <p class="form-help">{{ t('sections.soul.fields.personalityHelp') }}</p>
-          </div>
+          <h3 class="block-title">SOUL.md</h3>
+          <p class="block-desc">{{ t('sections.soul.blocks.soulDesc') }}</p>
+          <textarea v-model="editSoul" class="form-textarea md-editor" rows="12" />
         </div>
 
-        <!-- Traits -->
+        <!-- RULE.md -->
         <div class="config-block">
-          <h3 class="block-title">{{ t('sections.soul.blocks.traits') }}</h3>
-          <p class="block-desc">{{ t('sections.soul.blocks.traitsDesc') }}</p>
-
-          <div class="pill-list" v-if="editConfig.traits.length > 0">
-            <span v-for="trait in editConfig.traits" :key="trait" class="pill pill-trait">
-              {{ trait }}
-              <button class="pill-remove" @click="removeTrait(trait)">&times;</button>
-            </span>
-          </div>
-          <div v-else class="empty-hint">{{ t('sections.soul.traits.empty') }}</div>
-
-          <div class="add-row">
-            <input
-              v-model="newTrait"
-              class="form-input"
-              :placeholder="t('sections.soul.traits.placeholder')"
-              @keydown.enter.prevent="addTrait"
-            />
-            <button class="add-btn" @click="addTrait" :disabled="!newTrait.trim()">{{ t('sections.soul.traits.addBtn') }}</button>
-          </div>
+          <h3 class="block-title">RULE.md</h3>
+          <p class="block-desc">{{ t('sections.soul.blocks.ruleDesc') }}</p>
+          <textarea v-model="editRule" class="form-textarea md-editor" rows="10" />
         </div>
 
-        <!-- Response Style -->
+        <!-- PROFILE.md -->
         <div class="config-block">
-          <h3 class="block-title">{{ t('sections.soul.blocks.responseStyle') }}</h3>
-          <p class="block-desc">{{ t('sections.soul.blocks.responseStyleDesc') }}</p>
-
-          <div class="form-group">
-            <label class="form-label">{{ t('sections.soul.tone.label') }}</label>
-            <div class="radio-group">
-              <label
-                v-for="option in responseStyleOptions"
-                :key="option.value"
-                class="radio-option"
-              >
-                <input
-                  type="radio"
-                  :value="option.value"
-                  v-model="editConfig.responseStyle"
-                />
-                <span>{{ option.label }}</span>
-              </label>
-            </div>
-          </div>
-
-          <div class="form-group">
-            <label class="form-label">{{ t('sections.soul.detail.label') }}</label>
-            <div class="radio-group">
-              <label
-                v-for="option in detailLevelOptions"
-                :key="option.value"
-                class="radio-option"
-              >
-                <input
-                  type="radio"
-                  :value="option.value"
-                  v-model="editConfig.detailLevel"
-                />
-                <span>{{ option.label }}</span>
-              </label>
-            </div>
-          </div>
-        </div>
-
-        <!-- Expertise -->
-        <div class="config-block">
-          <h3 class="block-title">{{ t('sections.soul.blocks.expertise') }}</h3>
-          <p class="block-desc">{{ t('sections.soul.blocks.expertiseDesc') }}</p>
-
-          <div class="pill-list" v-if="editConfig.expertise.length > 0">
-            <span v-for="area in editConfig.expertise" :key="area" class="pill pill-expertise">
-              {{ area }}
-              <button class="pill-remove" @click="removeExpertise(area)">&times;</button>
-            </span>
-          </div>
-          <div v-else class="empty-hint">{{ t('sections.soul.expertise.empty') }}</div>
-
-          <div class="add-row">
-            <input
-              v-model="newExpertise"
-              class="form-input"
-              :placeholder="t('sections.soul.expertise.placeholder')"
-              @keydown.enter.prevent="addExpertise"
-            />
-            <button class="add-btn" @click="addExpertise" :disabled="!newExpertise.trim()">{{ t('sections.soul.expertise.addBtn') }}</button>
-          </div>
-        </div>
-
-        <!-- Forbidden Topics -->
-        <div class="config-block">
-          <h3 class="block-title">{{ t('sections.soul.blocks.forbidden') }}</h3>
-          <p class="block-desc">{{ t('sections.soul.blocks.forbiddenDesc') }}</p>
-
-          <div class="pill-list" v-if="editConfig.forbiddenTopics.length > 0">
-            <span v-for="topic in editConfig.forbiddenTopics" :key="topic" class="pill pill-forbidden">
-              {{ topic }}
-              <button class="pill-remove" @click="removeForbiddenTopic(topic)">&times;</button>
-            </span>
-          </div>
-          <div v-else class="empty-hint">{{ t('sections.soul.forbidden.empty') }}</div>
-
-          <div class="add-row">
-            <input
-              v-model="newForbiddenTopic"
-              class="form-input"
-              :placeholder="t('sections.soul.forbidden.placeholder')"
-              @keydown.enter.prevent="addForbiddenTopic"
-            />
-            <button class="add-btn" @click="addForbiddenTopic" :disabled="!newForbiddenTopic.trim()">{{ t('sections.soul.forbidden.addBtn') }}</button>
-          </div>
-        </div>
-
-        <!-- Custom Prompt -->
-        <div class="config-block">
-          <h3 class="block-title">{{ t('sections.soul.blocks.customPrompt') }}</h3>
-          <p class="block-desc">{{ t('sections.soul.blocks.customPromptDesc') }}</p>
-
-          <textarea
-            v-model="editConfig.customPrompt"
-            class="form-textarea"
-            rows="6"
-            :placeholder="t('sections.soul.customPrompt.placeholder')"
-          />
+          <h3 class="block-title">PROFILE.md</h3>
+          <p class="block-desc">{{ t('sections.soul.blocks.profileDesc') }}</p>
+          <textarea v-model="editProfile" class="form-textarea md-editor" rows="8" />
         </div>
       </div>
 
-      <!-- Save Success -->
       <div v-if="saveSuccess" class="save-success">{{ t('sections.soul.savedSuccess') }}</div>
-
-      <!-- Save Error -->
       <div v-if="saveError" class="save-error">{{ saveError }}</div>
 
-      <!-- Save Button -->
       <div class="form-actions">
-        <button
-          class="save-btn"
-          :disabled="saving"
-          @click="handleSave"
-        >
+        <button class="save-btn" :disabled="saving" @click="handleSave">
           {{ saving ? t('sections.soul.savingBtn') : t('sections.soul.saveBtn') }}
         </button>
       </div>
@@ -488,105 +283,10 @@ watch(
   margin: 4px 0 0 0;
 }
 
-.radio-group {
-  display: flex;
-  gap: 16px;
-  flex-wrap: wrap;
-}
-
-.radio-option {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  cursor: pointer;
-  font-size: 14px;
-}
-
-.radio-option input[type="radio"] {
-  cursor: pointer;
-}
-
-.pill-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-bottom: 12px;
-}
-
-.pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  border-radius: var(--radius-sm);
+.md-editor {
   font-family: var(--font-mono);
   font-size: 13px;
-}
-
-.pill-trait {
-  background: #eff6ff;
-  border: 1px solid #bfdbfe;
-  color: #1e40af;
-}
-
-.pill-expertise {
-  background: #f0fdf4;
-  border: 1px solid #bbf7d0;
-  color: #166534;
-}
-
-.pill-forbidden {
-  background: #fef2f2;
-  border: 1px solid #fecaca;
-  color: #dc2626;
-}
-
-.pill-remove {
-  background: none;
-  border: none;
-  cursor: pointer;
-  font-size: 16px;
-  line-height: 1;
-  color: inherit;
-  padding: 0;
-  opacity: 0.7;
-}
-
-.pill-remove:hover {
-  opacity: 1;
-}
-
-.empty-hint {
-  font-size: 13px;
-  color: var(--color-gray-500);
-  font-style: italic;
-  margin-bottom: 12px;
-}
-
-.add-row {
-  display: flex;
-  gap: 8px;
-}
-
-.add-btn {
-  padding: 10px 14px;
-  border: var(--border);
-  border-radius: var(--radius-md);
-  background: var(--color-white);
-  font-family: var(--font-mono);
-  font-size: 13px;
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.add-btn:hover:not(:disabled) {
-  background: var(--color-gray-bg);
-  border-color: var(--color-black);
-}
-
-.add-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+  line-height: 1.6;
 }
 
 .save-success {

@@ -4,7 +4,9 @@
  * Falls back: JRE 24 → JDK 24 → JRE 21 → JDK 21
  * Extracts to electron/resources/jre/
  *
- * Usage: node scripts/download-jre.js
+ * Usage:
+ *   node scripts/download-jre.js          # native platform JRE
+ *   node scripts/download-jre.js --win    # force Windows x64 JRE (for cross-compilation)
  */
 
 const https = require('https');
@@ -12,10 +14,12 @@ const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
 
-const IS_WINDOWS = process.platform === 'win32';
-const IS_MAC = process.platform === 'darwin';
+const FORCE_WIN = process.argv.includes('--win');
+
+const IS_WINDOWS = FORCE_WIN || process.platform === 'win32';
+const IS_MAC = !FORCE_WIN && process.platform === 'darwin';
 const OS = IS_WINDOWS ? 'windows' : IS_MAC ? 'mac' : 'linux';
-const ARCH = process.arch === 'arm64' ? 'aarch64' : 'x64';
+const ARCH = (!FORCE_WIN && process.arch === 'arm64') ? 'aarch64' : 'x64';
 const ARCHIVE_EXT = IS_WINDOWS ? '.zip' : '.tar.gz';
 const JAVA_BIN = IS_WINDOWS ? 'java.exe' : 'java';
 
@@ -185,11 +189,13 @@ async function main() {
   }
   fs.mkdirSync(TEMP_DIR, { recursive: true });
 
-  if (IS_WINDOWS) {
+  if (process.platform === 'win32') {
     execSync(
       `powershell -NoProfile -Command "Expand-Archive -Path '${archivePath}' -DestinationPath '${TEMP_DIR}' -Force"`,
       { stdio: 'inherit' }
     );
+  } else if (ARCHIVE_EXT === '.zip') {
+    execSync(`unzip -q "${archivePath}" -d "${TEMP_DIR}"`, { stdio: 'inherit' });
   } else {
     execSync(`tar xzf "${archivePath}" -C "${TEMP_DIR}"`, { stdio: 'inherit' });
   }
@@ -226,7 +232,10 @@ async function main() {
   }
 
   console.log(`\nJava runtime installed to: ${JRE_DIR}`);
-  execSync(`"${javaBin}" -version`, { stdio: 'inherit' });
+  // Skip version check when cross-compiling (e.g. --win on macOS: cannot run java.exe natively)
+  if (!FORCE_WIN || process.platform === 'win32') {
+    execSync(`"${javaBin}" -version`, { stdio: 'inherit' });
+  }
 
   if (asset.version !== '24') {
     console.log(

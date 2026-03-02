@@ -68,7 +68,7 @@ onMounted(async () => {
   await loadAgents()
   // 默认选中第一个可用 agent
   if (agents.value.length > 0) {
-    selectedAgentId.value = agents.value[0].id
+    selectedAgentId.value = agents.value[0]?.id ?? 'main'
   }
   await fetchConfig()
 })
