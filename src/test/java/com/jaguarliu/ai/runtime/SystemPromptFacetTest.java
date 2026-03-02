@@ -53,6 +53,7 @@ class SystemPromptFacetTest {
                 Optional.of(mcpPromptProvider),
                 soulConfigService,
                 Optional.empty(),
+                Optional.empty(),
                 Optional.empty()
         );
         ReflectionTestUtils.setField(builder, "workspace", "./workspace");
@@ -120,7 +121,7 @@ class SystemPromptFacetTest {
         assertTrue(agentBPrompt.contains("**bash**"));
         assertFalse(agentBPrompt.contains("**read_file**"));
 
-        assertTrue(agentAPrompt.contains("Active agent scope: `agent-a`"));
-        assertTrue(agentBPrompt.contains("Active agent scope: `agent-b`"));
+        assertTrue(agentAPrompt.contains("agent scope: `agent-a`"));
+        assertTrue(agentBPrompt.contains("agent scope: `agent-b`"));
     }
 }

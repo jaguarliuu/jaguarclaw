@@ -6,6 +6,7 @@ import com.jaguarliu.ai.datasource.domain.SchemaMetadata;
 import com.jaguarliu.ai.heartbeat.HeartbeatConfigService;
 import com.jaguarliu.ai.mcp.prompt.McpPromptProvider;
 import com.jaguarliu.ai.memory.search.MemorySearchService;
+import com.jaguarliu.ai.memory.store.MemoryStore;
 import com.jaguarliu.ai.runtime.prompt.KernelPromptFacet;
 import com.jaguarliu.ai.runtime.prompt.MemoryPromptFacet;
 import com.jaguarliu.ai.runtime.prompt.PromptAssemblyContext;
@@ -59,6 +60,7 @@ public class SystemPromptBuilder {
     private final SoulConfigService soulConfigService;
     private final Optional<DataSourceService> dataSourceService;
     private final Optional<HeartbeatConfigService> heartbeatConfigService;
+    private final Optional<MemoryStore> memoryStore;
 
     @Value("${tools.workspace:./workspace}")
     private String workspace;
@@ -163,7 +165,8 @@ public class SystemPromptBuilder {
                                 Optional<McpPromptProvider> mcpPromptProvider,
                                 SoulConfigService soulConfigService,
                                 Optional<DataSourceService> dataSourceService,
-                                Optional<HeartbeatConfigService> heartbeatConfigService) {
+                                Optional<HeartbeatConfigService> heartbeatConfigService,
+                                Optional<MemoryStore> memoryStore) {
         this.toolRegistry = toolRegistry;
         this.skillIndexBuilder = skillIndexBuilder;
         this.memorySearchService = memorySearchService;
@@ -171,13 +174,14 @@ public class SystemPromptBuilder {
         this.soulConfigService = soulConfigService;
         this.dataSourceService = dataSourceService;
         this.heartbeatConfigService = heartbeatConfigService;
+        this.memoryStore = memoryStore;
 
         this.kernelPromptFacet = new KernelPromptFacet();
         this.soulPromptFacet = new SoulPromptFacet(soulConfigService);
         this.rulePromptFacet = new RulePromptFacet(soulConfigService);
         this.profilePromptFacet = new ProfilePromptFacet(soulConfigService);
         this.toolPromptFacet = new ToolPromptFacet(toolRegistry);
-        this.memoryPromptFacet = new MemoryPromptFacet(memorySearchService);
+        this.memoryPromptFacet = new MemoryPromptFacet(memorySearchService, memoryStore.orElse(null));
     }
 
     /**

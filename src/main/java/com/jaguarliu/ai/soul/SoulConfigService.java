@@ -6,6 +6,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
@@ -84,6 +85,20 @@ public class SoulConfigService {
             writeMd(resolvedAgentId, PROFILE_MD_FILE, DEFAULT_PROFILE_MD);
             log.info("Initialized default PROFILE.md for agentId={}", resolvedAgentId);
         }
+
+        // 初始化 agent 私有 memory/MEMORY.md（若不存在）
+        Path agentWorkspace = workspaceResolver.resolveAgentWorkspace(resolvedAgentId);
+        Path agentMemoryMd = agentWorkspace.resolve("memory").resolve("MEMORY.md")
+                .toAbsolutePath().normalize();
+        if (!Files.exists(agentMemoryMd)) {
+            try {
+                Files.createDirectories(agentMemoryMd.getParent());
+                Files.writeString(agentMemoryMd, defaultAgentMemoryMd(agentName), StandardCharsets.UTF_8);
+                log.info("Initialized default memory/MEMORY.md for agentId={}", resolvedAgentId);
+            } catch (IOException e) {
+                log.warn("Failed to initialize memory/MEMORY.md for agentId={}", resolvedAgentId, e);
+            }
+        }
     }
 
     // ── Internal helpers ─────────────────────────────────────────────────────
@@ -131,13 +146,28 @@ public class SoulConfigService {
                "- Detail level: balanced\n";
     }
 
+    private static String defaultAgentMemoryMd(String agentName) {
+        return "# Memory — " + agentName + "\n\n" +
+               "## Memory Files\n" +
+               "(Register memory files here as you create them.)\n\n" +
+               "---\n\n" +
+               "## Usage Principles\n" +
+               "- This file is a lightweight index — keep it under 50 lines.\n" +
+               "- Never write substantive content directly here; create dedicated files instead.\n" +
+               "- To save notes: memory_write(content, file=\"notes.md\", scope=\"agent\")\n" +
+               "- To update this index: memory_write(content, file=\"MEMORY.md\", scope=\"agent\")\n";
+    }
+
     private static final String DEFAULT_RULE_MD =
             "# Rules\n\n" +
             "## Behavioral Constraints\n" +
             "- Be honest and transparent with the user.\n" +
             "- Do not perform irreversible actions without explicit confirmation.\n" +
             "- Respect user privacy; avoid storing sensitive data unless asked.\n" +
-            "- Keep responses concise unless more detail is requested.\n";
+            "- Keep responses concise unless more detail is requested.\n" +
+            "- Memory index discipline: MEMORY.md is a lightweight index only (< 50 lines).\n" +
+            "  Never write substantive content directly into MEMORY.md.\n" +
+            "  Write to a dedicated file (e.g. file=\"projects.md\"), then update the index in MEMORY.md.\n";
 
     private static final String DEFAULT_PROFILE_MD =
             "# User Profile\n\n" +

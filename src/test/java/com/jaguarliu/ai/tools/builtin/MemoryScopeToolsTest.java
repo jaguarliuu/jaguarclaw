@@ -68,17 +68,16 @@ class MemoryScopeToolsTest {
     }
 
     @Test
-    @DisplayName("memory_write 默认 scope=agent")
+    @DisplayName("memory_write 默认 scope=agent（写入今日日记）")
     void memoryWriteDefaultShouldBeAgent() throws IOException {
         ToolExecutionContext.set(ToolExecutionContext.builder().agentId("agent-a").build());
         MemoryWriteTool writeTool = new MemoryWriteTool(memoryStore, memoryIndexer);
 
-        ToolResult result = writeTool.execute(Map.of("target", "core", "content", "note")).block();
+        ToolResult result = writeTool.execute(Map.of("content", "note")).block();
 
         assertNotNull(result);
         assertTrue(result.isSuccess());
-        verify(memoryStore).appendToCore("note", "agent-a", MemoryScope.AGENT);
-        verify(memoryIndexer).indexFile("MEMORY.md", MemoryScope.AGENT, "agent-a");
+        verify(memoryStore).appendToDaily("note", "agent-a", MemoryScope.AGENT);
     }
 
     @Test
@@ -88,7 +87,6 @@ class MemoryScopeToolsTest {
         MemoryWriteTool writeTool = new MemoryWriteTool(memoryStore, memoryIndexer);
 
         ToolResult result = writeTool.execute(Map.of(
-                "target", "daily",
                 "content", "share",
                 "scope", "global"
         )).block();
