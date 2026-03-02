@@ -49,8 +49,8 @@ public class KernelPromptFacet {
         return switch (mode) {
             case FULL -> """
                     {{IDENTITY}}
-                    
-                    {{SOUL}}{{TOOLS}}{{SAFETY}}{{PLANNING}}{{SUBAGENT}}{{MEMORY}}{{HEARTBEAT}}{{SKILLS}}{{WORKSPACE}}{{DATASOURCE}}{{DATETIME}}{{RUNTIME}}{{MCP}}{{CUSTOM}}
+
+                    {{SOUL}}{{RULE}}{{PROFILE}}{{TOOLS}}{{SAFETY}}{{PLANNING}}{{SUBAGENT}}{{MEMORY}}{{HEARTBEAT}}{{SKILLS}}{{WORKSPACE}}{{DATASOURCE}}{{DATETIME}}{{RUNTIME}}{{MCP}}{{CUSTOM}}
                     """;
             case MINIMAL -> """
                     {{IDENTITY}}

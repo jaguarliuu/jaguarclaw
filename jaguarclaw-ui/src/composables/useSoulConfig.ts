@@ -1,69 +1,62 @@
 import { ref } from 'vue'
 import { useWebSocket } from './useWebSocket'
 
-export interface SoulConfig {
-  id?: number
-  agentName: string
-  personality: string
-  traits: string[]
-  responseStyle: string
-  detailLevel: string
-  expertise: string[]
-  forbiddenTopics: string[]
-  customPrompt: string
-  enabled: boolean
+export interface PersonaFiles {
+  soul: string
+  rule: string
+  profile: string
 }
 
 const { request, onEvent } = useWebSocket()
 
 export function useSoulConfig() {
-  const config = ref<SoulConfig | null>(null)
+  const persona = ref<PersonaFiles | null>(null)
   const loading = ref(false)
   const error = ref<string | null>(null)
 
-  async function fetchConfig(agentId?: string) {
+  async function fetchPersona(agentId?: string) {
     loading.value = true
     error.value = null
     try {
       const payload = agentId ? { agentId } : undefined
-      const result = await request<SoulConfig>('soul.get', payload)
-      config.value = result
+      const result = await request<PersonaFiles>('soul.get', payload)
+      persona.value = result
     } catch (e) {
       error.value = e instanceof Error ? e.message : 'Unknown error'
-      console.error('Failed to fetch soul config:', e)
+      console.error('Failed to fetch persona:', e)
     } finally {
       loading.value = false
     }
   }
 
-  async function saveConfig(newConfig: Partial<SoulConfig>, agentId?: string) {
+  async function saveFile(agentId: string, file: 'soul' | 'rule' | 'profile', content: string) {
     loading.value = true
     error.value = null
     try {
-      await request('soul.save', {
-        agentId,
-        config: newConfig,
-      })
-      await fetchConfig(agentId)
+      await request('soul.save', { agentId, file, content })
+      if (persona.value) {
+        persona.value = { ...persona.value, [file]: content }
+      }
     } catch (e) {
       error.value = e instanceof Error ? e.message : 'Unknown error'
-      console.error('Failed to save soul config:', e)
+      console.error('Failed to save persona file:', e)
       throw e
     } finally {
       loading.value = false
     }
   }
 
-  // Refresh config when AI uses update_soul tool
-  function watchSoulUpdates(onUpdated?: () => void): () => void {
+  // Refresh persona when AI uses update_soul / update_rule / update_profile tools
+  function watchPersonaUpdates(agentId?: string, onUpdated?: () => void): () => void {
     const pendingCallIds = new Set<string>()
+    const watchedTools = new Set(['update_soul', 'update_rule', 'update_profile'])
 
     const offCall = onEvent('tool.call', (event) => {
       const payload = event.payload
       if (payload && typeof payload === 'object' && 'toolName' in payload && 'callId' in payload) {
         const toolName = String((payload as { toolName: unknown }).toolName)
         const callId = String((payload as { callId: unknown }).callId)
-        if (toolName === 'update_soul') {
+        if (watchedTools.has(toolName)) {
           pendingCallIds.add(callId)
         }
       }
@@ -80,7 +73,7 @@ export function useSoulConfig() {
             if (onUpdated) {
               onUpdated()
             } else {
-              fetchConfig()
+              fetchPersona(agentId)
             }
           }
         }
@@ -94,11 +87,11 @@ export function useSoulConfig() {
   }
 
   return {
-    config,
+    persona,
     loading,
     error,
-    fetchConfig,
-    saveConfig,
-    watchSoulUpdates
+    fetchPersona,
+    saveFile,
+    watchPersonaUpdates,
   }
 }

@@ -1,4 +1,5 @@
 package com.jaguarliu.ai.gateway.rpc.handler.soul;
+
 import com.jaguarliu.ai.gateway.rpc.RpcHandler;
 import com.jaguarliu.ai.gateway.rpc.model.RpcRequest;
 import com.jaguarliu.ai.gateway.rpc.model.RpcResponse;
@@ -39,18 +40,18 @@ public class SoulSaveHandler implements RpcHandler {
                 agentId = agentIdRaw.toString();
             }
 
-            Map<String, Object> config;
-            Object nestedConfig = payloadMap.get("config");
-            if (nestedConfig instanceof Map<?, ?> nested) {
-                @SuppressWarnings("unchecked")
-                Map<String, Object> casted = (Map<String, Object>) nested;
-                config = casted;
-            } else {
-                config = new java.util.LinkedHashMap<>(payloadMap);
-                config.remove("agentId");
-            }
-            soulConfigService.saveConfig(agentId, config);
+            String file = payloadMap.getOrDefault("file", "soul").toString();
+            String content = payloadMap.getOrDefault("content", "").toString();
 
+            switch (file) {
+                case "soul"    -> soulConfigService.writeSoulMd(agentId, content);
+                case "rule"    -> soulConfigService.writeRuleMd(agentId, content);
+                case "profile" -> soulConfigService.writeProfileMd(agentId, content);
+                default -> {
+                    return RpcResponse.error(request.getId(), "INVALID_FILE",
+                            "file must be one of: soul, rule, profile");
+                }
+            }
 
             return RpcResponse.success(request.getId(), Map.of("success", true));
         }).subscribeOn(Schedulers.boundedElastic());

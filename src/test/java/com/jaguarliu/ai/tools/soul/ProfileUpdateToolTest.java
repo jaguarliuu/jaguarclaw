@@ -9,36 +9,32 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
-class SoulUpdateToolTest {
+class ProfileUpdateToolTest {
 
     @Test
-    void execute_writesFullContentToSoulMd() {
+    void execute_writesFullContentToProfileMd() {
         SoulConfigService svc = mock(SoulConfigService.class);
-        SoulUpdateTool tool = new SoulUpdateTool(svc);
+        ProfileUpdateTool tool = new ProfileUpdateTool(svc);
 
-        String newContent = "# Soul\n\nYour name is Test.\n";
+        String newContent = "# User Profile\n\n## Preferences\n- Address as: Alex\n";
         Map<String, Object> args = Map.of(
                 "content", newContent,
-                "reason", "test update"
+                "reason", "learned user name"
         );
 
         ToolResult result = tool.execute(args).block();
         assertNotNull(result);
         assertTrue(result.isSuccess());
 
-        verify(svc, times(1)).writeSoulMd("main", newContent);
+        verify(svc, times(1)).writeProfileMd("main", newContent);
     }
 
     @Test
     void execute_missingContent_returnsError() {
-        SoulUpdateTool tool = new SoulUpdateTool(mock(SoulConfigService.class));
+        ProfileUpdateTool tool = new ProfileUpdateTool(mock(SoulConfigService.class));
 
-        ToolResult r1 = tool.execute(Map.of()).block();
-        assertNotNull(r1);
-        assertFalse(r1.isSuccess());
-
-        ToolResult r2 = tool.execute(Map.of("reason", "oops")).block();
-        assertNotNull(r2);
-        assertFalse(r2.isSuccess());
+        ToolResult r = tool.execute(Map.of()).block();
+        assertNotNull(r);
+        assertFalse(r.isSuccess());
     }
 }

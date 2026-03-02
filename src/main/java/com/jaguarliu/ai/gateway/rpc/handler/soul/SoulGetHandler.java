@@ -28,7 +28,11 @@ public class SoulGetHandler implements RpcHandler {
     public Mono<RpcResponse> handle(String connectionId, RpcRequest request) {
         return Mono.fromCallable(() -> {
                     String agentId = extractAgentId(request.getPayload());
-                    return RpcResponse.success(request.getId(), soulConfigService.getConfig(agentId));
+                    return RpcResponse.success(request.getId(), Map.of(
+                            "soul", soulConfigService.readSoulMd(agentId),
+                            "rule", soulConfigService.readRuleMd(agentId),
+                            "profile", soulConfigService.readProfileMd(agentId)
+                    ));
                 })
                 .subscribeOn(Schedulers.boundedElastic());
     }
