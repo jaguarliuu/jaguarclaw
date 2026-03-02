@@ -42,6 +42,21 @@ public class MemoryStore {
     private Path workspaceRoot;
     private Path memoryDir;
 
+    private static final String DEFAULT_MEMORY_MD =
+            "# Memory\n\n" +
+            "## About User\n" +
+            "(Not yet known. Update as you learn about the user.)\n\n" +
+            "## Memory Files\n" +
+            "(Register memory files here as you create them.)\n\n" +
+            "---\n\n" +
+            "## Usage Principles\n" +
+            "- This file is a **lightweight index** — keep it under 50 lines.\n" +
+            "- Never write substantive content directly here; create dedicated files instead.\n" +
+            "- To save notes: memory_write(content, file=\"projects.md\", scope=\"global\")\n" +
+            "- To update this index: memory_write(content, file=\"MEMORY.md\", scope=\"global\")\n" +
+            "- Register every new memory file in \"Memory Files\" above.\n" +
+            "- Search before writing to avoid duplicates.\n";
+
     @PostConstruct
     public void init() {
         workspaceRoot = Path.of(toolsProperties.getWorkspace())
@@ -56,6 +71,12 @@ public class MemoryStore {
         try {
             Files.createDirectories(memoryDir);
             log.info("Global memory store initialized: {}", memoryDir);
+
+            Path globalMemoryMd = memoryDir.resolve("MEMORY.md");
+            if (!Files.exists(globalMemoryMd)) {
+                Files.writeString(globalMemoryMd, DEFAULT_MEMORY_MD, StandardCharsets.UTF_8);
+                log.info("Initialized default global MEMORY.md: {}", globalMemoryMd);
+            }
         } catch (IOException e) {
             log.error("Failed to create memory directory: {}", memoryDir, e);
         }
@@ -96,6 +117,18 @@ public class MemoryStore {
         appendToFile(dailyPath, content);
         log.info("Appended to {} daily log {}: {} chars",
                 scope == MemoryScope.AGENT ? "agent" : "global", fileName, content.length());
+    }
+
+    /**
+     * 追加内容到指定记忆文件（任意命名文件，agent 自行组织）
+     */
+    public void appendToMemoryFile(String relativePath, String content, String agentId, MemoryScope scope) throws IOException {
+        Path baseDir = resolveScopeDir(scope, agentId);
+        Path filePath = baseDir.resolve(relativePath).normalize();
+        validatePath(filePath, baseDir);
+        appendToFile(filePath, content);
+        log.info("Appended to {} file {}: {} chars",
+                scope == MemoryScope.AGENT ? "agent" : "global", relativePath, content.length());
     }
 
     /**

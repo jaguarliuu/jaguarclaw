@@ -53,7 +53,7 @@ public class HeartbeatScheduler {
 
     private static final DateTimeFormatter TIME_FMT = DateTimeFormatter.ofPattern("HH:mm");
 
-    @Scheduled(fixedDelay = 60_000)
+    @Scheduled(fixedDelay = 60_000, initialDelay = 90_000)
     public void tick() {
         try {
             List<String> targetAgentIds = Stream.concat(

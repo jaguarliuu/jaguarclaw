@@ -22,8 +22,10 @@ import org.springframework.transaction.annotation.Transactional;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Stream;
 
 /**
  * Agent Profile 控制面服务
@@ -270,7 +272,7 @@ public class AgentProfileService {
     private String normalizeWorkspacePath(String name, String inputPath) {
         Path path = (inputPath != null && !inputPath.isBlank())
                 ? Path.of(inputPath.trim())
-                : Path.of("workspace", "workspace-" + name);
+                : Path.of("workspace-" + name);
 
         // 如果是相对路径，基于 workspace root 解析
         Path resolved = path.isAbsolute()
@@ -295,6 +297,59 @@ public class AgentProfileService {
         } catch (IOException e) {
             throw new RuntimeException("Failed to create workspace directories: " + workspacePath, e);
         }
+    }
+
+    /**
+     * 修复旧版 normalizeWorkspacePath 的双层嵌套 bug。
+     * 旧逻辑将 Path.of("workspace", "workspace-{name}") 解析到 WORKSPACE_ROOT 下，
+     * 导致路径变成 workspace/workspace/workspace-{name}。
+     * 此方法在启动时检测并迁移这类路径到正确的 workspace/workspace-{name}。
+     */
+    @Transactional
+    public void migrateDoubleNestedWorkspacePaths() {
+        List<AgentProfileEntity> agents = repository.findAllByOrderByCreatedAtAsc();
+        for (AgentProfileEntity agent : agents) {
+            try {
+                migrateAgentIfDoubleNested(agent);
+            } catch (Exception e) {
+                log.warn("Failed to migrate workspace path for agentId={}", agent.getId(), e);
+            }
+        }
+    }
+
+    private void migrateAgentIfDoubleNested(AgentProfileEntity agent) throws IOException {
+        if (agent.getWorkspacePath() == null || agent.getWorkspacePath().isBlank()) return;
+
+        Path storedPath = Path.of(agent.getWorkspacePath()).toAbsolutePath().normalize();
+        // Old bug: WORKSPACE_ROOT.resolve(Path.of("workspace", "workspace-{name}"))
+        //        = workspace/workspace/workspace-{name}
+        Path oldPath = WORKSPACE_ROOT.resolve("workspace").resolve("workspace-" + agent.getName())
+                .toAbsolutePath().normalize();
+        if (!storedPath.equals(oldPath)) return;
+
+        Path newPath = WORKSPACE_ROOT.resolve("workspace-" + agent.getName())
+                .toAbsolutePath().normalize();
+        log.info("Migrating double-nested workspace for agentId={}: {} -> {}",
+                agent.getId(), storedPath, newPath);
+
+        // Copy files: old path -> new path (skip files already present at new path)
+        if (Files.exists(oldPath)) {
+            try (Stream<Path> stream = Files.walk(oldPath)) {
+                for (Path source : (Iterable<Path>) stream::iterator) {
+                    Path target = newPath.resolve(oldPath.relativize(source));
+                    if (Files.isDirectory(source)) {
+                        Files.createDirectories(target);
+                    } else if (!Files.exists(target)) {
+                        Files.createDirectories(target.getParent());
+                        Files.copy(source, target, StandardCopyOption.COPY_ATTRIBUTES);
+                    }
+                }
+            }
+        }
+
+        agent.setWorkspacePath(newPath.toString());
+        repository.save(agent);
+        log.info("Workspace path updated in DB for agentId={}, newPath={}", agent.getId(), newPath);
     }
 
     private String toJsonArray(List<String> values) {

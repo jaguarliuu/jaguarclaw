@@ -69,9 +69,9 @@ class MemoryStoreTest {
         }
 
         @Test
-        @DisplayName("初始化时核心记忆文件不存在")
-        void coreMemoryNotExistsInitially() {
-            assertFalse(memoryStore.coreMemoryExists());
+        @DisplayName("初始化时自动创建默认 MEMORY.md")
+        void coreMemoryExistsInitially() {
+            assertTrue(memoryStore.coreMemoryExists());
         }
     }
 
@@ -82,13 +82,13 @@ class MemoryStoreTest {
     class AppendToCoreTests {
 
         @Test
-        @DisplayName("首次写入创建 MEMORY.md")
+        @DisplayName("首次写入追加到已有 MEMORY.md")
         void firstAppendCreatesFile() throws IOException {
             memoryStore.appendToCore("Hello Memory");
 
             Path corePath = tempDir.resolve("memory/MEMORY.md");
             assertTrue(Files.exists(corePath));
-            assertEquals("Hello Memory", Files.readString(corePath).trim());
+            assertTrue(Files.readString(corePath).contains("Hello Memory"));
         }
 
         @Test
@@ -138,7 +138,7 @@ class MemoryStoreTest {
             memoryStore.appendToCore(largeContent);
 
             Path corePath = tempDir.resolve("memory/MEMORY.md");
-            assertEquals(100000, Files.readString(corePath).trim().length());
+            assertTrue(Files.readString(corePath).contains(largeContent));
         }
     }
 
@@ -276,10 +276,11 @@ class MemoryStoreTest {
     class ListFilesTests {
 
         @Test
-        @DisplayName("空目录返回空列表")
+        @DisplayName("初始化后只有默认 MEMORY.md")
         void emptyDirectoryReturnsEmptyList() throws IOException {
             List<MemoryStore.MemoryFileInfo> files = memoryStore.listFiles();
-            assertTrue(files.isEmpty());
+            assertEquals(1, files.size());
+            assertEquals("MEMORY.md", files.get(0).relativePath());
         }
 
         @Test

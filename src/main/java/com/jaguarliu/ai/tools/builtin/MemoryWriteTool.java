@@ -21,8 +21,8 @@ import java.util.Map;
  * 全局记忆写入工具
  *
  * LLM 通过此工具写入跨会话的全局记忆：
- * - core: 写入核心记忆 MEMORY.md（长期、重要的信息）
- * - daily: 写入今日日记（日常对话要点）
+ * - file 省略：写入今日日期文件（默认日记行为）
+ * - file 指定：写入任意命名文件（agent 自行组织），如 file="MEMORY.md" 更新索引
  *
  * 写入后自动触发索引更新。
  */
@@ -39,20 +39,23 @@ public class MemoryWriteTool implements Tool {
         return ToolDefinition.builder()
                 .name("memory_write")
                 .description("写入记忆（支持共享/Agent 私有）。将重要信息保存到永久记忆中，供未来检索。"
-                        + "target='core' 写入核心记忆（用户偏好、重要事实）；"
-                        + "target='daily' 写入今日日记（对话要点、临时笔记）。"
+                        + "file 省略时默认写入今日日期文件；"
+                        + "file=\"MEMORY.md\" 用于更新记忆索引（仅写轻量索引，不写实质内容）；"
+                        + "file=\"notes.md\" 等写入命名文件。"
                         + "scope 默认 agent（当前 Agent 私有），可选 global。")
                 .parameters(Map.of(
                         "type", "object",
                         "properties", Map.of(
-                                "target", Map.of(
-                                        "type", "string",
-                                        "enum", List.of("core", "daily"),
-                                        "description", "写入目标：core=核心记忆，daily=今日日记"
-                                ),
                                 "content", Map.of(
                                         "type", "string",
                                         "description", "要写入的内容（Markdown 格式）"
+                                ),
+                                "file", Map.of(
+                                        "type", "string",
+                                        "description", "目标文件（相对于 memory 目录的路径）。"
+                                                + "省略时默认写今日日期文件（如 2026-03-02.md）；"
+                                                + "file=\"MEMORY.md\" 用于更新索引；"
+                                                + "file=\"notes.md\" 写入命名文件"
                                 ),
                                 "scope", Map.of(
                                         "type", "string",
@@ -60,7 +63,7 @@ public class MemoryWriteTool implements Tool {
                                         "description", "写入作用域：agent=当前 Agent 私有（默认）；global=所有 Agent 共享"
                                 )
                         ),
-                        "required", List.of("target", "content")
+                        "required", List.of("content")
                 ))
                 .hitl(false)
                 .build();
@@ -69,19 +72,13 @@ public class MemoryWriteTool implements Tool {
     @Override
     public Mono<ToolResult> execute(Map<String, Object> arguments) {
         return Mono.fromCallable(() -> {
-            String target = (String) arguments.get("target");
             String content = (String) arguments.get("content");
+            String file = (String) arguments.get("file");
             String scopeArg = (String) arguments.get("scope");
 
             // 参数校验
-            if (target == null || target.isBlank()) {
-                return ToolResult.error("Missing required parameter: target");
-            }
             if (content == null || content.isBlank()) {
                 return ToolResult.error("Missing required parameter: content");
-            }
-            if (!target.equals("core") && !target.equals("daily")) {
-                return ToolResult.error("Invalid target: " + target + ". Must be 'core' or 'daily'");
             }
 
             try {
@@ -89,12 +86,14 @@ public class MemoryWriteTool implements Tool {
                 String agentId = resolveAgentId();
                 String filePath;
 
-                if ("core".equals(target)) {
-                    memoryStore.appendToCore(content, agentId, scope);
-                    filePath = "MEMORY.md";
-                } else {
+                if (file == null || file.isBlank()) {
+                    // 默认：写入今日日期文件
                     memoryStore.appendToDaily(content, agentId, scope);
                     filePath = LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE) + ".md";
+                } else {
+                    // 写入指定文件
+                    memoryStore.appendToMemoryFile(file, content, agentId, scope);
+                    filePath = file;
                 }
 
                 // 异步触发索引更新
@@ -106,9 +105,9 @@ public class MemoryWriteTool implements Tool {
                 }
 
                 log.info("memory_write to {} (scope={}, agentId={}): {} chars",
-                        target, scope.name().toLowerCase(), agentId, content.length());
+                        filePath, scope.name().toLowerCase(), agentId, content.length());
                 return ToolResult.success("Successfully wrote " + content.length()
-                        + " chars to " + target + " memory (" + filePath + ", scope="
+                        + " chars to " + filePath + " (scope="
                         + scope.name().toLowerCase() + ", agentId=" + agentId + ")");
 
             } catch (Exception e) {

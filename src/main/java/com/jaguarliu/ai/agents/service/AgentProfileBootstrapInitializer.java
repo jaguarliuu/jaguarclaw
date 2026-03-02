@@ -24,6 +24,9 @@ public class AgentProfileBootstrapInitializer implements ApplicationRunner {
     public void run(ApplicationArguments args) {
         agentProfileService.ensureDefaultMainAgentExists();
 
+        // 迁移旧版双层嵌套 workspace 路径（如 workspace/workspace/workspace-main）到正确路径
+        agentProfileService.migrateDoubleNestedWorkspacePaths();
+
         // 确保所有已有 Agent 都有 soul 和 heartbeat 文件（兼容旧版本升级场景）
         var agents = agentProfileService.list();
         agents.forEach(agent -> {

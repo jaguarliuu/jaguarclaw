@@ -52,6 +52,7 @@ class SystemPromptBuilderTest {
                 Optional.of(mcpPromptProvider),
                 soulConfigService,
                 Optional.empty(),
+                Optional.empty(),
                 Optional.empty()
         );
         ReflectionTestUtils.setField(builder, "workspace", "./workspace");
@@ -198,7 +199,6 @@ class SystemPromptBuilderTest {
             String result = builder.build(SystemPromptBuilder.PromptMode.FULL);
 
             assertTrue(result.contains("## Memory"));
-            assertTrue(result.contains("dual-scope memory system"));
             assertTrue(result.contains("memory_search"));
             assertTrue(result.contains("read_file"));
             assertTrue(result.contains("memory_write"));
@@ -222,15 +222,15 @@ class SystemPromptBuilderTest {
             // 检查 read_file 说明
             assertTrue(result.contains("read_file(path)"));
 
-            // 检查 memory_write 说明
-            assertTrue(result.contains("memory_write(content, target, scope?)"));
-            assertTrue(result.contains("target=\"core\""));
-            assertTrue(result.contains("target=\"daily\""));
+            // 检查 memory_write 说明（新 file 参数）
+            assertTrue(result.contains("memory_write(content, file?, scope?)"));
+            assertTrue(result.contains("file omitted"));
+            assertTrue(result.contains("file=\"MEMORY.md\""));
             assertTrue(result.contains("MEMORY.md"));
         }
 
         @Test
-        @DisplayName("Memory 段落强调跨会话特性")
+        @DisplayName("Memory 段落包含 agent scope 说明")
         void memoryEmphasizesCrossSession() {
             lenient().when(toolRegistry.listDefinitions()).thenReturn(List.of());
             when(toolRegistry.listDefinitions(any(ToolVisibilityResolver.VisibilityRequest.class))).thenReturn(List.of());
@@ -238,9 +238,9 @@ class SystemPromptBuilderTest {
 
             String result = builder.build(SystemPromptBuilder.PromptMode.FULL);
 
-            assertTrue(result.contains("Global memory is cross-session"));
-            assertTrue(result.contains("shared by all agents"));
-            assertTrue(result.contains("agent memory is isolated"));
+            assertTrue(result.contains("agent scope:"));
+            assertTrue(result.contains("scope=\"agent\""));
+            assertTrue(result.contains("scope=\"global\""));
         }
 
         @Test
