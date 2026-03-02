@@ -60,7 +60,9 @@ class SystemPromptFacetTest {
 
         lenient().when(skillIndexBuilder.buildIndex(anyString())).thenReturn("");
         lenient().when(mcpPromptProvider.getSystemPromptAdditions(any())).thenReturn("");
-        lenient().when(soulConfigService.generateSystemPrompt(anyString())).thenReturn("");
+        lenient().when(soulConfigService.readSoulMd(anyString())).thenReturn("");
+        lenient().when(soulConfigService.readRuleMd(anyString())).thenReturn("");
+        lenient().when(soulConfigService.readProfileMd(anyString())).thenReturn("");
     }
 
     @Test
@@ -94,9 +96,11 @@ class SystemPromptFacetTest {
                             .toList();
                 });
         when(toolRegistry.listDefinitions()).thenReturn(List.of(readFile, bash));
-        when(soulConfigService.generateSystemPrompt(anyString()))
+        when(soulConfigService.readSoulMd(anyString()))
                 .thenReturn("## Soul A\n\nAgent A style")
                 .thenReturn("## Soul B\n\nAgent B style");
+        lenient().when(soulConfigService.readRuleMd(anyString())).thenReturn("");
+        lenient().when(soulConfigService.readProfileMd(anyString())).thenReturn("");
 
         String agentAPrompt = builder.build(
                 SystemPromptBuilder.PromptMode.FULL, Set.of("read_file"), null, null, "agent-a");

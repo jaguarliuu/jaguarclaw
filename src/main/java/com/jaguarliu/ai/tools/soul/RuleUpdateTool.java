@@ -4,8 +4,8 @@ import com.jaguarliu.ai.soul.SoulConfigService;
 import com.jaguarliu.ai.tools.Tool;
 import com.jaguarliu.ai.tools.ToolDefinition;
 import com.jaguarliu.ai.tools.ToolResult;
-import lombok.extern.slf4j.Slf4j;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
 
@@ -15,20 +15,20 @@ import java.util.Map;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class SoulUpdateTool implements Tool {
+public class RuleUpdateTool implements Tool {
 
     private final SoulConfigService soulConfigService;
 
     @Override
     public ToolDefinition getDefinition() {
         return ToolDefinition.builder()
-                .name("update_soul")
-                .description("Rewrite the SOUL.md to update your identity, personality, or response style.")
+                .name("update_rule")
+                .description("Rewrite the RULE.md to update your behavioral constraints.")
                 .parameters(Map.of(
                         "type", "object",
                         "properties", Map.of(
                                 "content", Map.of("type", "string",
-                                        "description", "Full Markdown content to write to SOUL.md"),
+                                        "description", "Full Markdown content to write to RULE.md"),
                                 "reason", Map.of("type", "string",
                                         "description", "Why you are making this update")
                         ),
@@ -50,11 +50,11 @@ public class SoulUpdateTool implements Tool {
         }
 
         try {
-            soulConfigService.writeSoulMd("main", content);
-            String msg = String.format("SOUL.md updated. Reason: %s. This change will affect future interactions.", reason);
+            soulConfigService.writeRuleMd("main", content);
+            String msg = String.format("RULE.md updated. Reason: %s. This change will affect future interactions.", reason);
             return Mono.just(ToolResult.success(msg));
         } catch (Exception e) {
-            log.error("Failed to update SOUL.md", e);
+            log.error("Failed to update RULE.md", e);
             return Mono.just(ToolResult.error("Failed to update: " + e.getMessage()));
         }
     }

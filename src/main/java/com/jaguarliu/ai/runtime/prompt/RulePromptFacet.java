@@ -5,20 +5,20 @@ import com.jaguarliu.ai.soul.SoulConfigService;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Soul Facet（Agent 作用域）
+ * Rule Facet — injects RULE.md content into the system prompt.
  */
 @Slf4j
-public class SoulPromptFacet implements PromptFacet {
+public class RulePromptFacet implements PromptFacet {
 
     private final SoulConfigService soulConfigService;
 
-    public SoulPromptFacet(SoulConfigService soulConfigService) {
+    public RulePromptFacet(SoulConfigService soulConfigService) {
         this.soulConfigService = soulConfigService;
     }
 
     @Override
     public String key() {
-        return "SOUL";
+        return "RULE";
     }
 
     @Override
@@ -29,10 +29,10 @@ public class SoulPromptFacet implements PromptFacet {
     @Override
     public String render(PromptAssemblyContext context) {
         try {
-            String md = soulConfigService.readSoulMd(context.getAgentId());
+            String md = soulConfigService.readRuleMd(context.getAgentId());
             return md.isBlank() ? "" : md.trim() + "\n\n";
         } catch (Exception e) {
-            log.warn("Failed to build soul prompt facet", e);
+            log.warn("Failed to build rule prompt facet", e);
             return "";
         }
     }

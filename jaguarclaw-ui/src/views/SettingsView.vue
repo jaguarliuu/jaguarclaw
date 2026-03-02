@@ -9,6 +9,7 @@ import SkillsSection from '@/components/settings/SkillsSection.vue'
 import MemorySection from '@/components/settings/MemorySection.vue'
 import McpSection from '@/components/settings/McpSection.vue'
 import SoulSection from '@/components/settings/SoulSection.vue'
+import WorkspaceSection from '@/components/settings/WorkspaceSection.vue'
 import SystemSection from '@/components/settings/SystemSection.vue'
 import NodesSection from '@/components/settings/NodesSection.vue'
 import DataSourcesSection from '@/components/settings/DataSourcesSection.vue'
@@ -37,7 +38,7 @@ const currentSection = computed(() => {
         <SkillsSection v-else-if="currentSection === 'skills'" />
         <MemorySection v-else-if="currentSection === 'memory'" />
         <McpSection v-else-if="currentSection === 'mcp'" />
-        <SoulSection v-else-if="currentSection === 'soul'" />
+        <WorkspaceSection v-else-if="currentSection === 'soul'" />
         <SystemSection v-else-if="currentSection === 'system'" />
         <NodesSection v-else-if="currentSection === 'nodes'" />
         <DataSourcesSection v-else-if="currentSection === 'datasources'" />

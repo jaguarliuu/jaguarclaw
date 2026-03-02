@@ -5,20 +5,20 @@ import com.jaguarliu.ai.soul.SoulConfigService;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Soul Facet（Agent 作用域）
+ * Profile Facet — injects PROFILE.md content into the system prompt.
  */
 @Slf4j
-public class SoulPromptFacet implements PromptFacet {
+public class ProfilePromptFacet implements PromptFacet {
 
     private final SoulConfigService soulConfigService;
 
-    public SoulPromptFacet(SoulConfigService soulConfigService) {
+    public ProfilePromptFacet(SoulConfigService soulConfigService) {
         this.soulConfigService = soulConfigService;
     }
 
     @Override
     public String key() {
-        return "SOUL";
+        return "PROFILE";
     }
 
     @Override
@@ -29,10 +29,10 @@ public class SoulPromptFacet implements PromptFacet {
     @Override
     public String render(PromptAssemblyContext context) {
         try {
-            String md = soulConfigService.readSoulMd(context.getAgentId());
+            String md = soulConfigService.readProfileMd(context.getAgentId());
             return md.isBlank() ? "" : md.trim() + "\n\n";
         } catch (Exception e) {
-            log.warn("Failed to build soul prompt facet", e);
+            log.warn("Failed to build profile prompt facet", e);
             return "";
         }
     }

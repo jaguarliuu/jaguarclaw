@@ -62,7 +62,9 @@ class SystemPromptBuilderTest {
         lenient().when(mcpPromptProvider.getSystemPromptAdditions(any())).thenReturn("");
 
         // Default: Soul config service returns empty (lenient to avoid unnecessary stubbing warnings)
-        lenient().when(soulConfigService.generateSystemPrompt()).thenReturn("");
+        lenient().when(soulConfigService.readSoulMd(any())).thenReturn("");
+        lenient().when(soulConfigService.readRuleMd(any())).thenReturn("");
+        lenient().when(soulConfigService.readProfileMd(any())).thenReturn("");
         lenient().when(skillIndexBuilder.buildIndex("main")).thenReturn("");
         lenient().when(skillIndexBuilder.buildCompactIndex("main")).thenReturn("");
     }

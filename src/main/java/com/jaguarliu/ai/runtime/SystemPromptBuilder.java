@@ -10,6 +10,8 @@ import com.jaguarliu.ai.runtime.prompt.KernelPromptFacet;
 import com.jaguarliu.ai.runtime.prompt.MemoryPromptFacet;
 import com.jaguarliu.ai.runtime.prompt.PromptAssemblyContext;
 import com.jaguarliu.ai.runtime.prompt.SoulPromptFacet;
+import com.jaguarliu.ai.runtime.prompt.RulePromptFacet;
+import com.jaguarliu.ai.runtime.prompt.ProfilePromptFacet;
 import com.jaguarliu.ai.runtime.prompt.ToolPromptFacet;
 import com.jaguarliu.ai.skills.index.SkillIndexBuilder;
 import com.jaguarliu.ai.soul.SoulConfigService;
@@ -66,6 +68,8 @@ public class SystemPromptBuilder {
 
     private final KernelPromptFacet kernelPromptFacet;
     private final SoulPromptFacet soulPromptFacet;
+    private final RulePromptFacet rulePromptFacet;
+    private final ProfilePromptFacet profilePromptFacet;
     private final ToolPromptFacet toolPromptFacet;
     private final MemoryPromptFacet memoryPromptFacet;
 
@@ -170,6 +174,8 @@ public class SystemPromptBuilder {
 
         this.kernelPromptFacet = new KernelPromptFacet();
         this.soulPromptFacet = new SoulPromptFacet(soulConfigService);
+        this.rulePromptFacet = new RulePromptFacet(soulConfigService);
+        this.profilePromptFacet = new ProfilePromptFacet(soulConfigService);
         this.toolPromptFacet = new ToolPromptFacet(toolRegistry);
         this.memoryPromptFacet = new MemoryPromptFacet(memorySearchService);
     }
@@ -217,6 +223,8 @@ public class SystemPromptBuilder {
         java.util.Map<String, String> blocks = new java.util.HashMap<>();
         blocks.put("IDENTITY", IDENTITY_SECTION.trim());
         blocks.put("SOUL", soulPromptFacet.supports(context) ? soulPromptFacet.render(context) : "");
+        blocks.put("RULE", rulePromptFacet.supports(context) ? rulePromptFacet.render(context) : "");
+        blocks.put("PROFILE", profilePromptFacet.supports(context) ? profilePromptFacet.render(context) : "");
         blocks.put("TOOLS", toolPromptFacet.supports(context) ? toolPromptFacet.render(context) : "");
         blocks.put("SAFETY", mode == PromptMode.FULL ? SAFETY_SECTION.trim() + "\n\n" : "");
         blocks.put("PLANNING", mode == PromptMode.FULL ? PLANNING_SECTION.trim() + "\n\n" : "");

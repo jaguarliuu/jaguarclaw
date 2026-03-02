@@ -4,9 +4,7 @@ import com.jaguarliu.ai.gateway.rpc.model.RpcRequest;
 import com.jaguarliu.ai.gateway.rpc.model.RpcResponse;
 import com.jaguarliu.ai.soul.SoulConfigService;
 import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
 
-import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -15,14 +13,11 @@ import static org.mockito.Mockito.*;
 class SoulRpcHandlersTest {
 
     @Test
-    void soulGet_returnsConfig() {
+    void soulGet_returnsThreeMdFiles() {
         SoulConfigService svc = mock(SoulConfigService.class);
-        Map<String, Object> cfg = Map.of(
-                "agentName", "JaguarClaw",
-                "responseStyle", "balanced",
-                "traits", List.of()
-        );
-        when(svc.getConfig("main")).thenReturn(cfg);
+        when(svc.readSoulMd("main")).thenReturn("# Soul\n");
+        when(svc.readRuleMd("main")).thenReturn("# Rules\n");
+        when(svc.readProfileMd("main")).thenReturn("# Profile\n");
 
         SoulGetHandler handler = new SoulGetHandler(svc);
         RpcRequest req = RpcRequest.builder().type("request").id("1").method("soul.get").build();
@@ -35,44 +30,17 @@ class SoulRpcHandlersTest {
 
         @SuppressWarnings("unchecked")
         Map<String, Object> payload = (Map<String, Object>) resp.getPayload();
-        assertEquals("JaguarClaw", payload.get("agentName"));
-        assertEquals("balanced", payload.get("responseStyle"));
+        assertEquals("# Soul\n", payload.get("soul"));
+        assertEquals("# Rules\n", payload.get("rule"));
+        assertEquals("# Profile\n", payload.get("profile"));
     }
 
     @Test
-    void soulSave_persistsConfigAndReturnsSuccess() {
+    void soulGet_withAgentId_readsAgentScopedFiles() {
         SoulConfigService svc = mock(SoulConfigService.class);
-        SoulSaveHandler handler = new SoulSaveHandler(svc);
-
-        Map<String, Object> newCfg = Map.of(
-                "agentName", "JaguarClaw",
-                "responseStyle", "concise",
-                "traits", List.of("focused")
-        );
-        RpcRequest req = RpcRequest.builder()
-                .type("request").id("2").method("soul.save")
-                .payload(newCfg)
-                .build();
-
-        RpcResponse resp = handler.handle("conn-1", req).block();
-        assertNotNull(resp);
-        assertEquals("response", resp.getType());
-        assertNull(resp.getError());
-
-        @SuppressWarnings("unchecked")
-        Map<String, Object> payload = (Map<String, Object>) resp.getPayload();
-        assertEquals(Boolean.TRUE, payload.get("success"));
-
-        ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.forClass(Map.class);
-        verify(svc, times(1)).saveConfig(eq("main"), captor.capture());
-        Map<String, Object> saved = captor.getValue();
-        assertEquals("concise", saved.get("responseStyle"));
-    }
-
-    @Test
-    void soulGet_withAgentId_readsAgentScopedConfig() {
-        SoulConfigService svc = mock(SoulConfigService.class);
-        when(svc.getConfig("agent-a")).thenReturn(Map.of("agentName", "Agent A"));
+        when(svc.readSoulMd("agent-a")).thenReturn("# Agent A Soul\n");
+        when(svc.readRuleMd("agent-a")).thenReturn("");
+        when(svc.readProfileMd("agent-a")).thenReturn("");
 
         SoulGetHandler handler = new SoulGetHandler(svc);
         RpcRequest req = RpcRequest.builder()
@@ -83,23 +51,76 @@ class SoulRpcHandlersTest {
         RpcResponse resp = handler.handle("conn-1", req).block();
         assertNotNull(resp);
         assertNull(resp.getError());
-        verify(svc, times(1)).getConfig("agent-a");
+        verify(svc, times(1)).readSoulMd("agent-a");
+        verify(svc, times(1)).readRuleMd("agent-a");
+        verify(svc, times(1)).readProfileMd("agent-a");
     }
 
     @Test
-    void soulSave_withAgentIdAndNestedConfig_persistsAgentScopedConfig() {
+    void soulSave_soulFile_writesToSoulMd() {
         SoulConfigService svc = mock(SoulConfigService.class);
         SoulSaveHandler handler = new SoulSaveHandler(svc);
 
-        Map<String, Object> cfg = Map.of("agentName", "Agent B", "responseStyle", "concise");
         RpcRequest req = RpcRequest.builder()
-                .type("request").id("4").method("soul.save")
-                .payload(Map.of("agentId", "agent-b", "config", cfg))
+                .type("request").id("2").method("soul.save")
+                .payload(Map.of("agentId", "main", "file", "soul", "content", "# New Soul\n"))
                 .build();
 
         RpcResponse resp = handler.handle("conn-1", req).block();
         assertNotNull(resp);
         assertNull(resp.getError());
-        verify(svc, times(1)).saveConfig("agent-b", cfg);
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> payload = (Map<String, Object>) resp.getPayload();
+        assertEquals(Boolean.TRUE, payload.get("success"));
+
+        verify(svc, times(1)).writeSoulMd("main", "# New Soul\n");
+    }
+
+    @Test
+    void soulSave_ruleFile_writesToRuleMd() {
+        SoulConfigService svc = mock(SoulConfigService.class);
+        SoulSaveHandler handler = new SoulSaveHandler(svc);
+
+        RpcRequest req = RpcRequest.builder()
+                .type("request").id("4").method("soul.save")
+                .payload(Map.of("agentId", "agent-b", "file", "rule", "content", "# Rules\n"))
+                .build();
+
+        RpcResponse resp = handler.handle("conn-1", req).block();
+        assertNotNull(resp);
+        assertNull(resp.getError());
+        verify(svc, times(1)).writeRuleMd("agent-b", "# Rules\n");
+    }
+
+    @Test
+    void soulSave_profileFile_writesToProfileMd() {
+        SoulConfigService svc = mock(SoulConfigService.class);
+        SoulSaveHandler handler = new SoulSaveHandler(svc);
+
+        RpcRequest req = RpcRequest.builder()
+                .type("request").id("5").method("soul.save")
+                .payload(Map.of("agentId", "agent-c", "file", "profile", "content", "# Profile\n"))
+                .build();
+
+        RpcResponse resp = handler.handle("conn-1", req).block();
+        assertNotNull(resp);
+        assertNull(resp.getError());
+        verify(svc, times(1)).writeProfileMd("agent-c", "# Profile\n");
+    }
+
+    @Test
+    void soulSave_invalidFile_returnsError() {
+        SoulConfigService svc = mock(SoulConfigService.class);
+        SoulSaveHandler handler = new SoulSaveHandler(svc);
+
+        RpcRequest req = RpcRequest.builder()
+                .type("request").id("6").method("soul.save")
+                .payload(Map.of("agentId", "main", "file", "unknown", "content", "x"))
+                .build();
+
+        RpcResponse resp = handler.handle("conn-1", req).block();
+        assertNotNull(resp);
+        assertNotNull(resp.getError());
     }
 }
