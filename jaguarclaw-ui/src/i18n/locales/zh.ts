@@ -138,6 +138,7 @@ export default {
         model: '模型',
         status: '状态',
         actions: '操作',
+        persona: '角色配置',
       },
       form: {
         nameLabel: 'Agent ID',
@@ -410,6 +411,7 @@ export default {
     },
     soul: {
       subtitle: '配置你的 Agent 个性与回应风格',
+      agentScopeLabel: '当前 Agent',
       loading: '加载配置中...',
       savedSuccess: '角色配置保存成功',
       savingBtn: '保存中...',

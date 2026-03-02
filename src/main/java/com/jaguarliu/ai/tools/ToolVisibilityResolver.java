@@ -109,6 +109,10 @@ public final class ToolVisibilityResolver {
     }
 
     public static VisibilityResult resolve(List<Tool> tools, VisibilityRequest request) {
+        return resolve(tools, request, true);
+    }
+
+    public static VisibilityResult resolve(List<Tool> tools, VisibilityRequest request, boolean scopedMcpSkillEnabled) {
         if (tools == null || tools.isEmpty()) {
             return new VisibilityResult(List.of(), Set.of());
         }
@@ -128,9 +132,12 @@ public final class ToolVisibilityResolver {
                 continue;
             }
 
-            ToolMetadata metadata = resolveMetadata(tool);
-            if (!isScopeVisible(metadata, currentAgentId)) {
-                continue;
+            // 如果 scope 功能关闭，跳过 AGENT scope 过滤
+            if (scopedMcpSkillEnabled) {
+                ToolMetadata metadata = resolveMetadata(tool);
+                if (!isScopeVisible(metadata, currentAgentId)) {
+                    continue;
+                }
             }
 
             String toolName = tool.getName();

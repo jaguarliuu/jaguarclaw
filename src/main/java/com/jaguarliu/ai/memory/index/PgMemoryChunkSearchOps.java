@@ -20,34 +20,70 @@ public class PgMemoryChunkSearchOps implements MemoryChunkSearchOps {
 
     @Override
     public List<Object[]> searchByVector(String embedding, int limit) {
-        return em.createNativeQuery("""
+        return searchByVector(embedding, limit, null, null);
+    }
+
+    @Override
+    public List<Object[]> searchByVector(String embedding, int limit, String scope, String agentId) {
+        StringBuilder sql = new StringBuilder("""
                 SELECT id, file_path, line_start, line_end, content,
                        1 - (embedding <=> cast(:embedding as vector)) AS similarity,
                        scope, agent_id
                 FROM memory_chunks
                 WHERE embedding IS NOT NULL
-                ORDER BY embedding <=> cast(:embedding as vector)
-                LIMIT :limit
-                """)
+                """);
+        if (scope != null) {
+            sql.append(" AND scope = :scope");
+        }
+        if (agentId != null) {
+            sql.append(" AND agent_id = :agentId");
+        }
+        sql.append(" ORDER BY embedding <=> cast(:embedding as vector) LIMIT :limit");
+
+        var query = em.createNativeQuery(sql.toString())
                 .setParameter("embedding", embedding)
-                .setParameter("limit", limit)
-                .getResultList();
+                .setParameter("limit", limit);
+        if (scope != null) {
+            query.setParameter("scope", scope);
+        }
+        if (agentId != null) {
+            query.setParameter("agentId", agentId);
+        }
+        return query.getResultList();
     }
 
     @Override
     public List<Object[]> searchByFts(String query, int limit) {
-        return em.createNativeQuery("""
+        return searchByFts(query, limit, null, null);
+    }
+
+    @Override
+    public List<Object[]> searchByFts(String ftsQuery, int limit, String scope, String agentId) {
+        StringBuilder sql = new StringBuilder("""
                 SELECT id, file_path, line_start, line_end, content,
                        ts_rank(tsv, plainto_tsquery('simple', :query)) AS rank,
                        scope, agent_id
                 FROM memory_chunks
                 WHERE tsv @@ plainto_tsquery('simple', :query)
-                ORDER BY rank DESC
-                LIMIT :limit
-                """)
-                .setParameter("query", query)
-                .setParameter("limit", limit)
-                .getResultList();
+                """);
+        if (scope != null) {
+            sql.append(" AND scope = :scope");
+        }
+        if (agentId != null) {
+            sql.append(" AND agent_id = :agentId");
+        }
+        sql.append(" ORDER BY rank DESC LIMIT :limit");
+
+        var query = em.createNativeQuery(sql.toString())
+                .setParameter("query", ftsQuery)
+                .setParameter("limit", limit);
+        if (scope != null) {
+            query.setParameter("scope", scope);
+        }
+        if (agentId != null) {
+            query.setParameter("agentId", agentId);
+        }
+        return query.getResultList();
     }
 
     @Override

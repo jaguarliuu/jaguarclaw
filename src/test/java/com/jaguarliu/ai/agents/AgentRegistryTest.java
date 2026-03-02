@@ -1,12 +1,17 @@
 package com.jaguarliu.ai.agents;
 
 import com.jaguarliu.ai.agents.model.AgentProfile;
+import com.jaguarliu.ai.agents.repository.AgentProfileRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -14,6 +19,7 @@ import java.util.Optional;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.when;
 
 /**
  * AgentRegistry 单元测试
@@ -25,15 +31,27 @@ import static org.junit.jupiter.api.Assertions.*;
  * 4. Agent 存在性验证
  * 5. Spawn 权限检查
  */
+@ExtendWith(MockitoExtension.class)
 @DisplayName("AgentRegistry Tests")
 class AgentRegistryTest {
 
     private AgentsProperties properties;
+
+    @Mock
+    private AgentProfileRepository agentProfileRepository;
+
     private AgentRegistry registry;
 
     @BeforeEach
     void setUp() {
         properties = new AgentsProperties();
+    }
+
+    private AgentRegistry createRegistry() {
+        when(agentProfileRepository.findByEnabledTrueOrderByCreatedAtAsc()).thenReturn(Collections.emptyList());
+        AgentRegistry r = new AgentRegistry(properties, agentProfileRepository);
+        r.init();
+        return r;
     }
 
     // ==================== 默认行为测试 ====================
@@ -47,8 +65,7 @@ class AgentRegistryTest {
         void createDefaultProfileWhenNoConfig() {
             // profiles 为空
             properties.setProfiles(new HashMap<>());
-            registry = new AgentRegistry(properties);
-            registry.init();
+            registry = createRegistry();
 
             assertTrue(registry.exists("main"));
             AgentProfile profile = registry.getDefault();
@@ -62,8 +79,7 @@ class AgentRegistryTest {
         @DisplayName("默认 agent ID 为 main")
         void defaultAgentIdIsMain() {
             properties.setProfiles(new HashMap<>());
-            registry = new AgentRegistry(properties);
-            registry.init();
+            registry = createRegistry();
 
             assertEquals("main", registry.getDefaultAgentId());
         }
@@ -72,8 +88,7 @@ class AgentRegistryTest {
         @DisplayName("getOrDefault(null) 返回默认 profile")
         void getOrDefaultWithNullReturnsDefault() {
             properties.setProfiles(new HashMap<>());
-            registry = new AgentRegistry(properties);
-            registry.init();
+            registry = createRegistry();
 
             AgentProfile profile = registry.getOrDefault(null);
             assertEquals("main", profile.getId());
@@ -83,8 +98,7 @@ class AgentRegistryTest {
         @DisplayName("getOrDefault(blank) 返回默认 profile")
         void getOrDefaultWithBlankReturnsDefault() {
             properties.setProfiles(new HashMap<>());
-            registry = new AgentRegistry(properties);
-            registry.init();
+            registry = createRegistry();
 
             AgentProfile profile = registry.getOrDefault("   ");
             assertEquals("main", profile.getId());
@@ -117,8 +131,7 @@ class AgentRegistryTest {
 
             properties.setProfiles(profiles);
             properties.setDefaultAgent("main");
-            registry = new AgentRegistry(properties);
-            registry.init();
+            registry = createRegistry();
         }
 
         @Test
@@ -257,8 +270,7 @@ class AgentRegistryTest {
             profiles.put("restricted", restrictedProfile);
 
             properties.setProfiles(profiles);
-            registry = new AgentRegistry(properties);
-            registry.init();
+            registry = createRegistry();
         }
 
         @Test
@@ -277,8 +289,7 @@ class AgentRegistryTest {
         @DisplayName("默认 profile canSpawn=true")
         void defaultProfileCanSpawn() {
             properties.setProfiles(new HashMap<>());
-            registry = new AgentRegistry(properties);
-            registry.init();
+            registry = createRegistry();
 
             assertTrue(registry.canSpawn("main"));
         }
@@ -296,8 +307,7 @@ class AgentRegistryTest {
             profiles.put("main", new AgentProfile());
             profiles.put("public", new AgentProfile());
             properties.setProfiles(profiles);
-            registry = new AgentRegistry(properties);
-            registry.init();
+            registry = createRegistry();
         }
 
         @Test
@@ -344,8 +354,7 @@ class AgentRegistryTest {
         @DisplayName("默认 lane 配置")
         void defaultLaneConfig() {
             properties.setProfiles(new HashMap<>());
-            registry = new AgentRegistry(properties);
-            registry.init();
+            registry = createRegistry();
 
             AgentsProperties.LaneConfig laneConfig = registry.getLaneConfig();
             assertNotNull(laneConfig);
@@ -362,8 +371,7 @@ class AgentRegistryTest {
             properties.setLane(laneConfig);
 
             properties.setProfiles(new HashMap<>());
-            registry = new AgentRegistry(properties);
-            registry.init();
+            registry = createRegistry();
 
             assertEquals(2, registry.getLaneConfig().getMainMaxConcurrency());
             assertEquals(16, registry.getLaneConfig().getSubagentMaxConcurrency());
@@ -419,8 +427,7 @@ class AgentRegistryTest {
             properties.setProfiles(profiles);
             properties.setDefaultAgent("nonexistent");
 
-            registry = new AgentRegistry(properties);
-            registry.init();
+            registry = createRegistry();
 
             // 应该回退到某个存在的 agent
             String defaultAgentId = registry.getDefaultAgentId();

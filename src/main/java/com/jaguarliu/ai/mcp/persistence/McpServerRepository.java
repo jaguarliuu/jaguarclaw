@@ -48,4 +48,9 @@ public interface McpServerRepository extends JpaRepository<McpServerEntity, Long
      * 检查指定名称的 MCP Server 是否存在
      */
     boolean existsByName(String name);
+
+    /**
+     * 删除指定 agent 的 AGENT-scope MCP Server 配置
+     */
+    void deleteByScopeAndAgentId(String scope, String agentId);
 }

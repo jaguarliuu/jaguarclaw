@@ -21,11 +21,12 @@ export function useSoulConfig() {
   const loading = ref(false)
   const error = ref<string | null>(null)
 
-  async function fetchConfig() {
+  async function fetchConfig(agentId?: string) {
     loading.value = true
     error.value = null
     try {
-      const result = await request<SoulConfig>('soul.get')
+      const payload = agentId ? { agentId } : undefined
+      const result = await request<SoulConfig>('soul.get', payload)
       config.value = result
     } catch (e) {
       error.value = e instanceof Error ? e.message : 'Unknown error'
@@ -35,12 +36,15 @@ export function useSoulConfig() {
     }
   }
 
-  async function saveConfig(newConfig: Partial<SoulConfig>) {
+  async function saveConfig(newConfig: Partial<SoulConfig>, agentId?: string) {
     loading.value = true
     error.value = null
     try {
-      await request('soul.save', newConfig)
-      await fetchConfig()
+      await request('soul.save', {
+        agentId,
+        config: newConfig,
+      })
+      await fetchConfig(agentId)
     } catch (e) {
       error.value = e instanceof Error ? e.message : 'Unknown error'
       console.error('Failed to save soul config:', e)
@@ -51,7 +55,7 @@ export function useSoulConfig() {
   }
 
   // Refresh config when AI uses update_soul tool
-  function watchSoulUpdates(): () => void {
+  function watchSoulUpdates(onUpdated?: () => void): () => void {
     const pendingCallIds = new Set<string>()
 
     const offCall = onEvent('tool.call', (event) => {
@@ -73,7 +77,11 @@ export function useSoulConfig() {
         if (pendingCallIds.has(callId)) {
           pendingCallIds.delete(callId)
           if (success) {
-            fetchConfig()
+            if (onUpdated) {
+              onUpdated()
+            } else {
+              fetchConfig()
+            }
           }
         }
       }

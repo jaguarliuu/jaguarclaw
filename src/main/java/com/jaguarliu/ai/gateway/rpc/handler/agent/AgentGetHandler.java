@@ -2,6 +2,7 @@ package com.jaguarliu.ai.gateway.rpc.handler.agent;
 
 import com.jaguarliu.ai.agents.entity.AgentProfileEntity;
 import com.jaguarliu.ai.agents.service.AgentProfileService;
+import com.jaguarliu.ai.feature.FeatureFlagsProperties;
 import com.jaguarliu.ai.gateway.rpc.RpcHandler;
 import com.jaguarliu.ai.gateway.rpc.model.RpcRequest;
 import com.jaguarliu.ai.gateway.rpc.model.RpcResponse;
@@ -11,8 +12,6 @@ import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
-import java.util.LinkedHashMap;
-import java.util.Map;
 import java.util.Optional;
 
 @Component
@@ -21,6 +20,7 @@ public class AgentGetHandler implements RpcHandler {
 
     private final AgentProfileService agentProfileService;
     private final ConnectionManager connectionManager;
+    private final FeatureFlagsProperties featureFlags;
 
     @Override
     public String getMethod() {
@@ -30,11 +30,14 @@ public class AgentGetHandler implements RpcHandler {
     @Override
     public Mono<RpcResponse> handle(String connectionId, RpcRequest request) {
         return Mono.fromCallable(() -> {
+            if (!featureFlags.isAgentControlPlane()) {
+                return RpcResponse.error(request.getId(), "FEATURE_DISABLED", "Agent control plane is disabled");
+            }
             if (resolvePrincipalId(connectionId) == null) {
                 return RpcResponse.error(request.getId(), "UNAUTHORIZED", "Missing authenticated principal");
             }
 
-            String agentId = extractString(request.getPayload(), "agentId");
+            String agentId = AgentDtoMapper.extractString(request.getPayload(), "agentId");
             if (agentId == null || agentId.isBlank()) {
                 return RpcResponse.error(request.getId(), "INVALID_PARAMS", "Missing agentId");
             }
@@ -43,41 +46,12 @@ public class AgentGetHandler implements RpcHandler {
             if (entity.isEmpty()) {
                 return RpcResponse.error(request.getId(), "NOT_FOUND", "Agent not found: " + agentId);
             }
-            return RpcResponse.success(request.getId(), toDto(entity.get()));
+            return RpcResponse.success(request.getId(), AgentDtoMapper.toDto(entity.get()));
         }).subscribeOn(Schedulers.boundedElastic());
     }
 
     private String resolvePrincipalId(String connectionId) {
         var principal = connectionManager.getPrincipal(connectionId);
         return principal != null ? principal.getPrincipalId() : null;
-    }
-
-    private String extractString(Object payload, String key) {
-        if (payload instanceof Map<?, ?> map) {
-            Object value = map.get(key);
-            return value != null ? value.toString() : null;
-        }
-        return null;
-    }
-
-    private Map<String, Object> toDto(AgentProfileEntity entity) {
-        Map<String, Object> dto = new LinkedHashMap<>();
-        dto.put("id", entity.getId());
-        dto.put("name", entity.getName());
-        dto.put("displayName", entity.getDisplayName());
-        dto.put("description", entity.getDescription() != null ? entity.getDescription() : "");
-        dto.put("workspacePath", entity.getWorkspacePath());
-        dto.put("model", entity.getModel() != null ? entity.getModel() : "");
-        dto.put("enabled", entity.getEnabled());
-        dto.put("isDefault", entity.getIsDefault());
-        dto.put("allowedTools", entity.getAllowedTools() != null ? entity.getAllowedTools() : "[]");
-        dto.put("excludedTools", entity.getExcludedTools() != null ? entity.getExcludedTools() : "[]");
-        dto.put("heartbeatInterval", entity.getHeartbeatInterval() != null ? entity.getHeartbeatInterval() : 0);
-        dto.put("heartbeatActiveHours", entity.getHeartbeatActiveHours() != null ? entity.getHeartbeatActiveHours() : "");
-        dto.put("dailyTokenLimit", entity.getDailyTokenLimit() != null ? entity.getDailyTokenLimit() : 0);
-        dto.put("monthlyCostLimit", entity.getMonthlyCostLimit() != null ? entity.getMonthlyCostLimit() : 0.0);
-        dto.put("createdAt", entity.getCreatedAt().toString());
-        dto.put("updatedAt", entity.getUpdatedAt().toString());
-        return dto;
     }
 }

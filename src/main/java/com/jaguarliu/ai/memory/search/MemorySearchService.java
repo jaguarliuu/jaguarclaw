@@ -1,5 +1,6 @@
 package com.jaguarliu.ai.memory.search;
 
+import com.jaguarliu.ai.feature.FeatureFlagsProperties;
 import com.jaguarliu.ai.memory.MemoryProperties;
 import com.jaguarliu.ai.memory.embedding.EmbeddingModel;
 import com.jaguarliu.ai.memory.model.MemoryScope;
@@ -31,6 +32,7 @@ public class MemorySearchService {
     private final MemoryChunkSearchOps searchOps;
     private final MemoryIndexer indexer;
     private final MemoryProperties properties;
+    private final FeatureFlagsProperties featureFlags;
 
     /**
      * 语义检索全局记忆
@@ -47,8 +49,16 @@ public class MemorySearchService {
             return List.of();
         }
 
-        MemoryScope resolvedScope = scope == null ? MemoryScope.GLOBAL : scope;
-        String resolvedAgentId = normalizeAgentId(agentId);
+        // 如果 dual memory 关闭，强制 GLOBAL scope
+        MemoryScope effectiveScope = scope;
+        String effectiveAgentId = agentId;
+        if (!featureFlags.isAgentDualMemory()) {
+            effectiveScope = MemoryScope.GLOBAL;
+            effectiveAgentId = null;
+        }
+
+        MemoryScope resolvedScope = effectiveScope == null ? MemoryScope.GLOBAL : effectiveScope;
+        String resolvedAgentId = normalizeAgentId(effectiveAgentId);
         MemoryProperties.SearchConfig config = properties.getSearch();
         Map<String, ScopedSearchResult> resultMap = new LinkedHashMap<>();
         int vectorRequestTopK = requestTopK(config.getVectorTopK(), resolvedScope);
@@ -154,8 +164,10 @@ public class MemorySearchService {
         // 格式化为 PostgreSQL vector 字符串
         String vectorStr = formatVector(queryVector);
 
-        // 执行检索
-        List<Object[]> rows = searchOps.searchByVector(vectorStr, topK);
+        // 执行检索（带 scope 过滤，在 SQL 层过滤）
+        String scopeFilter = scope == MemoryScope.BOTH ? null : scope.name();
+        List<Object[]> rows = searchOps.searchByVector(vectorStr, topK, scopeFilter,
+                scope == MemoryScope.AGENT ? agentId : null);
         int snippetMax = properties.getSearch().getSnippetMaxChars();
 
         return rows.stream()
@@ -169,7 +181,9 @@ public class MemorySearchService {
      * 全文检索实现
      */
     private List<ScopedSearchResult> searchByFts(String query, int topK, MemoryScope scope, String agentId) {
-        List<Object[]> rows = searchOps.searchByFts(query, topK);
+        String scopeFilter = scope == MemoryScope.BOTH ? null : scope.name();
+        List<Object[]> rows = searchOps.searchByFts(query, topK, scopeFilter,
+                scope == MemoryScope.AGENT ? agentId : null);
         int snippetMax = properties.getSearch().getSnippetMaxChars();
 
         return rows.stream()

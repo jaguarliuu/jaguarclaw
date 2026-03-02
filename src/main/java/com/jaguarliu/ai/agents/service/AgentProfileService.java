@@ -2,8 +2,13 @@ package com.jaguarliu.ai.agents.service;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.jaguarliu.ai.agents.AgentConstants;
+import com.jaguarliu.ai.agents.AgentRegistry;
 import com.jaguarliu.ai.agents.entity.AgentProfileEntity;
 import com.jaguarliu.ai.agents.repository.AgentProfileRepository;
+import com.jaguarliu.ai.mcp.persistence.McpServerRepository;
+import com.jaguarliu.ai.memory.index.MemoryChunkEntity;
+import com.jaguarliu.ai.memory.index.MemoryChunkRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -24,11 +29,14 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class AgentProfileService {
 
-    private static final String DEFAULT_AGENT_ID = "main";
-    private static final String DEFAULT_AGENT_NAME = "main";
-    private static final String DEFAULT_AGENT_DISPLAY_NAME = "Main Agent";
+    private static final String DEFAULT_AGENT_ID = AgentConstants.DEFAULT_AGENT_ID;
+    private static final String DEFAULT_AGENT_NAME = AgentConstants.DEFAULT_AGENT_NAME;
+    private static final String DEFAULT_AGENT_DISPLAY_NAME = AgentConstants.DEFAULT_AGENT_DISPLAY_NAME;
 
     private final AgentProfileRepository repository;
+    private final AgentRegistry agentRegistry;
+    private final MemoryChunkRepository memoryChunkRepository;
+    private final McpServerRepository mcpServerRepository;
     private final ObjectMapper objectMapper;
 
     @Transactional(readOnly = true)
@@ -107,6 +115,7 @@ public class AgentProfileService {
                 .build();
 
         AgentProfileEntity saved = repository.save(entity);
+        agentRegistry.refresh();
         log.info("Created agent profile: id={}, name={}, default={}, enabled={}",
                 saved.getId(), saved.getName(), saved.getIsDefault(), saved.getEnabled());
         return saved;
@@ -180,6 +189,7 @@ public class AgentProfileService {
         }
 
         AgentProfileEntity saved = repository.save(entity);
+        agentRegistry.refresh();
         log.info("Updated agent profile: id={}, name={}, default={}, enabled={}",
                 saved.getId(), saved.getName(), saved.getIsDefault(), saved.getEnabled());
         return saved;
@@ -198,7 +208,12 @@ public class AgentProfileService {
             throw new IllegalStateException("Cannot delete default agent");
         }
 
+        // cascade cleanup: memory chunks and MCP server configs
+        memoryChunkRepository.deleteByScopeAndAgentId(MemoryChunkEntity.SCOPE_AGENT, agentId);
+        mcpServerRepository.deleteByScopeAndAgentId("AGENT", agentId);
+
         repository.deleteById(agentId);
+        agentRegistry.refresh();
         log.info("Deleted agent profile: id={}, name={}", entity.getId(), entity.getName());
     }
 
@@ -213,7 +228,7 @@ public class AgentProfileService {
     }
 
     private void validateAgentName(String name) {
-        if (!name.matches("^[a-zA-Z0-9_-]{1,64}$")) {
+        if (!AgentConstants.SAFE_AGENT_ID_PATTERN.matcher(name).matches()) {
             throw new IllegalArgumentException("Invalid agent name: " + name);
         }
     }
@@ -225,11 +240,25 @@ public class AgentProfileService {
         });
     }
 
+    private static final Path WORKSPACE_ROOT = Path.of("workspace").toAbsolutePath().normalize();
+
     private String normalizeWorkspacePath(String name, String inputPath) {
         Path path = (inputPath != null && !inputPath.isBlank())
                 ? Path.of(inputPath.trim())
                 : Path.of("workspace", "agents", name);
-        return path.normalize().toString();
+
+        // 如果是相对路径，基于 workspace root 解析
+        Path resolved = path.isAbsolute()
+                ? path.toAbsolutePath().normalize()
+                : WORKSPACE_ROOT.resolve(path).toAbsolutePath().normalize();
+
+        // 安全检查：必须在 workspace root 内
+        if (!resolved.startsWith(WORKSPACE_ROOT)) {
+            throw new IllegalArgumentException(
+                    "Invalid workspacePath: path must be within workspace root");
+        }
+
+        return resolved.toString();
     }
 
     private void ensureWorkspaceDirectories(String workspacePath) {

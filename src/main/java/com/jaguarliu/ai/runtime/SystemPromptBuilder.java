@@ -337,33 +337,6 @@ public class SystemPromptBuilder {
     }
 
     /**
-     * 构建记忆段落
-     */
-    private String buildMemorySection() {
-        StringBuilder sb = new StringBuilder();
-        sb.append("## Memory\n\n");
-        sb.append("You have access to a **dual-scope memory system** (global + agent-private):\n\n");
-        sb.append("- `memory_search(query, scope?)`\n");
-        sb.append("  - scope=\"both\" (default) → current agent + global\n");
-        sb.append("  - scope=\"agent\" → current agent only\n");
-        sb.append("  - scope=\"global\" → shared only\n");
-        sb.append("- `memory_write(content, target, scope?)`\n");
-        sb.append("  - scope=\"agent\" (default) → current agent private\n");
-        sb.append("  - scope=\"global\" → shared across agents\n");
-        sb.append("- `read_file(path)`: Read specific memory files\n");
-        sb.append("  - target=\"core\" → MEMORY.md (long-term: preferences, constraints)\n");
-        sb.append("  - target=\"daily\" → Today's log (session summaries, work records)\n\n");
-        sb.append("**Key point**: Global memory is cross-session and shared by all agents; ");
-        sb.append("agent memory is isolated to each agent profile.\n\n");
-        sb.append("**When to use memory:**\n");
-        sb.append("- Search for relevant context at conversation start\n");
-        sb.append("- Save stable user preferences to global core memory\n");
-        sb.append("- Save agent-specific strategy/working notes to agent scope\n");
-        sb.append("- Summarize significant tasks to daily log\n\n");
-        return sb.toString();
-    }
-
-    /**
      * 构建工作目录段落
      */
     private String buildWorkspaceSection() {
