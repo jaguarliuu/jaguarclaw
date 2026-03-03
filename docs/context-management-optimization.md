@@ -53,6 +53,108 @@ public LlmRequest build(String systemPrompt, List<LlmRequest.Message> history, S
 
 ## 📚 业界最佳实践调研
 
+### 0. Prompt Caching / Prefix Caching（最重要！）
+
+**原理**：
+- 缓存静态前缀（System Prompt + Tools + 历史对话）
+- 后续请求复用缓存，只处理新增部分
+- **成本降低 90%**（缓存读取价格是正常的 10%）
+
+**工作方式**：
+```
+Request 1: [System + Tools + History + User Message]
+            └─────── 缓存写入 ───────┘
+            
+Request 2: [System + Tools + History + User Message + Asst + User]
+            └──── 缓存读取 ────┘  └─ 新内容 ─┘
+```
+
+**缓存层级**：
+```
+tools → system → messages
+(按顺序缓存，修改任何一层会失效后面所有)
+```
+
+**价格对比**（Claude Opus 4.6）：
+| 类型 | 价格/MTok | 相当于 |
+|------|-----------|--------|
+| Base Input | $5 | 100% |
+| Cache Write (5m) | $6.25 | 125% |
+| Cache Write (1h) | $10 | 200% |
+| **Cache Read** | **$0.50** | **10%** |
+
+**最小缓存大小**：
+- Claude Opus 4.6: 4096 tokens
+- Claude Sonnet 4.6: 2048 tokens
+- Claude Haiku 3: 2048 tokens
+
+**Java 实现示例**：
+```java
+// 方式 1：自动缓存（推荐）
+MessageCreateParams params = MessageCreateParams.builder()
+    .model(Model.CLAUDE_OPUS_4_6)
+    .maxTokens(1024)
+    .cacheControl(CacheControlEphemeral.builder().build()) // 自动缓存到最后一个 block
+    .system("You are a helpful assistant...")
+    .messages(messages)
+    .build();
+
+// 方式 2：显式缓存（精细控制）
+MessageCreateParams params = MessageCreateParams.builder()
+    .model(Model.CLAUDE_OPUS_4_6)
+    .system(List.of(
+        TextBlockParam.builder()
+            .text("Static system instructions...")
+            .cacheControl(CacheControlEphemeral.builder().build()) // 缓存点 1
+            .build()
+    ))
+    .tools(List.of(
+        Tool.builder()
+            .name("get_weather")
+            // ...
+            .cacheControl(CacheControlEphemeral.builder().build()) // 缓存点 2
+            .build()
+    ))
+    .messages(messages)
+    .build();
+```
+
+**缓存命中监控**：
+```java
+Message response = client.messages().create(params);
+
+// 检查缓存使用情况
+Usage usage = response.usage();
+int cacheRead = usage.cacheReadInputTokens();      // 从缓存读取
+int cacheWrite = usage.cacheCreationInputTokens(); // 新写入缓存
+int newTokens = usage.inputTokens();               // 未缓存的 token
+
+// 计算节省
+int totalInput = cacheRead + cacheWrite + newTokens;
+double saved = (double) cacheRead / totalInput * 100;
+log.info("Cache hit rate: {}%", saved);
+```
+
+**失效条件**：
+| 修改 | 影响 |
+|------|------|
+| Tools 定义 | 全部失效 |
+| System Prompt | System + Messages 失效 |
+| Images | Messages 失效 |
+| tool_choice | Messages 失效 |
+
+**优点**：
+- ✅ 成本降低 90%
+- ✅ 延迟降低（跳过处理）
+- ✅ 不损失上下文
+
+**缺点**：
+- ⚠️ 需要模型支持（Claude、部分 OpenAI 模型）
+- ⚠️ 需要达到最小 token 数
+- ⚠️ TTL 限制（默认 5 分钟，可升级 1 小时）
+
+---
+
 ### 1. Claude Code Compaction（服务端压缩）
 
 **原理**：
@@ -222,44 +324,6 @@ class HierarchicalMemory {
 
 ### 5. Token 统计与监控
 
-**关键指标**：
-
-| 指标 | 说明 | 计算方式 |
-|------|------|---------|
-| **Input Tokens** | 输入 token 数 | messages → tokenizer |
-| **Output Tokens** | 输出 token 数 | response → tokenizer |
-| **Total Tokens** | 总 token 数 | input + output |
-| **Context Usage** | 上下文使用率 | current / max_context |
-| **Cost** | 成本 | tokens × price_per_1k |
-
-**实现**：
-```java
-@Data
-public class TokenUsage {
-    private int inputTokens;
-    private int outputTokens;
-    private String model;
-    private double cost;
-    private Instant timestamp;
-    
-    public static TokenUsage fromResponse(LlmResponse response, String model) {
-        TokenUsage usage = new TokenUsage();
-        usage.setInputTokens(response.getUsage().getInputTokens());
-        usage.setOutputTokens(response.getUsage().getOutputTokens());
-        usage.setModel(model);
-        usage.setCost(calculateCost(model, usage.getInputTokens(), usage.getOutputTokens()));
-        usage.setTimestamp(Instant.now());
-        return usage;
-    }
-    
-    private static double calculateCost(String model, int input, int output) {
-        // 根据模型价格表计算
-        Pricing pricing = PRICING_TABLE.get(model);
-        return (input * pricing.inputPerToken) + (output * pricing.outputPerToken);
-    }
-}
-```
-
 ---
 
 ## 🎯 JaguarClaw 优化方案
@@ -268,16 +332,123 @@ public class TokenUsage {
 
 基于调研，建议采用**组合策略**：
 
-| 策略 | 优先级 | 效果 | 复杂度 |
-|------|--------|------|--------|
-| **滑动窗口** | P0 | ⭐⭐⭐ | 低 |
-| **Token 统计** | P0 | ⭐⭐⭐ | 低 |
-| **智能压缩** | P1 | ⭐⭐⭐⭐ | 中 |
-| **分层记忆** | P2 | ⭐⭐⭐⭐⭐ | 高 |
+| 策略 | 优先级 | 效果 | 复杂度 | 说明 |
+|------|--------|------|--------|------|
+| **Prefix Caching** | P0 | ⭐⭐⭐⭐⭐ | 低 | **最重要！成本降低 90%** |
+| **Token 统计** | P0 | ⭐⭐⭐ | 低 | 可监控 |
+| **滑动窗口** | P1 | ⭐⭐⭐ | 低 | 限制历史 |
+| **智能压缩** | P2 | ⭐⭐⭐⭐ | 中 | 压缩早期对话 |
+| **分层记忆** | P3 | ⭐⭐⭐⭐⭐ | 高 | 长期优化 |
 
 ---
 
 ## 📋 实施方案
+
+### 阶段 0：Prefix Caching（1 天）⭐ 最重要
+
+**目标**：利用 API 缓存，成本降低 90%
+
+#### 0.1 修改 LLM 请求
+
+```java
+// LlmRequest.java 添加 cache_control 支持
+@Data
+public class LlmRequest {
+    private List<Map<String, Object>> system;
+    private List<LlmRequest.Message> messages;
+    private List<Map<String, Object>> tools;
+    private String model;
+    private Integer maxTokens;
+    
+    // 新增：缓存控制
+    private Map<String, Object> cacheControl;
+}
+```
+
+#### 0.2 ContextBuilder 启用缓存
+
+```java
+// ContextBuilder.java
+public LlmRequest buildWithCache(
+    String systemPrompt,
+    List<Map<String, Object>> tools,
+    List<LlmRequest.Message> history,
+    String userPrompt,
+    boolean enableCache
+) {
+    List<Map<String, Object>> systemBlocks = new ArrayList<>();
+    
+    // System prompt (带缓存)
+    Map<String, Object> systemBlock = new HashMap<>();
+    systemBlock.put("type", "text");
+    systemBlock.put("text", systemPrompt);
+    if (enableCache) {
+        systemBlock.put("cache_control", Map.of("type", "ephemeral"));
+    }
+    systemBlocks.add(systemBlock);
+    
+    // Tools (带缓存)
+    List<Map<String, Object>> cachedTools = tools;
+    if (enableCache && !tools.isEmpty()) {
+        // 在最后一个 tool 添加缓存标记
+        Map<String, Object> lastTool = new HashMap<>(tools.get(tools.size() - 1));
+        lastTool.put("cache_control", Map.of("type", "ephemeral"));
+        cachedTools = new ArrayList<>(tools.subList(0, tools.size() - 1));
+        cachedTools.add(lastTool);
+    }
+    
+    return LlmRequest.builder()
+        .system(systemBlocks)
+        .tools(cachedTools)
+        .messages(history)
+        .cacheControl(enableCache ? Map.of("type", "ephemeral") : null)
+        .build();
+}
+```
+
+#### 0.3 监控缓存效果
+
+```java
+// OpenAiCompatibleLlmClient.java
+private void recordCacheUsage(LlmResponse response, RunContext context) {
+    Usage usage = response.getUsage();
+    
+    if (usage.getCacheReadInputTokens() != null && usage.getCacheReadInputTokens() > 0) {
+        log.info("Cache hit! Read: {}, Write: {}, New: {}",
+            usage.getCacheReadInputTokens(),
+            usage.getCacheCreationInputTokens(),
+            usage.getInputTokens());
+        
+        // 记录到上下文
+        context.setCacheReadTokens(usage.getCacheReadInputTokens());
+        context.setCacheWriteTokens(usage.getCacheCreationInputTokens());
+        
+        // 发布事件
+        eventBus.publish(AgentEvent.cacheHit(
+            context.getConnectionId(),
+            context.getRunId(),
+            usage.getCacheReadInputTokens()
+        ));
+    }
+}
+```
+
+#### 0.4 配置
+
+```yaml
+# application.yml
+llm:
+  cache:
+    enabled: true
+    ttl: 5m  # 5m 或 1h
+    min-tokens: 1024  # 最小缓存 token 数
+```
+
+**效果**：
+- 首次请求：正常成本
+- 后续请求（5分钟内）：**成本降低 90%**
+
+---
 
 ### 阶段 1：Token 统计 + 基础限制（2 天）
 
