@@ -120,6 +120,20 @@ class AgentScopedSoulConfigServiceTest {
     }
 
     @Test
+    @DisplayName("ensureAgentDefaults with null displayName creates SOUL.md without name line")
+    void ensureAgentDefaultsNullNameCreatesNoNameLine(@TempDir Path tempDir) {
+        AgentWorkspaceResolver resolver = new AgentWorkspaceResolver(Optional.empty());
+        ReflectionTestUtils.setField(resolver, "workspaceRoot", tempDir.toString());
+        SoulConfigService svc = new SoulConfigService(resolver);
+
+        svc.ensureAgentDefaults("nameless-agent", null);
+
+        String soul = svc.readSoulMd("nameless-agent");
+        assertFalse(soul.contains("Your name is"), "SOUL.md should not contain a name when none given");
+        assertNull(svc.extractAgentName("nameless-agent"), "extractAgentName should return null");
+    }
+
+    @Test
     @DisplayName("心跳配置按 agent 独立加载")
     void heartbeatConfigShouldBeAgentScoped() {
         AgentWorkspaceResolver resolver = new AgentWorkspaceResolver(Optional.empty());

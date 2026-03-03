@@ -88,7 +88,7 @@ public class SoulConfigService {
      */
     public void ensureAgentDefaults(String agentId, String displayName) {
         String resolvedAgentId = workspaceResolver.normalizeAgentId(agentId);
-        String agentName = (displayName != null && !displayName.isBlank()) ? displayName : resolvedAgentId;
+        String agentName = (displayName != null && !displayName.isBlank()) ? displayName : null;
 
         Path soulPath = agentFilePath(resolvedAgentId, SOUL_MD_FILE);
         if (!Files.exists(soulPath)) {
@@ -159,13 +159,16 @@ public class SoulConfigService {
     // ── Default templates ─────────────────────────────────────────────────────
 
     private static String defaultSoulMd(String agentName) {
-        return "# Soul\n\n" +
-               "Your name is " + agentName + ".\n\n" +
-               "## Personality\n" +
-               "A helpful and professional AI assistant.\n\n" +
-               "## Response Style\n" +
-               "- Tone: balanced\n" +
-               "- Detail level: balanced\n";
+        StringBuilder sb = new StringBuilder("# Soul\n\n");
+        if (agentName != null && !agentName.isBlank()) {
+            sb.append("Your name is ").append(agentName).append(".\n\n");
+        }
+        sb.append("## Personality\n");
+        sb.append("A helpful and professional AI assistant.\n\n");
+        sb.append("## Response Style\n");
+        sb.append("- Tone: balanced\n");
+        sb.append("- Detail level: balanced\n");
+        return sb.toString();
     }
 
     private static String defaultAgentMemoryMd(String agentName) {
