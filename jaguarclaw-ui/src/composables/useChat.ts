@@ -994,7 +994,6 @@ function setupEventListeners() {
         streamBlocks.value = []
         toolCallIndex.value = {}
         subagentIndex.value = {}
-        currentRunUsage.value = null
         currentRun.value = null
       }
     }),
@@ -1024,7 +1023,6 @@ function setupEventListeners() {
         streamBlocks.value = []
         toolCallIndex.value = {}
         subagentIndex.value = {}
-        currentRunUsage.value = null
         currentRun.value = null
       }
     }),

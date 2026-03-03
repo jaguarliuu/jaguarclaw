@@ -839,8 +839,8 @@ onMounted(() => {
             </div>
           </div>
 
-          <div v-if="isRunning && tokenUsage" class="token-status-bar">
-            <span>Step {{ tokenUsage.step }}</span>
+          <div v-if="tokenUsage" class="token-status-bar">
+            <span>{{ isRunning ? 'Step' : 'Last Step' }} {{ tokenUsage.step }}</span>
             <span class="separator">·</span>
             <span>{{ formatTokens(tokenUsage.totalTokens) }} tokens</span>
             <span class="separator">·</span>
