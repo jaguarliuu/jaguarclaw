@@ -68,6 +68,77 @@ class SystemPromptBuilderTest {
         lenient().when(soulConfigService.readProfileMd(any())).thenReturn("");
         lenient().when(skillIndexBuilder.buildIndex("main")).thenReturn("");
         lenient().when(skillIndexBuilder.buildCompactIndex("main")).thenReturn("");
+        lenient().when(soulConfigService.extractAgentName(any())).thenReturn(null);
+    }
+
+    // ==================== Identity 和 Name Reminder 测试 ====================
+
+    @Nested
+    @DisplayName("Identity and Name Reminder")
+    class IdentityAndNameReminderTests {
+
+        @Test
+        @DisplayName("FULL mode: no name in soul → identity block contains reminder")
+        void fullModeNoNameContainsReminder() {
+            lenient().when(toolRegistry.listDefinitions()).thenReturn(List.of());
+            when(toolRegistry.listDefinitions(any(ToolVisibilityResolver.VisibilityRequest.class))).thenReturn(List.of());
+            when(skillIndexBuilder.buildIndex("main")).thenReturn("");
+            when(soulConfigService.extractAgentName("main")).thenReturn(null);
+
+            String result = builder.build(SystemPromptBuilder.PromptMode.FULL);
+
+            assertTrue(result.contains("First Conversation"), "Should contain name reminder");
+            assertTrue(result.contains("don't have a name"), "Should say no name yet");
+        }
+
+        @Test
+        @DisplayName("FULL mode: name set in soul → no reminder")
+        void fullModeNameSetNoReminder() {
+            lenient().when(toolRegistry.listDefinitions()).thenReturn(List.of());
+            when(toolRegistry.listDefinitions(any(ToolVisibilityResolver.VisibilityRequest.class))).thenReturn(List.of());
+            when(skillIndexBuilder.buildIndex("main")).thenReturn("");
+            when(soulConfigService.extractAgentName("main")).thenReturn("Alice");
+
+            String result = builder.build(SystemPromptBuilder.PromptMode.FULL);
+
+            assertFalse(result.contains("First Conversation"), "Should not contain reminder when name is set");
+        }
+
+        @Test
+        @DisplayName("NONE mode: name set → includes name in identity")
+        void noneModeNameSetIncludesName() {
+            when(soulConfigService.extractAgentName("main")).thenReturn("Alice");
+
+            String result = builder.build(SystemPromptBuilder.PromptMode.NONE);
+
+            assertTrue(result.contains("Alice"), "Should include agent name");
+            assertTrue(result.contains("AI coding assistant"));
+        }
+
+        @Test
+        @DisplayName("NONE mode: no name → generic identity")
+        void noneModeNoNameGenericIdentity() {
+            when(soulConfigService.extractAgentName("main")).thenReturn(null);
+
+            String result = builder.build(SystemPromptBuilder.PromptMode.NONE);
+
+            assertEquals("You are an AI coding assistant.", result);
+        }
+
+        @Test
+        @DisplayName("IDENTITY section no longer contains JaguarClaw")
+        void identityNoLongerHardcodesJaguarClaw() {
+            lenient().when(toolRegistry.listDefinitions()).thenReturn(List.of());
+            when(toolRegistry.listDefinitions(any(ToolVisibilityResolver.VisibilityRequest.class))).thenReturn(List.of());
+            when(skillIndexBuilder.buildIndex("main")).thenReturn("");
+            lenient().when(soulConfigService.extractAgentName(any())).thenReturn(null);
+
+            String full = builder.build(SystemPromptBuilder.PromptMode.FULL);
+            String minimal = builder.build(SystemPromptBuilder.PromptMode.MINIMAL);
+
+            assertFalse(full.contains("JaguarClaw"), "FULL should not contain hardcoded JaguarClaw");
+            assertFalse(minimal.contains("JaguarClaw"), "MINIMAL should not contain hardcoded JaguarClaw");
+        }
     }
 
     // ==================== NONE 模式测试 ====================
@@ -79,9 +150,11 @@ class SystemPromptBuilderTest {
         @Test
         @DisplayName("返回简短的身份行")
         void returnsMinimalIdentity() {
+            when(soulConfigService.extractAgentName("main")).thenReturn(null);
+
             String result = builder.build(SystemPromptBuilder.PromptMode.NONE);
 
-            assertEquals("You are JaguarClaw, an AI coding assistant.", result);
+            assertEquals("You are an AI coding assistant.", result);
         }
     }
 
@@ -99,7 +172,7 @@ class SystemPromptBuilderTest {
 
             String result = builder.build(SystemPromptBuilder.PromptMode.MINIMAL);
 
-            assertTrue(result.contains("You are JaguarClaw"));
+            assertTrue(result.contains("You are an AI coding assistant"));
         }
 
         @Test
@@ -174,7 +247,7 @@ class SystemPromptBuilderTest {
 
             String result = builder.build(SystemPromptBuilder.PromptMode.FULL);
 
-            assertTrue(result.contains("You are JaguarClaw"));
+            assertTrue(result.contains("You are an AI coding assistant"));
         }
 
         @Test
@@ -573,7 +646,7 @@ class SystemPromptBuilderTest {
 
             String result = builder.build(SystemPromptBuilder.PromptMode.FULL);
 
-            int identityIdx = result.indexOf("You are JaguarClaw");
+            int identityIdx = result.indexOf("You are an AI coding assistant");
             int toolsIdx = result.indexOf("## Available Tools");
             int safetyIdx = result.indexOf("## Safety Guidelines");
             int memoryIdx = result.indexOf("## Memory");

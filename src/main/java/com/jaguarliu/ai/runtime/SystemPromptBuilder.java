@@ -75,15 +75,29 @@ public class SystemPromptBuilder {
     private final ToolPromptFacet toolPromptFacet;
     private final MemoryPromptFacet memoryPromptFacet;
 
-    // 身份段落
+    // 身份段落（通用，不含名字 — 名字由 SOUL.md 管理）
     private static final String IDENTITY_SECTION = """
-        You are JaguarClaw, an AI coding assistant. You help users with software engineering tasks including:
+        You are an AI coding assistant. You help users with software engineering tasks including:
         - Writing, reviewing, and debugging code
         - Explaining technical concepts
         - File operations and shell commands
         - Creating documents (PPTX, XLSX, etc.)
 
         Respond concisely and accurately. Use Chinese when the user writes in Chinese.
+        """;
+
+    // 无名字时的首次对话提醒
+    private static final String NAME_REMINDER_INSTRUCTION = """
+
+        **First Conversation — Introduce Yourself**
+
+        You don't have a name yet. At the very start of your FIRST response, \
+        warmly introduce yourself to the user. Acknowledge that you're new and \
+        unnamed, express that you'd love to have a name, and invite the user to \
+        give you one. Keep it light and natural — don't make it feel like a \
+        system alert. Adapt the language to the user (Chinese if they write in \
+        Chinese). After they provide a name, use the soul tools to save it. \
+        Only do this introduction once.
         """;
 
     // 安全段落
@@ -217,7 +231,11 @@ public class SystemPromptBuilder {
      */
     public String build(PromptMode mode, Set<String> allowedTools, Set<String> excludedMcpServers, String dataSourceId, String agentId) {
         if (mode == PromptMode.NONE) {
-            return "You are JaguarClaw, an AI coding assistant.";
+            String name = soulConfigService.extractAgentName(agentId);
+            if (name != null && !name.isBlank()) {
+                return "You are " + name + ", an AI coding assistant.";
+            }
+            return "You are an AI coding assistant.";
         }
 
         PromptAssemblyContext context = new PromptAssemblyContext(
@@ -225,7 +243,7 @@ public class SystemPromptBuilder {
         );
 
         java.util.Map<String, String> blocks = new java.util.HashMap<>();
-        blocks.put("IDENTITY", IDENTITY_SECTION.trim());
+        blocks.put("IDENTITY", buildIdentitySection(agentId));
         blocks.put("SOUL", soulPromptFacet.supports(context) ? soulPromptFacet.render(context) : "");
         blocks.put("RULE", rulePromptFacet.supports(context) ? rulePromptFacet.render(context) : "");
         blocks.put("PROFILE", profilePromptFacet.supports(context) ? profilePromptFacet.render(context) : "");
@@ -257,6 +275,18 @@ public class SystemPromptBuilder {
         if (!toolExists) return false;
         // 如果有白名单，检查是否在白名单中
         return allowedTools == null || allowedTools.contains("sessions_spawn");
+    }
+
+    /**
+     * 构建 Identity 段落，如果 SOUL.md 中没有名字则附加首次对话提醒。
+     */
+    private String buildIdentitySection(String agentId) {
+        String base = IDENTITY_SECTION.trim();
+        String name = soulConfigService.extractAgentName(agentId);
+        if (name == null || name.isBlank()) {
+            return base + NAME_REMINDER_INSTRUCTION.stripTrailing();
+        }
+        return base;
     }
 
     /**
