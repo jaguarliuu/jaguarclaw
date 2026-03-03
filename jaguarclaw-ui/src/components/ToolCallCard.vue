@@ -151,7 +151,7 @@ const showDownloadBtn = computed(() => {
 // 文件下载 URL
 const downloadUrl = computed(() => {
   if (!showDownloadBtn.value) return ''
-  const path = String(props.toolCall.arguments.path || '')
+  const path = String(props.toolCall.arguments.path || '').replace(/\\/g, '/')
   const prefix = props.sessionId ? `${props.sessionId}/` : ''
   const encodedPath = path.split('/').map(encodeURIComponent).join('/')
   return `/api/workspace/${prefix}${encodedPath}?download`

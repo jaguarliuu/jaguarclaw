@@ -41,7 +41,8 @@ const formattedSize = computed(() => {
 
 // 编码文件路径（保留路径分隔符）
 function encodePath(p: string): string {
-  return p.split('/').map(encodeURIComponent).join('/')
+  const normalized = p.replace(/\\/g, '/')
+  return normalized.split('/').map(encodeURIComponent).join('/')
 }
 
 // 下载 URL
