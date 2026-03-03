@@ -83,4 +83,4 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           rm -f .npmrc
-          npx electron-builder --config builder.local.json --publish always --config.publish.tag="${GITHUB_REF_NAME}"
+          npx electron-builder --config builder.local.json --publish always
