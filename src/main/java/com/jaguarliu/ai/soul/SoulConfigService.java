@@ -55,6 +55,27 @@ public class SoulConfigService {
         writeMd(agentId, PROFILE_MD_FILE, content);
     }
 
+    // ── Derived accessors ─────────────────────────────────────────────────────
+
+    /**
+     * Extracts the agent's name from SOUL.md by looking for a line matching
+     * "Your name is <name>". Returns null if not found or SOUL.md is missing.
+     */
+    public String extractAgentName(String agentId) {
+        String soul = readSoulMd(agentId);
+        if (soul == null || soul.isBlank()) {
+            return null;
+        }
+        java.util.regex.Matcher m = java.util.regex.Pattern
+                .compile("Your name is ([^.\\n]+)\\.?")
+                .matcher(soul);
+        if (m.find()) {
+            String name = m.group(1).trim();
+            return name.isBlank() ? null : name;
+        }
+        return null;
+    }
+
     // ── Bootstrap ────────────────────────────────────────────────────────────
 
     public void ensureAgentDefaults(String agentId) {

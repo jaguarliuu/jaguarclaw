@@ -96,6 +96,30 @@ class AgentScopedSoulConfigServiceTest {
     }
 
     @Test
+    @DisplayName("extractAgentName 从 SOUL.md 提取名字")
+    void extractAgentNameReturnsParsedName(@TempDir Path tempDir) {
+        AgentWorkspaceResolver resolver = new AgentWorkspaceResolver(Optional.empty());
+        ReflectionTestUtils.setField(resolver, "workspaceRoot", tempDir.toString());
+        SoulConfigService svc = new SoulConfigService(resolver);
+
+        svc.writeSoulMd("agent-x", "# Soul\n\nYour name is Alice.\n\n## Personality\nHelpful.\n");
+
+        assertEquals("Alice", svc.extractAgentName("agent-x"));
+    }
+
+    @Test
+    @DisplayName("extractAgentName 无名字时返回 null")
+    void extractAgentNameReturnsNullWhenMissing(@TempDir Path tempDir) {
+        AgentWorkspaceResolver resolver = new AgentWorkspaceResolver(Optional.empty());
+        ReflectionTestUtils.setField(resolver, "workspaceRoot", tempDir.toString());
+        SoulConfigService svc = new SoulConfigService(resolver);
+
+        svc.writeSoulMd("agent-y", "# Soul\n\n## Personality\nHelpful.\n");
+
+        assertNull(svc.extractAgentName("agent-y"));
+    }
+
+    @Test
     @DisplayName("心跳配置按 agent 独立加载")
     void heartbeatConfigShouldBeAgentScoped() {
         AgentWorkspaceResolver resolver = new AgentWorkspaceResolver(Optional.empty());
