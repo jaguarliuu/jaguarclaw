@@ -315,6 +315,21 @@ public class OpenAiCompatibleLlmClient implements LlmClient {
                 return Flux.empty();
             }
 
+            // 解析 usage（streaming 最后一帧携带，OpenAI 和 Claude 格式一致）
+            JsonNode usageNode = root.get("usage");
+            if (usageNode != null && !usageNode.isNull()) {
+                LlmResponse.Usage usage = LlmResponse.Usage.builder()
+                        .promptTokens(usageNode.path("prompt_tokens").asInt(0))
+                        .completionTokens(usageNode.path("completion_tokens").asInt(0))
+                        .totalTokens(usageNode.path("total_tokens").asInt(0))
+                        .cacheReadInputTokens(usageNode.has("cache_read_input_tokens")
+                                ? usageNode.get("cache_read_input_tokens").asInt() : null)
+                        .cacheCreationInputTokens(usageNode.has("cache_creation_input_tokens")
+                                ? usageNode.get("cache_creation_input_tokens").asInt() : null)
+                        .build();
+                chunkBuilder.usage(usage);
+            }
+
             return Flux.just(chunkBuilder.build());
 
         } catch (JsonProcessingException e) {

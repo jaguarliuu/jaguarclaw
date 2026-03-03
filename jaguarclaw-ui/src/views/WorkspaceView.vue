@@ -46,6 +46,7 @@ const selectedDataSourceId = ref<string | undefined>(undefined)
 const {
   currentSession,
   currentSessionId,
+  currentRunUsage,
   messages,
   streamBlocks,
   isStreaming,
@@ -268,6 +269,7 @@ async function handleInstallAction() {
         :active-model-label="activeModelLabel"
         :agents="agents"
         :selected-agent-id="selectedAgentId"
+        :token-usage="currentRunUsage"
         @send="handleSend"
         @cancel="handleCancel"
         @attach-file="handleAttachFile"

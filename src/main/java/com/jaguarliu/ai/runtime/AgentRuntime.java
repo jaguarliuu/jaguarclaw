@@ -4,6 +4,7 @@ import com.jaguarliu.ai.gateway.events.AgentEvent;
 import com.jaguarliu.ai.gateway.events.EventBus;
 import com.jaguarliu.ai.llm.LlmClient;
 import com.jaguarliu.ai.llm.model.LlmRequest;
+import com.jaguarliu.ai.llm.model.LlmResponse;
 import com.jaguarliu.ai.llm.model.ToolCall;
 import com.jaguarliu.ai.memory.flush.PreCompactionFlushHook;
 import com.jaguarliu.ai.session.SessionFileService;
@@ -330,7 +331,7 @@ public class AgentRuntime {
             }
         }
 
-        return streamLlmCall(context.getConnectionId(), context.getRunId(), requestBuilder.build());
+        return streamLlmCall(context, requestBuilder.build());
     }
 
     private Set<String> resolveStrategyAllowedTools(
@@ -357,10 +358,13 @@ public class AgentRuntime {
     /**
      * 流式调用 LLM
      */
-    private StepResult streamLlmCall(String connectionId, String runId, LlmRequest request) {
+    private StepResult streamLlmCall(RunContext context, LlmRequest request) {
+        String connectionId = context.getConnectionId();
+        String runId = context.getRunId();
         StringBuilder content = new StringBuilder();
         List<ToolCall> toolCalls = new ArrayList<>();
         ArtifactStreamExtractor artifactExtractor = new ArtifactStreamExtractor();
+        LlmResponse.Usage[] usageHolder = {null};
 
         llmClient.stream(request)
                 .doOnNext(chunk -> {
@@ -380,8 +384,26 @@ public class AgentRuntime {
                     if (chunk.getToolCalls() != null) {
                         toolCalls.addAll(chunk.getToolCalls());
                     }
+                    if (chunk.getUsage() != null) {
+                        usageHolder[0] = chunk.getUsage();
+                    }
                 })
                 .blockLast();
+
+        if (usageHolder[0] != null) {
+            context.addUsage(usageHolder[0]);
+            int historyCount = (int) request.getMessages().stream()
+                    .filter(m -> !"system".equals(m.getRole()))
+                    .count() - 1;
+            historyCount = Math.max(0, historyCount);
+            eventBus.publish(AgentEvent.tokenUsage(
+                    connectionId, runId, usageHolder[0], historyCount, context.getCurrentStep()));
+            log.debug("Token usage: step={}, input={}, output={}, cacheRead={}",
+                    context.getCurrentStep(),
+                    usageHolder[0].getPromptTokens(),
+                    usageHolder[0].getCompletionTokens(),
+                    usageHolder[0].getCacheReadInputTokens());
+        }
 
         return new StepResult(content.toString(), toolCalls);
     }

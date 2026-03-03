@@ -1,5 +1,6 @@
 package com.jaguarliu.ai.runtime;
 
+import com.jaguarliu.ai.llm.model.LlmResponse;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.Setter;
@@ -95,6 +96,18 @@ public class RunContext {
      */
     @Builder.Default
     private final AtomicInteger currentStep = new AtomicInteger(0);
+
+    /**
+     * 整个 run 累计 token 消耗（线程安全）
+     */
+    @Builder.Default
+    private final AtomicInteger totalInputTokens = new AtomicInteger(0);
+
+    @Builder.Default
+    private final AtomicInteger totalOutputTokens = new AtomicInteger(0);
+
+    @Builder.Default
+    private final AtomicInteger totalCacheReadTokens = new AtomicInteger(0);
 
     /**
      * 原始用户输入（用于 skill 激活）
@@ -211,6 +224,40 @@ public class RunContext {
      */
     public int getCurrentStep() {
         return currentStep.get();
+    }
+
+    /**
+     * 累加单次 LLM 调用的 usage（null-safe）
+     */
+    public void addUsage(LlmResponse.Usage usage) {
+        if (usage == null) {
+            return;
+        }
+        if (usage.getPromptTokens() != null) {
+            totalInputTokens.addAndGet(usage.getPromptTokens());
+        }
+        if (usage.getCompletionTokens() != null) {
+            totalOutputTokens.addAndGet(usage.getCompletionTokens());
+        }
+        if (usage.getCacheReadInputTokens() != null) {
+            totalCacheReadTokens.addAndGet(usage.getCacheReadInputTokens());
+        }
+    }
+
+    public int getTotalInputTokens() {
+        return totalInputTokens.get();
+    }
+
+    public int getTotalOutputTokens() {
+        return totalOutputTokens.get();
+    }
+
+    public int getTotalCacheReadTokens() {
+        return totalCacheReadTokens.get();
+    }
+
+    public int getTotalTokens() {
+        return totalInputTokens.get() + totalOutputTokens.get();
     }
 
     /**

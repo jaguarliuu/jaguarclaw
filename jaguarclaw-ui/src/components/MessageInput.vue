@@ -17,9 +17,19 @@ import McpServerFilter from '@/components/McpServerFilter.vue'
 import DataSourceSelector from '@/components/DataSourceSelector.vue'
 import ModelSelector from '@/components/ModelSelector.vue'
 
+interface TokenUsageState {
+  inputTokens: number
+  outputTokens: number
+  totalTokens: number
+  cacheReadTokens: number
+  historyMessages: number
+  step: number
+}
+
 const props = defineProps<{
   disabled: boolean
   isRunning?: boolean
+  tokenUsage?: TokenUsageState | null
   attachedContexts?: AttachedContext[]
   mcpServers?: McpServer[]
   excludedMcpServers?: Set<string>
@@ -145,6 +155,11 @@ const hasUploading = computed(() => props.attachedContexts?.some((c) => c.upload
 
 // 发送按钮是否禁用：常规禁用 OR 有上下文正在上传
 const sendDisabled = computed(() => props.disabled || hasUploading.value || !input.value.trim())
+
+function formatTokens(n: number): string {
+  if (n >= 1000) return (n / 1000).toFixed(1) + 'k'
+  return String(n)
+}
 
 onMounted(() => {
   loadCommands()
@@ -823,6 +838,18 @@ onMounted(() => {
               </button>
             </div>
           </div>
+
+          <div v-if="isRunning && tokenUsage" class="token-status-bar">
+            <span>Step {{ tokenUsage.step }}</span>
+            <span class="separator">·</span>
+            <span>{{ formatTokens(tokenUsage.totalTokens) }} tokens</span>
+            <span class="separator">·</span>
+            <span>{{ tokenUsage.historyMessages }} 条上下文</span>
+            <span v-if="tokenUsage.cacheReadTokens > 0" class="separator">·</span>
+            <span v-if="tokenUsage.cacheReadTokens > 0" class="cache-hit">
+              ↩ {{ formatTokens(tokenUsage.cacheReadTokens) }} cached
+            </span>
+          </div>
         </div>
       </div>
     </div>
@@ -1026,6 +1053,24 @@ textarea:disabled {
   padding: 2px 6px 8px;
   background: transparent;
   margin: 0;
+}
+
+.token-status-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-3);
+  font-size: 11px;
+  color: var(--color-gray-500);
+  font-family: var(--font-mono);
+}
+
+.token-status-bar .separator {
+  color: var(--color-gray-300);
+}
+
+.token-status-bar .cache-hit {
+  color: var(--color-gray-400);
 }
 
 .toolbar-left {

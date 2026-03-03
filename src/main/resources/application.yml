@@ -92,7 +92,10 @@ agent:
   system-prompt: |
     你是一个有帮助的 AI 助手。请用中文回答用户的问题。
     回答要简洁、准确、有条理。
-  max-history-messages: 20
+  max-history-messages: 20  # 滑动窗口：保留最近 N 条消息
+  # P2 智能压缩配置（当前不生效，NoOpContextCompactionService 下 shouldCompact 永远 false）
+  # context-window-limit: 80000
+  # compaction-keep-recent: 10
   loop:
     max-steps: 50
     run-timeout-seconds: 1200
