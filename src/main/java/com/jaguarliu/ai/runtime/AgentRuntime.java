@@ -371,9 +371,21 @@ public class AgentRuntime {
                     if (chunk.getDelta() != null) {
                         content.append(chunk.getDelta());
                         eventBus.publish(AgentEvent.assistantDelta(connectionId, runId, chunk.getDelta()));
-                        
-                        // 处理 artifact 提取（在 null check 内）
-                        ArtifactStreamExtractor.ExtractionResult result = artifactExtractor.append(chunk.getDelta());
+                    }
+
+                    // 收集 tool_calls（最后一个 chunk 包含完整 tool_calls）
+                    if (chunk.hasToolCalls()) {
+                        toolCalls.clear();
+                        toolCalls.addAll(chunk.getToolCalls());
+                    }
+
+                    // Artifact 流式提取：基于 write_file 的 arguments delta
+                    if ("write_file".equals(chunk.getToolCallFunctionName())) {
+                        artifactExtractor.activate();
+                    }
+                    if (artifactExtractor.isActive() && chunk.getToolCallArgumentsDelta() != null) {
+                        ArtifactStreamExtractor.ExtractionResult result =
+                                artifactExtractor.append(chunk.getToolCallArgumentsDelta());
                         if (result.pathDetected() != null) {
                             eventBus.publish(AgentEvent.artifactOpen(connectionId, runId, result.pathDetected()));
                         }
@@ -381,9 +393,7 @@ public class AgentRuntime {
                             eventBus.publish(AgentEvent.artifactDelta(connectionId, runId, result.contentDelta()));
                         }
                     }
-                    if (chunk.getToolCalls() != null) {
-                        toolCalls.addAll(chunk.getToolCalls());
-                    }
+
                     if (chunk.getUsage() != null) {
                         usageHolder[0] = chunk.getUsage();
                     }
