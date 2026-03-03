@@ -172,7 +172,8 @@ public class SoulConfigService {
     }
 
     private static String defaultAgentMemoryMd(String agentName) {
-        return "# Memory — " + agentName + "\n\n" +
+        String heading = (agentName != null && !agentName.isBlank()) ? agentName : "Agent";
+        return "# Memory — " + heading + "\n\n" +
                "## Memory Files\n" +
                "(Register memory files here as you create them.)\n\n" +
                "---\n\n" +
