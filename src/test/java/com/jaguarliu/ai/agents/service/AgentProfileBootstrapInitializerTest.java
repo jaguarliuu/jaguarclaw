@@ -29,6 +29,7 @@ class AgentProfileBootstrapInitializerTest {
         initializer.run(null);
 
         verify(service, times(1)).ensureDefaultMainAgentExists();
+        verify(service, times(1)).migrateLegacyWorkspacePaths();
         verify(service, times(1)).list();
     }
 }

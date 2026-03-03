@@ -15,12 +15,14 @@ import com.jaguarliu.ai.memory.index.MemoryChunkRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.List;
@@ -48,6 +50,9 @@ public class AgentProfileService {
     // AgentProfileService → SoulConfigService → AgentWorkspaceResolver → Optional<AgentProfileService>
     private final ObjectProvider<SoulConfigService> soulConfigServiceProvider;
     private final ObjectProvider<HeartbeatConfigService> heartbeatConfigServiceProvider;
+
+    @Value("${tools.workspace:./workspace}")
+    private String workspaceRoot;
 
     @Transactional(readOnly = true)
     public List<AgentProfileEntity> list() {
@@ -267,9 +272,12 @@ public class AgentProfileService {
         });
     }
 
-    private static final Path WORKSPACE_ROOT = Path.of("workspace").toAbsolutePath().normalize();
+    private Path workspaceRootPath() {
+        return Path.of(workspaceRoot).toAbsolutePath().normalize();
+    }
 
     private String normalizeWorkspacePath(String name, String inputPath) {
+        Path workspaceRootPath = workspaceRootPath();
         Path path = (inputPath != null && !inputPath.isBlank())
                 ? Path.of(inputPath.trim())
                 : Path.of("workspace-" + name);
@@ -277,10 +285,10 @@ public class AgentProfileService {
         // 如果是相对路径，基于 workspace root 解析
         Path resolved = path.isAbsolute()
                 ? path.toAbsolutePath().normalize()
-                : WORKSPACE_ROOT.resolve(path).toAbsolutePath().normalize();
+                : workspaceRootPath.resolve(path).toAbsolutePath().normalize();
 
         // 安全检查：必须在 workspace root 内
-        if (!resolved.startsWith(WORKSPACE_ROOT)) {
+        if (!resolved.startsWith(workspaceRootPath)) {
             throw new IllegalArgumentException(
                     "Invalid workspacePath: path must be within workspace root");
         }
@@ -300,56 +308,73 @@ public class AgentProfileService {
     }
 
     /**
-     * 修复旧版 normalizeWorkspacePath 的双层嵌套 bug。
-     * 旧逻辑将 Path.of("workspace", "workspace-{name}") 解析到 WORKSPACE_ROOT 下，
-     * 导致路径变成 workspace/workspace/workspace-{name}。
-     * 此方法在启动时检测并迁移这类路径到正确的 workspace/workspace-{name}。
+     * 修复历史 workspace 路径问题：
+     * 1) 旧版双层嵌套路径（workspace/workspace/workspace-{name}）
+     * 2) 旧版使用错误根目录（例如安装目录下 workspace），导致超出当前 tools.workspace
      */
     @Transactional
-    public void migrateDoubleNestedWorkspacePaths() {
+    public void migrateLegacyWorkspacePaths() {
         List<AgentProfileEntity> agents = repository.findAllByOrderByCreatedAtAsc();
         for (AgentProfileEntity agent : agents) {
             try {
-                migrateAgentIfDoubleNested(agent);
+                migrateAgentWorkspacePath(agent);
             } catch (Exception e) {
                 log.warn("Failed to migrate workspace path for agentId={}", agent.getId(), e);
             }
         }
     }
 
-    private void migrateAgentIfDoubleNested(AgentProfileEntity agent) throws IOException {
-        if (agent.getWorkspacePath() == null || agent.getWorkspacePath().isBlank()) return;
+    private void migrateAgentWorkspacePath(AgentProfileEntity agent) throws IOException {
+        if (agent.getWorkspacePath() == null || agent.getWorkspacePath().isBlank()) {
+            return;
+        }
 
-        Path storedPath = Path.of(agent.getWorkspacePath()).toAbsolutePath().normalize();
-        // Old bug: WORKSPACE_ROOT.resolve(Path.of("workspace", "workspace-{name}"))
-        //        = workspace/workspace/workspace-{name}
-        Path oldPath = WORKSPACE_ROOT.resolve("workspace").resolve("workspace-" + agent.getName())
-                .toAbsolutePath().normalize();
-        if (!storedPath.equals(oldPath)) return;
+        final Path storedPath;
+        try {
+            storedPath = Path.of(agent.getWorkspacePath()).toAbsolutePath().normalize();
+        } catch (InvalidPathException ex) {
+            Path fallbackPath = workspaceRootPath().resolve("workspace-" + agent.getName()).toAbsolutePath().normalize();
+            ensureWorkspaceDirectories(fallbackPath.toString());
+            agent.setWorkspacePath(fallbackPath.toString());
+            repository.save(agent);
+            log.info("Repaired invalid workspace path for agentId={}, newPath={}", agent.getId(), fallbackPath);
+            return;
+        }
 
-        Path newPath = WORKSPACE_ROOT.resolve("workspace-" + agent.getName())
-                .toAbsolutePath().normalize();
-        log.info("Migrating double-nested workspace for agentId={}: {} -> {}",
-                agent.getId(), storedPath, newPath);
+        Path workspaceRootPath = workspaceRootPath();
+        Path expectedPath = workspaceRootPath.resolve("workspace-" + agent.getName()).toAbsolutePath().normalize();
 
-        // Copy files: old path -> new path (skip files already present at new path)
-        if (Files.exists(oldPath)) {
-            try (Stream<Path> stream = Files.walk(oldPath)) {
-                for (Path source : (Iterable<Path>) stream::iterator) {
-                    Path target = newPath.resolve(oldPath.relativize(source));
-                    if (Files.isDirectory(source)) {
-                        Files.createDirectories(target);
-                    } else if (!Files.exists(target)) {
-                        Files.createDirectories(target.getParent());
-                        Files.copy(source, target, StandardCopyOption.COPY_ATTRIBUTES);
-                    }
+        if (storedPath.equals(expectedPath) || storedPath.startsWith(workspaceRootPath)) {
+            return;
+        }
+
+        log.info("Migrating legacy workspace for agentId={}: {} -> {}",
+                agent.getId(), storedPath, expectedPath);
+
+        copyWorkspaceTree(storedPath, expectedPath);
+        ensureWorkspaceDirectories(expectedPath.toString());
+
+        agent.setWorkspacePath(expectedPath.toString());
+        repository.save(agent);
+        log.info("Workspace path migrated in DB for agentId={}, newPath={}", agent.getId(), expectedPath);
+    }
+
+    private void copyWorkspaceTree(Path sourceRoot, Path targetRoot) throws IOException {
+        if (!Files.exists(sourceRoot)) {
+            return;
+        }
+
+        try (Stream<Path> stream = Files.walk(sourceRoot)) {
+            for (Path source : (Iterable<Path>) stream::iterator) {
+                Path target = targetRoot.resolve(sourceRoot.relativize(source));
+                if (Files.isDirectory(source)) {
+                    Files.createDirectories(target);
+                } else if (!Files.exists(target)) {
+                    Files.createDirectories(target.getParent());
+                    Files.copy(source, target, StandardCopyOption.COPY_ATTRIBUTES);
                 }
             }
         }
-
-        agent.setWorkspacePath(newPath.toString());
-        repository.save(agent);
-        log.info("Workspace path updated in DB for agentId={}, newPath={}", agent.getId(), newPath);
     }
 
     private String toJsonArray(List<String> values) {
