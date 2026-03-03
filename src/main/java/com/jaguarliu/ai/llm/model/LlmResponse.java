@@ -51,5 +51,7 @@ public class LlmResponse {
         private Integer promptTokens;
         private Integer completionTokens;
         private Integer totalTokens;
+        private Integer cacheReadInputTokens;
+        private Integer cacheCreationInputTokens;
     }
 }

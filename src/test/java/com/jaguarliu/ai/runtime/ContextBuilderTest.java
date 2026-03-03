@@ -1,6 +1,7 @@
 package com.jaguarliu.ai.runtime;
 
 import com.jaguarliu.ai.llm.model.LlmRequest;
+import com.jaguarliu.ai.llm.model.ToolCall;
 import com.jaguarliu.ai.skills.index.SkillIndexBuilder;
 import com.jaguarliu.ai.skills.model.LoadedSkill;
 import com.jaguarliu.ai.skills.model.SkillEntry;
@@ -49,6 +50,9 @@ class ContextBuilderTest {
     @Mock
     private SystemPromptBuilder systemPromptBuilder;
 
+    @Mock
+    private ContextCompactionService compactionService;
+
     @InjectMocks
     private ContextBuilder contextBuilder;
 
@@ -68,8 +72,10 @@ class ContextBuilderTest {
                 eq(SystemPromptBuilder.PromptMode.SKILL), anySet(), isNull(), isNull(), anyString()
         )).thenReturn(DEFAULT_SYSTEM_PROMPT);
         lenient().when(systemPromptBuilder.build(eq(SystemPromptBuilder.PromptMode.MINIMAL), any())).thenReturn(DEFAULT_SYSTEM_PROMPT);
+        lenient().when(compactionService.shouldCompact(anyList(), anyInt())).thenReturn(false);
 
         ReflectionTestUtils.setField(contextBuilder, "autoSelectEnabled", true);
+        ReflectionTestUtils.setField(contextBuilder, "maxHistoryMessages", 20);
     }
 
     @Nested
@@ -535,6 +541,58 @@ class ContextBuilderTest {
             // 应该可以添加元素
             assertDoesNotThrow(() -> messages.add(LlmRequest.Message.assistant("回答")));
             assertEquals(3, messages.size());
+        }
+
+        @Test
+        @DisplayName("历史消息超过上限时应用滑动窗口")
+        void buildMessagesAppliesSlidingWindowWhenHistoryExceedsLimit() {
+            ReflectionTestUtils.setField(contextBuilder, "maxHistoryMessages", 10);
+
+            List<LlmRequest.Message> history = new ArrayList<>();
+            for (int i = 0; i < 15; i++) {
+                history.add(LlmRequest.Message.user("question " + i));
+                history.add(LlmRequest.Message.assistant("answer " + i));
+            }
+
+            LlmRequest request = contextBuilder.build("system", history, "new question");
+
+            long historyCount = request.getMessages().stream()
+                    .filter(m -> !"system".equals(m.getRole()))
+                    .count() - 1; // 去掉最后一条用户消息
+
+            assertTrue(historyCount <= 10);
+            assertEquals(12, request.getMessages().size());
+        }
+
+        @Test
+        @DisplayName("窗口截断不产生孤立 tool result")
+        void buildMessagesPreservesToolCallPairsWhenTruncating() {
+            ReflectionTestUtils.setField(contextBuilder, "maxHistoryMessages", 10);
+
+            List<LlmRequest.Message> history = new ArrayList<>();
+            for (int i = 0; i < 8; i++) {
+                history.add(LlmRequest.Message.user("q" + i));
+                history.add(LlmRequest.Message.assistant("a" + i));
+            }
+
+            ToolCall toolCall = ToolCall.builder()
+                    .id("tc1")
+                    .type("function")
+                    .function(ToolCall.FunctionCall.builder().name("ping").arguments("{}").build())
+                    .build();
+            history.add(LlmRequest.Message.assistantWithToolCalls(List.of(toolCall)));
+            history.add(LlmRequest.Message.toolResult("tc1", "pong"));
+
+            LlmRequest request = contextBuilder.build("system", history, "new question");
+            List<LlmRequest.Message> messages = request.getMessages();
+
+            for (int i = 0; i < messages.size(); i++) {
+                if ("tool".equals(messages.get(i).getRole())) {
+                    assertTrue(i > 0);
+                    assertNotNull(messages.get(i - 1).getToolCalls());
+                    assertFalse(messages.get(i - 1).getToolCalls().isEmpty());
+                }
+            }
         }
     }
 }

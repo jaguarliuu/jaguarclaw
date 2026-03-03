@@ -38,9 +38,13 @@ public class ContextBuilder {
     private final SkillSelector skillSelector;
     private final SkillTemplateEngine templateEngine;
     private final SystemPromptBuilder systemPromptBuilder;
+    private final ContextCompactionService compactionService;
 
     @Value("${skills.auto-select-enabled:true}")
     private boolean autoSelectEnabled;
+
+    @Value("${agent.max-history-messages:20}")
+    private int maxHistoryMessages;
 
     public ContextBuilder(
             ToolRegistry toolRegistry,
@@ -48,13 +52,15 @@ public class ContextBuilder {
             SkillIndexBuilder skillIndexBuilder,
             SkillSelector skillSelector,
             SkillTemplateEngine templateEngine,
-            SystemPromptBuilder systemPromptBuilder) {
+            SystemPromptBuilder systemPromptBuilder,
+            ContextCompactionService compactionService) {
         this.toolRegistry = toolRegistry;
         this.skillRegistry = skillRegistry;
         this.skillIndexBuilder = skillIndexBuilder;
         this.skillSelector = skillSelector;
         this.templateEngine = templateEngine;
         this.systemPromptBuilder = systemPromptBuilder;
+        this.compactionService = compactionService;
     }
 
     /**
@@ -73,9 +79,14 @@ public class ContextBuilder {
                 : systemPromptBuilder.build(SystemPromptBuilder.PromptMode.FULL);
         messages.add(LlmRequest.Message.system(system));
 
-        // 2. 历史消息
+        // 2. 历史消息（P2 压缩插槽 -> 滑动窗口）
         if (history != null && !history.isEmpty()) {
-            messages.addAll(history);
+            List<LlmRequest.Message> processedHistory = history;
+            if (compactionService.shouldCompact(history, estimateTokens(history))) {
+                processedHistory = compactionService.compact(history).messages();
+                log.info("Context compacted: {} -> {} messages", history.size(), processedHistory.size());
+            }
+            messages.addAll(applyWindow(processedHistory));
         }
 
         // 3. 当前用户输入
@@ -451,15 +462,54 @@ public class ContextBuilder {
         );
         messages.add(LlmRequest.Message.system(systemPrompt));
 
-        // 2. 历史消息
+        // 2. 历史消息（P2 压缩插槽 -> 滑动窗口）
         if (history != null && !history.isEmpty()) {
-            messages.addAll(history);
+            List<LlmRequest.Message> processedHistory = history;
+            if (compactionService.shouldCompact(history, estimateTokens(history))) {
+                processedHistory = compactionService.compact(history).messages();
+                log.info("Context compacted: {} -> {} messages", history.size(), processedHistory.size());
+            }
+            messages.addAll(applyWindow(processedHistory));
         }
 
         // 3. 当前用户输入
         messages.add(LlmRequest.Message.user(userPrompt));
 
         return messages;
+    }
+
+    /**
+     * 粗略估算 token 数（1 token ≈ 4 chars，仅用于压缩阈值判断）
+     */
+    private int estimateTokens(List<LlmRequest.Message> messages) {
+        return messages.stream()
+                .mapToInt(m -> m.getContent() != null ? m.getContent().length() / 4 : 10)
+                .sum();
+    }
+
+    /**
+     * 滑动窗口截断历史消息，保留最近 maxHistoryMessages 条。
+     * 确保不以孤立 tool 消息开头。
+     */
+    private List<LlmRequest.Message> applyWindow(List<LlmRequest.Message> history) {
+        if (history == null || history.isEmpty()) {
+            return history;
+        }
+        if (maxHistoryMessages <= 0) {
+            return List.of();
+        }
+        if (history.size() <= maxHistoryMessages) {
+            return history;
+        }
+
+        List<LlmRequest.Message> windowed = history.subList(
+                history.size() - maxHistoryMessages, history.size()
+        );
+        int start = 0;
+        while (start < windowed.size() && "tool".equals(windowed.get(start).getRole())) {
+            start++;
+        }
+        return start == 0 ? windowed : windowed.subList(start, windowed.size());
     }
 
     /**

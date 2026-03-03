@@ -102,6 +102,15 @@ export interface FileCreatedPayload {
   size: number
 }
 
+export interface TokenUsagePayload {
+  inputTokens: number
+  outputTokens: number
+  totalTokens: number
+  cacheReadTokens: number
+  historyMessages: number
+  step: number
+}
+
 // WebSocket Connection State
 export type ConnectionState = 'disconnected' | 'connecting' | 'connected' | 'error'
 
@@ -137,6 +146,7 @@ export interface RpcEventPayloadMap {
   'step.completed': StepCompletedPayload
   'skill.activated': SkillActivatedPayload
   'file.created': FileCreatedPayload
+  'token.usage': TokenUsagePayload
 
   'subagent.spawned': SubagentSpawnedPayload
   'subagent.started': SubagentStartedPayload
@@ -150,6 +160,7 @@ export interface RpcEventPayloadMap {
   'assistant.delta': unknown
   'session.renamed': unknown
   'heartbeat.notify': HeartbeatNotifyPayload
+  'context.compacted': unknown
 }
 
 // 用 AgentEventType 约束事件名，并用映射表推断 payload 类型
@@ -178,6 +189,8 @@ export type AgentEventType =
   | 'subagent.announced'
   | 'subagent.failed'
   | 'heartbeat.notify'
+  | 'token.usage'
+  | 'context.compacted'
 
 // Tool Event Payloads
 export interface ToolCallPayload {

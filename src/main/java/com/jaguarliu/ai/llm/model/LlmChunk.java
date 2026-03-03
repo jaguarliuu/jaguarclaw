@@ -47,6 +47,11 @@ public class LlmChunk {
     private String toolCallArgumentsDelta;
 
     /**
+     * token 用量（仅 streaming 最后一个 chunk 携带，其他 chunk 为 null）
+     */
+    private LlmResponse.Usage usage;
+
+    /**
      * 是否有工具调用
      */
     public boolean hasToolCalls() {

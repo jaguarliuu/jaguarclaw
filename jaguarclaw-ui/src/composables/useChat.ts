@@ -24,6 +24,7 @@ import type {
   AttachedContext,
   SessionFile,
   FileCreatedPayload,
+  TokenUsagePayload,
 } from '@/types'
 
 const FALLBACK_AGENT_ID = 'main'
@@ -36,6 +37,9 @@ const isStreaming = ref(false)
 
 // 流式内容块（交错显示文本和工具调用）
 const streamBlocks = ref<StreamBlock[]>([])
+
+// Token 监控：当前 run 最新一次 LLM 调用的 usage
+const currentRunUsage = ref<TokenUsagePayload | null>(null)
 
 // 工具调用索引（用于快速查找和更新）- 使用普通对象避免 Map 的响应式问题
 const toolCallIndex = ref<Record<string, ToolCall>>({})
@@ -184,6 +188,7 @@ async function selectSession(sessionId: string) {
   syncSelectedAgentFromSession(sessionId)
   isStreaming.value = false
   currentRun.value = null
+  currentRunUsage.value = null
   streamBlocks.value = []
   toolCallIndex.value = {}
   subagentIndex.value = {}
@@ -211,6 +216,7 @@ async function deleteSession(sessionId: string) {
       subagentIndex.value = {}
       sessionFiles.value = []
       currentRun.value = null
+      currentRunUsage.value = null
       closeArtifact()
     }
     console.log('[Chat] Deleted session:', sessionId)
@@ -394,6 +400,7 @@ async function sendMessage(
 
   // Start streaming
   isStreaming.value = true
+  currentRunUsage.value = null
   streamBlocks.value = []
   toolCallIndex.value = {}
   subagentIndex.value = {}
@@ -540,6 +547,7 @@ async function cancelRun() {
     streamBlocks.value = []
     toolCallIndex.value = {}
     subagentIndex.value = {}
+    currentRunUsage.value = null
   } catch (e) {
     console.error('Failed to cancel run:', e)
   }
@@ -948,6 +956,14 @@ function setupEventListeners() {
     }),
   )
 
+  eventCleanups.push(
+    onEvent('token.usage', (event: RpcEvent) => {
+      if (currentRun.value && event.runId === currentRun.value.id) {
+        currentRunUsage.value = (event.payload as TokenUsagePayload) ?? null
+      }
+    }),
+  )
+
   // Handle lifecycle end - 保存到消息
   eventCleanups.push(
     onEvent('lifecycle.end', (event: RpcEvent) => {
@@ -978,6 +994,7 @@ function setupEventListeners() {
         streamBlocks.value = []
         toolCallIndex.value = {}
         subagentIndex.value = {}
+        currentRunUsage.value = null
         currentRun.value = null
       }
     }),
@@ -1007,6 +1024,7 @@ function setupEventListeners() {
         streamBlocks.value = []
         toolCallIndex.value = {}
         subagentIndex.value = {}
+        currentRunUsage.value = null
         currentRun.value = null
       }
     }),
@@ -1020,6 +1038,7 @@ export function useChat() {
     currentSession,
     currentSessionId,
     currentRun,
+    currentRunUsage,
     messages,
     streamBlocks,
     isStreaming,

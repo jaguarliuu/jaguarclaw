@@ -1,5 +1,6 @@
 package com.jaguarliu.ai.gateway.events;
 
+import com.jaguarliu.ai.llm.model.LlmResponse;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
@@ -60,7 +61,11 @@ public class AgentEvent {
         // 文件创建事件
         FILE_CREATED("file.created"),
         // Heartbeat 通知
-        HEARTBEAT_NOTIFY("heartbeat.notify");
+        HEARTBEAT_NOTIFY("heartbeat.notify"),
+        // Token 监控事件
+        TOKEN_USAGE("token.usage"),
+        // P2 扩展占位：上下文压缩通知
+        CONTEXT_COMPACTED("context.compacted");
 
         private final String value;
 
@@ -237,6 +242,29 @@ public class AgentEvent {
                 .connectionId(connectionId)
                 .runId(runId)
                 .data(new HeartbeatNotifyData(agentId, content, sessionId, runId))
+                .build();
+    }
+
+    /**
+     * 创建 token.usage 事件（每次 LLM 调用后发布）
+     */
+    public static AgentEvent tokenUsage(String connectionId, String runId,
+                                        LlmResponse.Usage usage,
+                                        int historyMessages, int step) {
+        int cacheRead = usage.getCacheReadInputTokens() != null
+                ? usage.getCacheReadInputTokens() : 0;
+        return AgentEvent.builder()
+                .type(EventType.TOKEN_USAGE)
+                .connectionId(connectionId)
+                .runId(runId)
+                .data(new TokenUsageData(
+                        usage.getPromptTokens() != null ? usage.getPromptTokens() : 0,
+                        usage.getCompletionTokens() != null ? usage.getCompletionTokens() : 0,
+                        usage.getTotalTokens() != null ? usage.getTotalTokens() : 0,
+                        cacheRead,
+                        historyMessages,
+                        step
+                ))
                 .build();
     }
 
@@ -427,6 +455,17 @@ public class AgentEvent {
         private String content;
         private String sessionId;
         private String runId;
+    }
+
+    @Data
+    @AllArgsConstructor
+    public static class TokenUsageData {
+        private int inputTokens;
+        private int outputTokens;
+        private int totalTokens;
+        private int cacheReadTokens;
+        private int historyMessages;
+        private int step;
     }
 
 }
