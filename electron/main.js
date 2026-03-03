@@ -12,6 +12,23 @@ let splashWindow = null;
 let javaProcess = null;
 let serverPort = null;
 let javaErrorLogs = [];  // 收集 Java 错误日志
+let startupLogs = [];
+const STARTUP_TOTAL_STEPS = 5;
+const STARTUP_PROGRESS = Object.freeze({
+  prepare: 1,
+  setup: 2,
+  port: 3,
+  backend: 4,
+  health: 5,
+  ready: 5,
+});
+let currentStartupStatus = {
+  message: 'Initializing...',
+  step: 0,
+  total: STARTUP_TOTAL_STEPS,
+  percent: 0,
+  failed: false,
+};
 
 // Paths
 const isPackaged = app.isPackaged;
@@ -30,6 +47,65 @@ const workspacePath = path.join(appDataPath, 'workspace');
 const skillsDir = path.join(appDataPath, 'skills');
 const builtinSkillsDir = path.join(resourcesPath, 'skills');
 const configPath = path.join(appDataPath, 'config.json');
+const startupLogPath = path.join(appDataPath, 'startup.log');
+const STARTUP_LOG_LIMIT = 300;
+
+function sendToSplash(channel, payload) {
+  if (splashWindow && !splashWindow.isDestroyed()) {
+    splashWindow.webContents.send(channel, payload);
+  }
+}
+
+function publishStartupStatus(message, stage = null, failed = false) {
+  let step = currentStartupStatus.step;
+  if (stage && STARTUP_PROGRESS[stage] !== undefined) {
+    step = STARTUP_PROGRESS[stage];
+  }
+
+  currentStartupStatus = {
+    message,
+    step,
+    total: STARTUP_TOTAL_STEPS,
+    percent: Math.round((step / STARTUP_TOTAL_STEPS) * 100),
+    failed,
+  };
+
+  sendToSplash('startup:status', currentStartupStatus);
+}
+
+function appendStartupLog(level, message) {
+  const text = String(message ?? '').replace(/\r/g, '');
+  const lines = text.split('\n').map((line) => line.trim()).filter(Boolean);
+
+  for (const line of lines) {
+    const entry = {
+      level,
+      message: line,
+      timestamp: new Date().toISOString(),
+    };
+
+    startupLogs.push(entry);
+    if (startupLogs.length > STARTUP_LOG_LIMIT) {
+      startupLogs.shift();
+    }
+
+    if (level === 'error') {
+      javaErrorLogs.push(line);
+      if (javaErrorLogs.length > 50) {
+        javaErrorLogs.shift();
+      }
+    }
+
+    const logLine = `[${entry.timestamp}] [${level.toUpperCase()}] ${line}\n`;
+    try {
+      fs.appendFileSync(startupLogPath, logLine, 'utf8');
+    } catch (err) {
+      console.error('Failed to write startup log:', err.message);
+    }
+
+    sendToSplash('startup:log', entry);
+  }
+}
 
 function ensureDirectories() {
   for (const dir of [appDataPath, dataDir, workspacePath, skillsDir]) {
@@ -79,14 +155,15 @@ function getOrCreateEncryptionKey() {
 
 function createSplashWindow() {
   splashWindow = new BrowserWindow({
-    width: 400,
-    height: 300,
+    width: 560,
+    height: 420,
     frame: false,
     resizable: false,
     transparent: false,
     alwaysOnTop: true,
     icon: path.join(resourcesPath, 'icon.png'),
     webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
       contextIsolation: true,
     },
@@ -101,32 +178,157 @@ function createSplashWindow() {
         body {
           font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
           display: flex; flex-direction: column;
-          align-items: center; justify-content: center;
+          align-items: stretch; justify-content: center;
           height: 100vh;
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          padding: 24px;
+          background: linear-gradient(145deg, #1f2937 0%, #111827 100%);
           color: white;
           -webkit-app-region: drag;
         }
-        h1 { font-size: 32px; margin-bottom: 16px; font-weight: 300; }
+        .card {
+          background: rgba(255, 255, 255, 0.08);
+          border: 1px solid rgba(255, 255, 255, 0.15);
+          border-radius: 12px;
+          padding: 18px;
+          display: flex;
+          flex-direction: column;
+          gap: 12px;
+          min-height: 0;
+          flex: 1;
+        }
+        .header {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+        }
         .spinner {
-          width: 40px; height: 40px;
+          width: 20px; height: 20px;
           border: 3px solid rgba(255,255,255,0.3);
           border-top-color: white;
           border-radius: 50%;
           animation: spin 0.8s linear infinite;
-          margin-bottom: 16px;
         }
         @keyframes spin { to { transform: rotate(360deg); } }
-        p { font-size: 14px; opacity: 0.8; }
+        .status {
+          font-size: 14px;
+          opacity: 0.95;
+          line-height: 1.4;
+          -webkit-app-region: no-drag;
+        }
+        .progress-row {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          font-size: 12px;
+          opacity: 0.9;
+          -webkit-app-region: no-drag;
+        }
+        .progress-track {
+          width: 100%;
+          height: 6px;
+          border-radius: 999px;
+          background: rgba(255, 255, 255, 0.18);
+          overflow: hidden;
+          -webkit-app-region: no-drag;
+        }
+        .progress-bar {
+          width: 0%;
+          height: 100%;
+          background: linear-gradient(90deg, #60a5fa, #a78bfa);
+          transition: width 180ms ease;
+        }
+        .logs {
+          flex: 1;
+          min-height: 0;
+          border-radius: 8px;
+          border: 1px solid rgba(255,255,255,0.2);
+          background: rgba(17, 24, 39, 0.85);
+          padding: 10px;
+          overflow: auto;
+          font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+          font-size: 12px;
+          line-height: 1.45;
+          -webkit-app-region: no-drag;
+          white-space: pre-wrap;
+          word-break: break-word;
+        }
+        .line { margin-bottom: 4px; }
+        .line.info { color: rgba(255,255,255,0.86); }
+        .line.error { color: #fca5a5; }
       </style>
     </head>
     <body>
-      <h1>JaguarClaw</h1>
-      <div class="spinner"></div>
-      <p>Starting backend server...</p>
+      <div class="card">
+        <div class="header">
+          <div class="spinner"></div>
+          <div id="status" class="status">Initializing...</div>
+        </div>
+        <div class="progress-row">
+          <div id="progressText">Step 0/5</div>
+          <div id="progressPercent">0%</div>
+        </div>
+        <div class="progress-track">
+          <div id="progressBar" class="progress-bar"></div>
+        </div>
+        <div id="logs" class="logs"></div>
+      </div>
+
+      <script>
+        const statusEl = document.getElementById('status');
+        const progressTextEl = document.getElementById('progressText');
+        const progressPercentEl = document.getElementById('progressPercent');
+        const progressBarEl = document.getElementById('progressBar');
+        const logsEl = document.getElementById('logs');
+
+        function appendLog(entry) {
+          if (!entry || !entry.message) return;
+
+          const line = document.createElement('div');
+          line.className = 'line ' + (entry.level === 'error' ? 'error' : 'info');
+
+          const time = entry.timestamp
+            ? new Date(entry.timestamp).toLocaleTimeString()
+            : new Date().toLocaleTimeString();
+
+          line.textContent = '[' + time + '] ' + entry.message;
+          logsEl.appendChild(line);
+          logsEl.scrollTop = logsEl.scrollHeight;
+        }
+
+        if (window.electron && typeof window.electron.onStartupLog === 'function') {
+          window.electron.onStartupLog((entry) => appendLog(entry));
+        }
+
+        if (window.electron && typeof window.electron.onStartupStatus === 'function') {
+          window.electron.onStartupStatus((payload) => {
+            if (payload && payload.message) {
+              statusEl.textContent = payload.message;
+              if (payload.failed) {
+                statusEl.style.color = '#fca5a5';
+              }
+            }
+
+            if (payload && Number.isFinite(payload.step) && Number.isFinite(payload.total) && payload.total > 0) {
+              progressTextEl.textContent = 'Step ' + payload.step + '/' + payload.total;
+            }
+
+            if (payload && Number.isFinite(payload.percent)) {
+              progressPercentEl.textContent = payload.percent + '%';
+              progressBarEl.style.width = payload.percent + '%';
+            }
+          });
+        }
+      </script>
     </body>
     </html>
   `)}`);
+
+  splashWindow.webContents.on('did-finish-load', () => {
+    sendToSplash('startup:status', currentStartupStatus);
+    for (const entry of startupLogs) {
+      sendToSplash('startup:log', entry);
+    }
+  });
 }
 
 function startJavaBackend(port, encryptionKey) {
@@ -151,8 +353,10 @@ function startJavaBackend(port, encryptionKey) {
     NODE_CONSOLE_ENCRYPTION_KEY: encryptionKey
   };
 
-  console.log(`Starting Java: ${javaExe} ${args.join(' ')}`);
-  console.log('Encryption key configured');
+  appendStartupLog('info', `Starting backend process on port ${port}`);
+  appendStartupLog('info', `Java executable: ${javaExe}`);
+  appendStartupLog('info', `Startup log file: ${startupLogPath}`);
+  publishStartupStatus('Starting backend server...', 'backend');
 
   javaProcess = spawn(javaExe, args, {
     env: env,
@@ -161,24 +365,19 @@ function startJavaBackend(port, encryptionKey) {
   });
 
   javaProcess.stdout.on('data', (data) => {
-    process.stdout.write(`[Java] ${data}`);
+    const message = data.toString();
+    process.stdout.write(`[Java] ${message}`);
+    appendStartupLog('info', message);
   });
 
   javaProcess.stderr.on('data', (data) => {
     const message = data.toString();
     process.stderr.write(`[Java] ${message}`);
-
-    // 收集错误日志，用于错误提示
-    javaErrorLogs.push(message);
-
-    // 限制错误日志数量，只保留最后 50 条
-    if (javaErrorLogs.length > 50) {
-      javaErrorLogs.shift();
-    }
+    appendStartupLog('error', message);
   });
 
   javaProcess.on('exit', (code) => {
-    console.log(`Java process exited with code ${code}`);
+    appendStartupLog(code === 0 ? 'info' : 'error', `Backend process exited with code ${code}`);
     const hadProcess = javaProcess !== null;
     javaProcess = null;
 
@@ -202,7 +401,8 @@ function startJavaBackend(port, encryptionKey) {
     } else if (hadProcess && !mainWindow) {
       // Java 进程在主窗口创建之前退出（启动阶段失败）
       // 这种情况已经在 waitForHealth 中处理了，这里不需要额外操作
-      console.log('Java process exited during startup phase');
+      publishStartupStatus('Backend startup failed.', null, true);
+      appendStartupLog('error', 'Backend process exited during startup phase');
     }
   });
 }
@@ -223,7 +423,9 @@ function showStartupError(title, message, details = null) {
   };
 
   if (details) {
-    options.detail = details;
+    options.detail = `${details}\n\nStartup log file: ${startupLogPath}`;
+  } else {
+    options.detail = `Startup log file: ${startupLogPath}`;
   }
 
   dialog.showMessageBox(options).then(({ response }) => {
@@ -253,7 +455,7 @@ function extractErrorMessage() {
     /Unable to.*?:/,
   ];
 
-  for (const log of javaErrorLogs.reverse()) {
+  for (const log of [...javaErrorLogs].reverse()) {
     for (const pattern of errorPatterns) {
       const match = log.match(pattern);
       if (match) {
@@ -271,10 +473,18 @@ function extractErrorMessage() {
 function waitForHealth(port, timeoutMs = 60000) {
   const startTime = Date.now();
   const interval = 1000;
+  let attempts = 0;
 
   return new Promise((resolve, reject) => {
     function check() {
+      attempts += 1;
       const elapsed = Date.now() - startTime;
+
+      if (!javaProcess) {
+        const errorMsg = extractErrorMessage();
+        return reject(new Error(`Backend process exited before health check passed.\n\nLast logs:\n${errorMsg}`));
+      }
+
       if (elapsed > timeoutMs) {
         const errorMsg = extractErrorMessage();
         return reject(new Error(`Backend health check timed out after ${Math.floor(elapsed / 1000)}s.\n\nLast logs:\n${errorMsg}`));
@@ -282,13 +492,23 @@ function waitForHealth(port, timeoutMs = 60000) {
 
       const req = http.get(`http://localhost:${port}/actuator/health`, (res) => {
         if (res.statusCode === 200) {
+          publishStartupStatus('Backend ready, opening application...', 'ready');
+          appendStartupLog('info', 'Health check passed');
           resolve();
         } else {
+          if (attempts === 1 || attempts % 5 === 0) {
+            const msg = `Waiting for backend health check... (${Math.floor(elapsed / 1000)}s)`;
+            publishStartupStatus(msg, 'health');
+            appendStartupLog('info', msg);
+          }
           setTimeout(check, interval);
         }
       });
 
-      req.on('error', () => {
+      req.on('error', (err) => {
+        if (attempts === 1 || attempts % 5 === 0) {
+          appendStartupLog('info', `Health check retry: ${err.message}`);
+        }
         setTimeout(check, interval);
       });
 
@@ -412,28 +632,42 @@ app.whenReady().then(async () => {
     // 确保目录存在
     ensureDirectories();
 
+    // 重置本次启动日志文件
+    fs.writeFileSync(startupLogPath, '', 'utf8');
+
+    // 重置内存日志缓存
+    javaErrorLogs = [];
+    startupLogs = [];
+
+    appendStartupLog('info', '=== JaguarClaw startup ===');
+    publishStartupStatus('Preparing startup environment...', 'prepare');
+
     // 获取或生成加密密钥
+    appendStartupLog('info', 'Loading encryption key...');
     const encryptionKey = getOrCreateEncryptionKey();
 
     // 创建启动页面
     createSplashWindow();
+    publishStartupStatus('Initializing backend startup...', 'setup');
+    appendStartupLog('info', 'Splash window is ready');
 
     // Find available port starting from 18080
     portfinder.basePort = 18080;
+    publishStartupStatus('Selecting available service port...', 'port');
     serverPort = await portfinder.getPortPromise();
-    console.log(`Using port: ${serverPort}`);
-
-    // 重置错误日志
-    javaErrorLogs = [];
+    appendStartupLog('info', `Using backend port: ${serverPort}`);
 
     // Start Java backend with encryption key
     startJavaBackend(serverPort, encryptionKey);
 
     // Wait for backend to be ready
+    publishStartupStatus('Waiting for backend health check...', 'health');
     await waitForHealth(serverPort);
 
     // Create main window
+    appendStartupLog('info', 'Creating main window');
     createMainWindow(serverPort);
+    appendStartupLog('info', 'Startup completed successfully');
 
     // Close splash
     if (splashWindow && !splashWindow.isDestroyed()) {
@@ -445,15 +679,11 @@ app.whenReady().then(async () => {
     setupAutoUpdater();
   } catch (err) {
     console.error('Failed to start:', err);
-
-    // 关闭启动页面
-    if (splashWindow && !splashWindow.isDestroyed()) {
-      splashWindow.close();
-      splashWindow = null;
-    }
+    appendStartupLog('error', `Startup failed: ${err.message || err}`);
+    publishStartupStatus('Startup failed. See error details and logs.', null, true);
 
     // 显示友好的错误提示
-    if (err.message && err.message.includes('health check timed out')) {
+    if (err.message && (err.message.includes('health check timed out') || err.message.includes('exited before health check passed'))) {
       // 健康检查超时，显示详细日志
       showStartupError(
         'Backend Failed to Start',
