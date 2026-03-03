@@ -111,8 +111,7 @@ class SystemPromptBuilderTest {
 
             String result = builder.build(SystemPromptBuilder.PromptMode.NONE);
 
-            assertTrue(result.contains("Alice"), "Should include agent name");
-            assertTrue(result.contains("AI coding assistant"));
+            assertEquals("You are Alice, an AI coding assistant.", result);
         }
 
         @Test
