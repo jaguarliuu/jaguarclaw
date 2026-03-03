@@ -1,5 +1,7 @@
 package com.jaguarliu.ai.gateway.ws;
 
+import com.jaguarliu.ai.agents.context.AgentWorkspaceResolver;
+import com.jaguarliu.ai.session.SessionService;
 import com.jaguarliu.ai.tools.ToolsProperties;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -28,6 +30,8 @@ import java.nio.file.Path;
 public class WorkspaceFileRouter {
 
     private final ToolsProperties toolsProperties;
+    private final SessionService sessionService;
+    private final AgentWorkspaceResolver agentWorkspaceResolver;
 
     @Bean
     public RouterFunction<ServerResponse> workspaceFileRoute() {
@@ -44,12 +48,29 @@ public class WorkspaceFileRouter {
                     // URL 解码
                     relativePath = URLDecoder.decode(relativePath, StandardCharsets.UTF_8);
 
-                    // 解析并校验路径
+                    // 默认：全局 workspace 下解析
                     Path workspaceRoot = Path.of(toolsProperties.getWorkspace()).toAbsolutePath().normalize();
-                    Path filePath = workspaceRoot.resolve(relativePath).normalize();
+                    Path filePath = resolvePathWithinRoot(workspaceRoot, relativePath);
+
+                    // 兼容前端历史路径格式：/api/workspace/{sessionId}/{filePath}
+                    // 如果首段是 sessionId，则改为从该 session 对应 agent workspace 解析 filePath。
+                    int slashIdx = relativePath.indexOf('/');
+                    if (slashIdx > 0 && slashIdx < relativePath.length() - 1) {
+                        String possibleSessionId = relativePath.substring(0, slashIdx);
+                        String scopedPath = relativePath.substring(slashIdx + 1);
+                        var session = sessionService.get(possibleSessionId);
+                        if (session.isPresent()) {
+                            String agentId = session.get().getAgentId();
+                            Path agentWorkspace = agentWorkspaceResolver.resolveAgentWorkspace(agentId);
+                            Path scopedResolved = resolvePathWithinRoot(agentWorkspace, scopedPath);
+                            if (scopedResolved != null) {
+                                filePath = scopedResolved;
+                            }
+                        }
+                    }
 
                     // 路径遍历防护
-                    if (!filePath.startsWith(workspaceRoot)) {
+                    if (filePath == null) {
                         log.warn("Workspace download path traversal attempt: {}", relativePath);
                         return ServerResponse.status(403).bodyValue("Access denied");
                     }
@@ -77,6 +98,14 @@ public class WorkspaceFileRouter {
                     return responseBuilder.bodyValue(resource);
                 })
                 .build();
+    }
+
+    private static Path resolvePathWithinRoot(Path root, String relativePath) {
+        Path resolved = root.resolve(relativePath).normalize();
+        if (!resolved.startsWith(root)) {
+            return null;
+        }
+        return resolved;
     }
 
     private static MediaType guessMediaType(String fileName) {
