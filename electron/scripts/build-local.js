@@ -29,7 +29,7 @@ const ROOT = path.resolve(__dirname, '..', '..');
 const ELECTRON_DIR = path.resolve(__dirname, '..');
 const RESOURCES_DIR = path.join(ELECTRON_DIR, 'resources');
 const UI_DIR = path.join(ROOT, 'jaguarclaw-ui');
-const LOCAL_ICON = path.join(ROOT, 'local-icon.png');
+const LOCAL_ICON = path.join(ELECTRON_DIR, 'assets','local-icon.ico');
 const DEFAULT_ICON = path.join(ELECTRON_DIR, 'assets', 'icon.ico');
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -62,7 +62,7 @@ const productName = customName || 'JaguarClaw';
 const useCustomName = !!customName;
 
 const iconPath = fs.existsSync(LOCAL_ICON) ? LOCAL_ICON : DEFAULT_ICON;
-const iconLabel = fs.existsSync(LOCAL_ICON) ? 'local-icon.png' : 'default icon.ico';
+const iconLabel = fs.existsSync(LOCAL_ICON) ? 'local-icon.ico' : 'default icon.ico';
 
 console.log('');
 console.log('=== JaguarClaw Local Build (Windows) ===');

@@ -1,0 +1,40 @@
+{
+  "appId": "com.local.miniclaw",
+  "productName": "MiniClaw",
+  "extraResources": [
+    {
+      "from": "assets/local-icon.png",
+      "to": "icon.png"
+    },
+    {
+      "from": "resources/jre",
+      "to": "jre"
+    },
+    {
+      "from": "resources/app.jar",
+      "to": "app.jar"
+    },
+    {
+      "from": "resources/webapp",
+      "to": "webapp"
+    },
+    {
+      "from": "resources/skills",
+      "to": "skills"
+    }
+  ],
+  "win": {
+    "target": "nsis",
+    "icon": "assets/local-icon.ico"
+  },
+  "mac": {
+    "target": "dmg",
+    "icon": "assets/local-icon.png",
+    "identity": null
+  },
+  "publish": {
+    "provider": "github",
+    "owner": "jaguarliuu",
+    "repo": "jaguarclaw"
+  }
+}
