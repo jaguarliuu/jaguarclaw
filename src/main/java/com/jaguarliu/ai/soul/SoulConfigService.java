@@ -9,6 +9,8 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Soul 配置服务（Agent 作用域）
@@ -24,6 +26,7 @@ public class SoulConfigService {
     private static final String SOUL_MD_FILE = "SOUL.md";
     private static final String RULE_MD_FILE = "RULE.md";
     private static final String PROFILE_MD_FILE = "PROFILE.md";
+    private static final Pattern AGENT_NAME_PATTERN = Pattern.compile("Your name is ([^\\n]+?)(?:\\.|\\n|$)");
 
     // ── SOUL.md ──────────────────────────────────────────────────────────────
 
@@ -66,9 +69,7 @@ public class SoulConfigService {
         if (soul == null || soul.isBlank()) {
             return null;
         }
-        java.util.regex.Matcher m = java.util.regex.Pattern
-                .compile("Your name is ([^.\\n]+)\\.?")
-                .matcher(soul);
+        Matcher m = AGENT_NAME_PATTERN.matcher(soul);
         if (m.find()) {
             String name = m.group(1).trim();
             return name.isBlank() ? null : name;
