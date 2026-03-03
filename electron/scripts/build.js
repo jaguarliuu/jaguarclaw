@@ -93,14 +93,17 @@ try {
   // Step 5: Check JRE
   console.log('\n=== Step 5: Checking JRE ===');
   const jreDir = path.join(RESOURCES_DIR, 'jre');
-  const javaBin = process.platform === 'win32' ? 'java.exe' : 'java';
-  const javaExe = path.join(jreDir, 'bin', javaBin);
-  if (!fs.existsSync(javaExe)) {
+  const javaCandidates = [
+    path.join(jreDir, 'bin', 'java'),
+    path.join(jreDir, 'bin', 'java.exe'),
+  ];
+  const javaExe = javaCandidates.find((candidate) => fs.existsSync(candidate));
+  if (!javaExe) {
     throw new Error(
       `JRE not found at ${jreDir}\nRun "npm run download-jre" first.`
     );
   }
-  console.log('JRE found.');
+  console.log(`JRE found: ${path.basename(javaExe)}`);
 
   // Step 6: electron-builder
   console.log('\n=== Step 6: Building Electron installer ===');

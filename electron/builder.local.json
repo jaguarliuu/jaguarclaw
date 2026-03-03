@@ -1,6 +1,14 @@
 {
   "appId": "com.local.miniclaw",
   "productName": "MiniClaw",
+  "directories": {
+    "output": "dist"
+  },
+  "files": [
+    "**/*",
+    "!dist/**",
+    "!release/**"
+  ],
   "extraResources": [
     {
       "from": "assets/local-icon.png",
@@ -35,6 +43,7 @@
   "publish": {
     "provider": "github",
     "owner": "jaguarliuu",
-    "repo": "jaguarclaw"
+    "repo": "jaguarclaw",
+    "tagNamePrefix": "local-v"
   }
 }

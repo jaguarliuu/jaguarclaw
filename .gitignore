@@ -49,3 +49,6 @@ data/tool-config.yml
 electron/resources/
 electron/release/
 electron/node_modules
+
+
+dist/
