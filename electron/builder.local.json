@@ -35,7 +35,6 @@
   "publish": {
     "provider": "github",
     "owner": "jaguarliuu",
-    "repo": "jaguarclaw",
-    "tagNamePrefix": "local-"
+    "repo": "jaguarclaw"
   }
 }
