@@ -80,4 +80,37 @@ class NodeTestHandlerTest {
         assertNotNull(response.getError());
         assertEquals("INVALID_PARAMS", response.getError().getCode());
     }
+
+    @Test
+    @DisplayName("returns success when optional errorType is null")
+    @SuppressWarnings("unchecked")
+    void returnsSuccessWhenErrorTypeIsNull() {
+        LocalDateTime testedAt = LocalDateTime.of(2026, 3, 4, 16, 32, 54);
+        when(objectMapper.convertValue(any(), eq(Map.class))).thenReturn(Map.of("id", "node-1"));
+        when(nodeService.testConnectionDetailed("node-1")).thenReturn(
+                new NodeService.ConnectionTestReport(
+                        "node-1", "yajun", true, null,
+                        "Connection successful", 123L, testedAt
+                )
+        );
+
+        RpcRequest request = RpcRequest.builder()
+                .id("req-3")
+                .method("nodes.test")
+                .payload(Map.of("id", "node-1"))
+                .build();
+
+        RpcResponse response = handler.handle("conn-1", request).block();
+        assertNotNull(response);
+        assertNull(response.getError());
+
+        Map<String, Object> payload = (Map<String, Object>) response.getPayload();
+        assertEquals(true, payload.get("success"));
+        assertEquals("node-1", payload.get("nodeId"));
+        assertEquals("yajun", payload.get("nodeAlias"));
+        assertNull(payload.get("errorType"));
+        assertEquals("Connection successful", payload.get("message"));
+        assertEquals(123L, ((Number) payload.get("durationMs")).longValue());
+        assertEquals("2026-03-04T16:32:54", payload.get("testedAt"));
+    }
 }

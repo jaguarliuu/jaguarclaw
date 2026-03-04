@@ -11,6 +11,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
 
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
@@ -41,15 +42,15 @@ public class NodeTestHandler implements RpcHandler {
             }
 
             NodeService.ConnectionTestReport report = nodeService.testConnectionDetailed(id);
-            return RpcResponse.success(request.getId(), Map.of(
-                    "success", report.success(),
-                    "nodeId", report.nodeId(),
-                    "nodeAlias", report.nodeAlias(),
-                    "errorType", report.errorType(),
-                    "message", report.message(),
-                    "durationMs", report.durationMs(),
-                    "testedAt", report.testedAt() != null ? report.testedAt().toString() : null
-            ));
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("success", report.success());
+            payload.put("nodeId", report.nodeId());
+            payload.put("nodeAlias", report.nodeAlias());
+            payload.put("errorType", report.errorType());
+            payload.put("message", report.message());
+            payload.put("durationMs", report.durationMs());
+            payload.put("testedAt", report.testedAt() != null ? report.testedAt().toString() : null);
+            return RpcResponse.success(request.getId(), payload);
         }).onErrorResume(e -> {
             log.error("Failed to test node: {}", LogSanitizer.sanitizeException(e));
             if (e instanceof IllegalArgumentException iae) {
