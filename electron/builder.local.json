@@ -33,7 +33,8 @@
   ],
   "win": {
     "target": "nsis",
-    "icon": "assets/local-icon.ico"
+    "icon": "assets/local-icon.ico",
+    "executableName": "miniclaw"
   },
   "mac": {
     "target": "dmg",

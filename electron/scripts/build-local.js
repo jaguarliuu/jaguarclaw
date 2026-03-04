@@ -1,7 +1,9 @@
 /**
  * JaguarClaw Local Build Script (Windows only)
  *
- * Usage: node electron/scripts/build-local.js [--name "Custom App Name"]
+ * Usage:
+ *   node electron/scripts/build-local.js [--name "Custom App Name"]
+ *   LOCAL_APP_NAME="Custom App Name" node electron/scripts/build-local.js
  *
  * - Reads local-icon.png from project root as icon (falls back to default if absent)
  * - Builds Windows NSIS installer only, no publish
@@ -54,14 +56,11 @@ function copyDir(src, dest) {
   }
 }
 
-function slugify(name) {
-  return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-}
-
 // ── Config ────────────────────────────────────────────────────────────────────
 
-const productName = customName || 'JaguarClaw';
-const useCustomName = !!customName;
+const envName = process.env.LOCAL_APP_NAME ? process.env.LOCAL_APP_NAME.trim() : '';
+const productName = customName || envName || 'MiniClaw';
+const useCustomName = !!customName || !!envName;
 
 const iconPath = fs.existsSync(LOCAL_ICON) ? LOCAL_ICON : DEFAULT_ICON;
 const iconLabel = fs.existsSync(LOCAL_ICON) ? 'local-icon.ico' : 'default icon.ico';
@@ -152,9 +151,6 @@ try {
     `--config.productName=${productName}`,
     `--config.win.icon=${iconPath.replace(/\\/g, '/')}`,
   ];
-  if (useCustomName) {
-    ebArgs.push(`--config.appId=com.local.${slugify(productName)}`);
-  }
 
   console.log(`\n> npx ${ebArgs.join(' ')}`);
   const result = spawnSync('npx', ebArgs, {
