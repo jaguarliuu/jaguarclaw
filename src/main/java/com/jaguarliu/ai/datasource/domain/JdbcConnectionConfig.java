@@ -63,7 +63,8 @@ public class JdbcConnectionConfig extends ConnectionConfig {
                     host, port, database);
             case ORACLE -> String.format("jdbc:oracle:thin:@%s:%d:%s",
                     host, port, database);
-            case GAUSS -> String.format("jdbc:opengauss://%s:%d/%s",
+            // openGauss JDBC driver uses PostgreSQL protocol prefix
+            case GAUSS -> String.format("jdbc:postgresql://%s:%d/%s",
                     host, port, database);
             default -> throw new IllegalArgumentException("Unsupported JDBC type: " + type);
         };
