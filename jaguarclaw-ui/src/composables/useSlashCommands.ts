@@ -72,20 +72,10 @@ export function useSlashCommands() {
     )
   }
 
-  function filterMentions(query: string): SlashCommandItem[] {
-    const q = query.toLowerCase()
-    const pool = commands.value.filter((item) => item.type === 'agent')
-    if (!query) return pool
-    return pool.filter(
-      (c) => c.name.toLowerCase().includes(q) || c.description.toLowerCase().includes(q),
-    )
-  }
-
   return {
     commands: readonly(commands),
     loaded: readonly(loaded),
     loadCommands,
     filterCommands,
-    filterMentions,
   }
 }
