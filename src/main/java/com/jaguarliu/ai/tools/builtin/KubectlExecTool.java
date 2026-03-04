@@ -95,7 +95,7 @@ public class KubectlExecTool implements Tool {
 
             long startTime = System.currentTimeMillis();
             try {
-                String output = nodeService.executeCommand(alias, command);
+                String output = nodeService.executeCommandAfterHitl(alias, command);
                 long durationMs = System.currentTimeMillis() - startTime;
 
                 auditLogService.logCommandExecution(

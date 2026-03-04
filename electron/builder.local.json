@@ -36,6 +36,15 @@
     "icon": "assets/local-icon.ico",
     "executableName": "miniclaw"
   },
+  "nsis": {
+    "oneClick": false,
+    "allowToChangeInstallationDirectory": true,
+    "perMachine": true,
+    "createDesktopShortcut": "always",
+    "createStartMenuShortcut": true,
+    "shortcutName": "MiniClaw",
+    "deleteAppDataOnUninstall": true
+  },
   "mac": {
     "target": "dmg",
     "icon": "assets/local-icon.png",

@@ -28,6 +28,17 @@ public class NodeConsoleProperties {
     private int sshConnectTimeoutSeconds = 10;
 
     /**
+     * 是否启用 SSH 连接复用
+     */
+    private boolean sshConnectionReuseEnabled = true;
+
+    /**
+     * SSH 连接空闲保活时间（秒）
+     * 超过该时间未使用的连接会被回收
+     */
+    private int sshSessionIdleSeconds = 300;
+
+    /**
      * 命令执行超时（秒）- 包含命令运行和输出读取的总时间
      */
     private int execTimeoutSeconds = 60;

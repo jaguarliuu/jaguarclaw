@@ -225,11 +225,18 @@ public class AgentRuntime {
             List<ToolExecutor.ToolExecutionResult> toolResults =
                     toolExecutor.executeToolCalls(context, result.toolCalls());
 
+            boolean shouldStopOnHitlReject = false;
+            String rejectedToolName = null;
             for (int i = 0; i < result.toolCalls().size(); i++) {
                 ToolCall toolCall = result.toolCalls().get(i);
                 ToolExecutor.ToolExecutionResult execResult = toolResults.get(i);
                 messages.add(LlmRequest.Message.toolResult(
                         toolCall.getId(), execResult.result().getContent()));
+
+                if (isHitlRejectedResult(execResult.result())) {
+                    shouldStopOnHitlReject = true;
+                    rejectedToolName = toolCall.getName();
+                }
 
                 // 跟踪 sessions_spawn 的 subRunId
                 if ("sessions_spawn".equals(toolCall.getName()) && execResult.result().isSuccess()) {
@@ -240,6 +247,17 @@ public class AgentRuntime {
                                 subRunId, context.getRunId());
                     }
                 }
+            }
+
+            if (shouldStopOnHitlReject) {
+                String stopMessage = "Tool call was rejected by user ("
+                        + (rejectedToolName != null ? rejectedToolName : "unknown")
+                        + "). Execution stopped to avoid automatic retry loop. "
+                        + "Please explicitly approve or adjust the command/instruction.";
+                messages.add(LlmRequest.Message.assistant(stopMessage));
+                log.info("Loop stopped due to HITL rejection: runId={}, tool={}",
+                        context.getRunId(), rejectedToolName);
+                return stopMessage;
             }
 
             // 增加步数并发布事件
@@ -414,6 +432,13 @@ public class AgentRuntime {
             log.debug("Failed to parse subRunId from tool result: {}", e.getMessage());
         }
         return null;
+    }
+
+    static boolean isHitlRejectedResult(ToolResult result) {
+        if (result == null || result.isSuccess() || result.getContent() == null) {
+            return false;
+        }
+        return result.getContent().contains(ToolExecutor.HITL_REJECTED_MARKER);
     }
 
     /**

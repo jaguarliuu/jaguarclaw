@@ -31,7 +31,6 @@ const ROOT = path.resolve(__dirname, '..', '..');
 const ELECTRON_DIR = path.resolve(__dirname, '..');
 const RESOURCES_DIR = path.join(ELECTRON_DIR, 'resources');
 const UI_DIR = path.join(ROOT, 'jaguarclaw-ui');
-const LOCAL_BUILDER_CONFIG = path.join(ELECTRON_DIR, 'builder.local.json');
 const LOCAL_OUTPUT_DIR = path.join(ELECTRON_DIR, 'dist');
 const LOCAL_ICON = path.join(ELECTRON_DIR, 'assets','local-icon.ico');
 const DEFAULT_ICON = path.join(ELECTRON_DIR, 'assets', 'icon.ico');
@@ -59,15 +58,14 @@ function copyDir(src, dest) {
 // ── Config ────────────────────────────────────────────────────────────────────
 
 const envName = process.env.LOCAL_APP_NAME ? process.env.LOCAL_APP_NAME.trim() : '';
-const productName = customName || envName || 'MiniClaw';
+const displayName = customName || envName || 'MiniClaw';
 const useCustomName = !!customName || !!envName;
 
-const iconPath = fs.existsSync(LOCAL_ICON) ? LOCAL_ICON : DEFAULT_ICON;
 const iconLabel = fs.existsSync(LOCAL_ICON) ? 'local-icon.ico' : 'default icon.ico';
 
 console.log('');
 console.log('=== JaguarClaw Local Build (Windows) ===');
-console.log(`  App name : ${productName}${useCustomName ? '' : ' (default)'}`);
+console.log(`  App name : ${displayName}${useCustomName ? '' : ' (default)'}`);
 console.log(`  Icon     : ${iconLabel}`);
 console.log(`  Platform : Windows (NSIS)`);
 console.log(`  Publish  : none`);
@@ -130,7 +128,8 @@ try {
   console.log('JRE found.');
 
   // Step 7: electron-builder (Windows only, no publish)
-  // Use spawnSync with args array to safely pass user-provided productName
+  // Keep invocation aligned with the known-good manual command:
+  // npx electron-builder --config builder.local.json --win --x64
   console.log('\n=== Step 7: Building Windows installer ===');
 
   // Keep local outputs deterministic and prevent historical installers from
@@ -145,11 +144,10 @@ try {
 
   const ebArgs = [
     'electron-builder',
-    '--win',
     '--config',
-    LOCAL_BUILDER_CONFIG,
-    `--config.productName=${productName}`,
-    `--config.win.icon=${iconPath.replace(/\\/g, '/')}`,
+    'builder.local.json',
+    '--win',
+    '--x64',
   ];
 
   console.log(`\n> npx ${ebArgs.join(' ')}`);
@@ -161,6 +159,24 @@ try {
 
   if (result.status !== 0) {
     throw new Error(`electron-builder exited with code ${result.status}`);
+  }
+
+  // Step 8: Optional artifact alias for department distribution.
+  // This does not change app identity/path/shortcut target.
+  if (useCustomName) {
+    const files = fs.readdirSync(LOCAL_OUTPUT_DIR);
+    const setupExe = files.find((f) => f.endsWith('Setup.exe'));
+    if (setupExe) {
+      const safeName = displayName.replace(/[<>:"/\\|?*]/g, '').trim();
+      if (safeName) {
+        const src = path.join(LOCAL_OUTPUT_DIR, setupExe);
+        const alias = path.join(LOCAL_OUTPUT_DIR, `${safeName}-Setup.exe`);
+        if (src !== alias) {
+          fs.copyFileSync(src, alias);
+          console.log(`Created department installer alias: ${path.basename(alias)}`);
+        }
+      }
+    }
   }
 
   console.log('\n=== Build complete! ===');

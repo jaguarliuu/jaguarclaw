@@ -184,6 +184,18 @@ public class NodeService {
      * 执行远程命令（包含安全策略检查）
      */
     public String executeCommand(String alias, String command) {
+        return executeCommandInternal(alias, command, false);
+    }
+
+    /**
+     * 执行远程命令（上游已完成 HITL 审批）
+     * 用于 remote_exec/kubectl_exec 等工具在通过 ToolDispatcher/HitlManager 后执行。
+     */
+    public String executeCommandAfterHitl(String alias, String command) {
+        return executeCommandInternal(alias, command, true);
+    }
+
+    private String executeCommandInternal(String alias, String command, boolean hitlApproved) {
         NodeEntity node = nodeRepository.findByAlias(alias)
                 .orElseThrow(() -> new IllegalArgumentException("Node not found: " + alias));
 
@@ -210,7 +222,7 @@ public class NodeService {
 
         // 如果命令需要 HITL 确认，也拒绝执行
         // 注意：真正的 HITL 应该通过 UI/工具层面处理，这里只是后端最后一道防护
-        if (classification.requiresHitl()) {
+        if (classification.requiresHitl() && !hitlApproved) {
             String errorMsg = String.format(
                 "Command requires human approval: %s (level=%d, policy=%s)",
                 classification.reason(), classification.level(), safetyPolicy

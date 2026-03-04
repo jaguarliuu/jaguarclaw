@@ -15,7 +15,7 @@ class SshConnectorTimeoutTest {
     void testExecutionHardTimeout() {
         // 使用 mock SSH server 或跳过
         // 测试命令执行超过 execTimeout 时能正确中断并返回超时错误
-        SshConnector connector = new SshConnector();
+        SshConnector connector = newConnector();
         NodeEntity node = createTestNode();
 
         ExecOptions options = ExecOptions.builder()
@@ -34,7 +34,7 @@ class SshConnectorTimeoutTest {
     @Test
     @Disabled("Requires network access - run manually with integration tests")
     void testConnectionTimeoutSeparate() {
-        SshConnector connector = new SshConnector();
+        SshConnector connector = newConnector();
         NodeEntity node = new NodeEntity();
         node.setHost("192.0.2.1"); // TEST-NET-1, non-routable
         node.setPort(22);
@@ -47,9 +47,13 @@ class SshConnectorTimeoutTest {
     @Test
     void testExecutorServiceConfiguration() {
         // 单元测试：验证 SshConnector 正确初始化（不需要真实连接）
-        SshConnector connector = new SshConnector();
+        SshConnector connector = newConnector();
         assertNotNull(connector, "SshConnector should be instantiated");
         assertEquals("ssh", connector.getType(), "Connector type should be 'ssh'");
+    }
+
+    private SshConnector newConnector() {
+        return new SshConnector(new NodeConsoleProperties());
     }
 
     private NodeEntity createTestNode() {

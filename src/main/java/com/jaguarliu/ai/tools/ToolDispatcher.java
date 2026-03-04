@@ -163,7 +163,16 @@ public class ToolDispatcher {
 
         // 3. 对于命令执行工具，检查命令内容是否危险
         if (COMMAND_TOOLS.contains(toolName) && arguments != null) {
-            String command = (String) arguments.get("command");
+            String scriptPath = asString(arguments.get("script_path"));
+            if (scriptPath != null && !scriptPath.isBlank()) {
+                log.info("Tool {} requires HITL (script_path execution: {})", toolName, scriptPath);
+                return true;
+            }
+
+            String command = firstNonBlank(
+                    asString(arguments.get("command")),
+                    asString(arguments.get("script_content"))
+            );
             if (command != null && dangerousCommandDetector.isDangerous(command)) {
                 String reason = dangerousCommandDetector.getDangerReason(command);
                 log.info("Tool {} requires HITL (dangerous command: {})", toolName, reason);
@@ -173,7 +182,16 @@ public class ToolDispatcher {
 
         // 4. 对于远程命令工具，使用 RemoteCommandClassifier 判断
         if (REMOTE_COMMAND_TOOLS.contains(toolName) && arguments != null) {
-            String command = (String) arguments.get("command");
+            String scriptPath = asString(arguments.get("script_path"));
+            if (scriptPath != null && !scriptPath.isBlank()) {
+                log.info("Tool {} requires HITL (remote script_path execution: {})", toolName, scriptPath);
+                return true;
+            }
+
+            String command = firstNonBlank(
+                    asString(arguments.get("command")),
+                    asString(arguments.get("script_content"))
+            );
             String alias = (String) arguments.get("alias");
             if (command != null) {
                 String fullCommand = "kubectl_exec".equals(toolName) ? "kubectl " + command : command;
@@ -191,6 +209,25 @@ public class ToolDispatcher {
         return toolRegistry.get(toolName)
                 .map(tool -> tool.getDefinition().isHitl())
                 .orElse(false);
+    }
+
+    private static String asString(Object value) {
+        if (value == null) {
+            return null;
+        }
+        return String.valueOf(value);
+    }
+
+    private static String firstNonBlank(String... values) {
+        if (values == null) {
+            return null;
+        }
+        for (String value : values) {
+            if (value != null && !value.isBlank()) {
+                return value;
+            }
+        }
+        return null;
     }
 
     /**

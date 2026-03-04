@@ -1,12 +1,18 @@
 package com.jaguarliu.ai.nodeconsole;
 
 import com.jcraft.jsch.*;
+import jakarta.annotation.PreDestroy;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.util.Base64;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.*;
 
 /**
@@ -15,12 +21,16 @@ import java.util.concurrent.*;
  */
 @Slf4j
 @Component
+@RequiredArgsConstructor
 public class SshConnector implements Connector {
 
-    private static final int SSH_CONNECT_TIMEOUT_MS = 10000; // 10秒连接超时
+    private static final int DEFAULT_SSH_CONNECT_TIMEOUT_MS = 10000; // 10秒连接超时
+    private static final int DEFAULT_SSH_IDLE_SECONDS = 300; // 5分钟
     private static final int BUFFER_SIZE = 4096;
 
+    private final NodeConsoleProperties properties;
     private final ExecutorService executor = Executors.newCachedThreadPool();
+    private final Map<String, SessionHolder> sessionCache = new ConcurrentHashMap<>();
 
     @Override
     public String getType() {
@@ -31,7 +41,7 @@ public class SshConnector implements Connector {
     public ExecResult execute(String credential, NodeEntity node, String command, ExecOptions options) {
         // 使用 Future 实现硬超时
         Future<ExecResult> future = executor.submit(() ->
-            executeInternal(credential, node, command, options));
+                executeInternal(credential, node, command, options));
 
         try {
             // 硬超时：如果超过 timeoutSeconds，抛出 TimeoutException
@@ -59,19 +69,101 @@ public class SshConnector implements Connector {
     }
 
     private ExecResult executeInternal(String credential, NodeEntity node, String command, ExecOptions options) {
+        if (!isConnectionReuseEnabled()) {
+            return executeWithoutReuse(credential, node, command, options);
+        }
+        return executeWithReuse(credential, node, command, options);
+    }
+
+    private ExecResult executeWithoutReuse(String credential, NodeEntity node, String command, ExecOptions options) {
         Session session = null;
+        try {
+            int timeoutMs = resolveConnectTimeoutMs();
+            session = createSession(credential, node, timeoutMs);
+            session.connect(timeoutMs);
+            return executeOverSession(session, command, options);
+
+        } catch (InterruptedException e) {
+            // 超时中断
+            return new ExecResult.Builder()
+                    .stderr("Execution interrupted by timeout")
+                    .exitCode(-1)
+                    .timedOut(true)
+                    .errorType(ExecResult.ErrorType.TIMEOUT)
+                    .build();
+        } catch (com.jcraft.jsch.JSchException e) {
+            // JSch 特定异常 - 映射到具体错误类型
+            log.error("SSH execute failed on node {}: {}", node.getAlias(), e.getClass().getSimpleName());
+            log.debug("SSH execute exception details for node {}", node.getAlias(), e);
+            ExecResult.ErrorType errorType = mapJSchException(e);
+            return new ExecResult.Builder()
+                    .stderr("SSH execution failed: " + e.getClass().getSimpleName())
+                    .exitCode(-1)
+                    .errorType(errorType)
+                    .build();
+        } catch (Exception e) {
+            log.error("SSH execute failed on node {}: {}", node.getAlias(), e.getClass().getSimpleName());
+            log.debug("SSH execute exception details for node {}", node.getAlias(), e);
+            return new ExecResult.Builder()
+                    .stderr("SSH command execution failed: " + e.getClass().getSimpleName())
+                    .exitCode(-1)
+                    .errorType(ExecResult.ErrorType.UNKNOWN)
+                    .build();
+        } finally {
+            if (session != null) session.disconnect();
+        }
+    }
+
+    private ExecResult executeWithReuse(String credential, NodeEntity node, String command, ExecOptions options) {
+        evictIdleSessions();
+        String cacheKey = cacheKey(node);
+        SessionHolder holder = sessionCache.computeIfAbsent(cacheKey, k -> new SessionHolder());
+
+        try {
+            synchronized (holder.lock) {
+                Session session = ensureConnectedSession(holder, credential, node);
+                holder.lastUsedAt = System.currentTimeMillis();
+                ExecResult result = executeOverSession(session, command, options);
+                holder.lastUsedAt = System.currentTimeMillis();
+                return result;
+            }
+        } catch (InterruptedException e) {
+            return new ExecResult.Builder()
+                    .stderr("Execution interrupted by timeout")
+                    .exitCode(-1)
+                    .timedOut(true)
+                    .errorType(ExecResult.ErrorType.TIMEOUT)
+                    .build();
+        } catch (JSchException e) {
+            invalidateSession(cacheKey, holder);
+            log.error("SSH execute failed on node {}: {}", node.getAlias(), e.getClass().getSimpleName());
+            log.debug("SSH execute exception details for node {}", node.getAlias(), e);
+            ExecResult.ErrorType errorType = mapJSchException(e);
+            return new ExecResult.Builder()
+                    .stderr("SSH execution failed: " + e.getClass().getSimpleName())
+                    .exitCode(-1)
+                    .errorType(errorType)
+                    .build();
+        } catch (Exception e) {
+            log.error("SSH execute failed on node {}: {}", node.getAlias(), e.getClass().getSimpleName());
+            log.debug("SSH execute exception details for node {}", node.getAlias(), e);
+            return new ExecResult.Builder()
+                    .stderr("SSH command execution failed: " + e.getClass().getSimpleName())
+                    .exitCode(-1)
+                    .errorType(ExecResult.ErrorType.UNKNOWN)
+                    .build();
+        }
+    }
+
+    private ExecResult executeOverSession(Session session, String command, ExecOptions options) throws Exception {
         ChannelExec channel = null;
         try {
-            session = createSession(credential, node, SSH_CONNECT_TIMEOUT_MS);
-            session.connect(SSH_CONNECT_TIMEOUT_MS);
-
             channel = (ChannelExec) session.openChannel("exec");
             channel.setCommand(command);
             channel.setInputStream(null);
 
-            // 使用限制输出的流
             LimitedByteArrayOutputStream stdout = new LimitedByteArrayOutputStream(options.getMaxOutputBytes());
-            LimitedByteArrayOutputStream stderr = new LimitedByteArrayOutputStream(options.getMaxOutputBytes() / 4); // stderr 更小
+            LimitedByteArrayOutputStream stderr = new LimitedByteArrayOutputStream(options.getMaxOutputBytes() / 4);
 
             channel.setOutputStream(stdout);
             channel.setErrStream(stderr);
@@ -79,9 +171,8 @@ public class SshConnector implements Connector {
             InputStream in = channel.getInputStream();
             InputStream err = channel.getExtInputStream();
 
-            channel.connect(SSH_CONNECT_TIMEOUT_MS);
+            channel.connect(resolveConnectTimeoutMs());
 
-            // 读取输出（LimitedByteArrayOutputStream 会自动截断）
             byte[] buf = new byte[BUFFER_SIZE];
             int len;
             while (true) {
@@ -100,7 +191,6 @@ public class SshConnector implements Connector {
                     break;
                 }
 
-                // 检查线程中断状态（配合 Future.cancel）
                 if (Thread.currentThread().isInterrupted()) {
                     throw new InterruptedException("Execution interrupted by timeout");
                 }
@@ -113,44 +203,147 @@ public class SshConnector implements Connector {
             long originalLength = stdout.getOriginalLength() + stderr.getOriginalLength();
 
             return new ExecResult.Builder()
-                .stdout(stdout.toString(StandardCharsets.UTF_8))
-                .stderr(stderr.toString(StandardCharsets.UTF_8))
-                .exitCode(exitCode)
-                .truncated(truncated)
-                .originalLength(originalLength)
-                .timedOut(false)
-                .build();
-
-        } catch (InterruptedException e) {
-            // 超时中断
-            return new ExecResult.Builder()
-                .stderr("Execution interrupted by timeout")
-                .exitCode(-1)
-                .timedOut(true)
-                .errorType(ExecResult.ErrorType.TIMEOUT)
-                .build();
-        } catch (com.jcraft.jsch.JSchException e) {
-            // JSch 特定异常 - 映射到具体错误类型
-            log.error("SSH execute failed on node {}: {}", node.getAlias(), e.getClass().getSimpleName());
-            log.debug("SSH execute exception details for node {}", node.getAlias(), e);
-            ExecResult.ErrorType errorType = mapJSchException(e);
-            return new ExecResult.Builder()
-                .stderr("SSH execution failed: " + e.getClass().getSimpleName())
-                .exitCode(-1)
-                .errorType(errorType)
-                .build();
-        } catch (Exception e) {
-            log.error("SSH execute failed on node {}: {}", node.getAlias(), e.getClass().getSimpleName());
-            log.debug("SSH execute exception details for node {}", node.getAlias(), e);
-            return new ExecResult.Builder()
-                .stderr("SSH command execution failed: " + e.getClass().getSimpleName())
-                .exitCode(-1)
-                .errorType(ExecResult.ErrorType.UNKNOWN)
-                .build();
+                    .stdout(stdout.toString(StandardCharsets.UTF_8))
+                    .stderr(stderr.toString(StandardCharsets.UTF_8))
+                    .exitCode(exitCode)
+                    .truncated(truncated)
+                    .originalLength(originalLength)
+                    .timedOut(false)
+                    .build();
         } finally {
-            if (channel != null) channel.disconnect();
-            if (session != null) session.disconnect();
+            if (channel != null) {
+                channel.disconnect();
+            }
         }
+    }
+
+    private Session ensureConnectedSession(SessionHolder holder, String credential, NodeEntity node) throws JSchException {
+        String fingerprint = buildFingerprint(node, credential);
+        int timeoutMs = resolveConnectTimeoutMs();
+
+        if (holder.session != null) {
+            boolean expired = System.currentTimeMillis() - holder.lastUsedAt > resolveIdleTtlMs();
+            boolean fingerprintChanged = holder.fingerprint == null || !holder.fingerprint.equals(fingerprint);
+            if (!holder.session.isConnected() || expired || fingerprintChanged) {
+                closeSession(holder.session);
+                holder.session = null;
+                holder.fingerprint = null;
+            }
+        }
+
+        if (holder.session == null) {
+            Session session = createSession(credential, node, timeoutMs);
+            session.connect(timeoutMs);
+            holder.session = session;
+            holder.fingerprint = fingerprint;
+            holder.lastUsedAt = System.currentTimeMillis();
+        }
+
+        return holder.session;
+    }
+
+    private void evictIdleSessions() {
+        long now = System.currentTimeMillis();
+        long ttlMs = resolveIdleTtlMs();
+        for (Map.Entry<String, SessionHolder> entry : sessionCache.entrySet()) {
+            SessionHolder holder = entry.getValue();
+            synchronized (holder.lock) {
+                if (holder.session == null) {
+                    sessionCache.remove(entry.getKey(), holder);
+                    continue;
+                }
+                if (now - holder.lastUsedAt > ttlMs) {
+                    closeSession(holder.session);
+                    holder.session = null;
+                    holder.fingerprint = null;
+                    sessionCache.remove(entry.getKey(), holder);
+                }
+            }
+        }
+    }
+
+    private void invalidateSession(String cacheKey, SessionHolder holder) {
+        synchronized (holder.lock) {
+            closeSession(holder.session);
+            holder.session = null;
+            holder.fingerprint = null;
+        }
+        sessionCache.remove(cacheKey, holder);
+    }
+
+    private void closeSession(Session session) {
+        if (session != null) {
+            try {
+                session.disconnect();
+            } catch (Exception ignore) {
+            }
+        }
+    }
+
+    private int resolveConnectTimeoutMs() {
+        int sec = properties.getSshConnectTimeoutSeconds();
+        if (sec <= 0) {
+            return DEFAULT_SSH_CONNECT_TIMEOUT_MS;
+        }
+        return sec * 1000;
+    }
+
+    private long resolveIdleTtlMs() {
+        int sec = properties.getSshSessionIdleSeconds();
+        if (sec <= 0) {
+            sec = DEFAULT_SSH_IDLE_SECONDS;
+        }
+        return sec * 1000L;
+    }
+
+    private boolean isConnectionReuseEnabled() {
+        return properties.isSshConnectionReuseEnabled();
+    }
+
+    private String cacheKey(NodeEntity node) {
+        if (node.getId() != null && !node.getId().isBlank()) {
+            return node.getId();
+        }
+        if (node.getAlias() != null && !node.getAlias().isBlank()) {
+            return node.getAlias();
+        }
+        return (node.getHost() != null ? node.getHost() : "unknown-host") + ":" +
+                (node.getPort() != null ? node.getPort() : 22) + ":" +
+                (node.getUsername() != null ? node.getUsername() : "unknown-user");
+    }
+
+    private String buildFingerprint(NodeEntity node, String credential) {
+        String raw = (node.getHost() != null ? node.getHost() : "") + "|" +
+                (node.getPort() != null ? node.getPort() : "") + "|" +
+                (node.getUsername() != null ? node.getUsername() : "") + "|" +
+                (node.getAuthType() != null ? node.getAuthType() : "password") + "|" +
+                (credential != null ? credential : "");
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            return Base64.getEncoder().encodeToString(digest.digest(raw.getBytes(StandardCharsets.UTF_8)));
+        } catch (Exception e) {
+            return raw;
+        }
+    }
+
+    @PreDestroy
+    void shutdown() {
+        for (SessionHolder holder : sessionCache.values()) {
+            synchronized (holder.lock) {
+                closeSession(holder.session);
+                holder.session = null;
+                holder.fingerprint = null;
+            }
+        }
+        sessionCache.clear();
+        executor.shutdownNow();
+    }
+
+    private static class SessionHolder {
+        private final Object lock = new Object();
+        private Session session;
+        private String fingerprint;
+        private long lastUsedAt;
     }
 
     /**
@@ -188,8 +381,9 @@ public class SshConnector implements Connector {
     public ConnectionTestOutcome testConnectionWithDetails(String credential, NodeEntity node) {
         Session session = null;
         try {
-            session = createSession(credential, node, SSH_CONNECT_TIMEOUT_MS);
-            session.connect(SSH_CONNECT_TIMEOUT_MS);
+            int timeoutMs = resolveConnectTimeoutMs();
+            session = createSession(credential, node, timeoutMs);
+            session.connect(timeoutMs);
             return session.isConnected()
                     ? ConnectionTestOutcome.ok()
                     : ConnectionTestOutcome.fail(ExecResult.ErrorType.NETWORK_ERROR, "SSH connection was not established");

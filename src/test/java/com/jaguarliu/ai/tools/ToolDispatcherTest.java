@@ -3,7 +3,6 @@ package com.jaguarliu.ai.tools;
 import com.jaguarliu.ai.nodeconsole.RemoteCommandClassifier;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import reactor.core.publisher.Mono;
@@ -36,13 +35,19 @@ class ToolDispatcherTest {
     @Mock
     private RemoteCommandClassifier remoteCommandClassifier;
 
-    @InjectMocks
     private ToolDispatcher dispatcher;
 
     private Tool mockTool;
 
     @BeforeEach
     void setUp() {
+        dispatcher = new ToolDispatcher(
+                toolRegistry,
+                dangerousCommandDetector,
+                remoteCommandClassifier,
+                toolConfigProperties,
+                Optional.empty()
+        );
         mockTool = mock(Tool.class);
         ToolDefinition definition = ToolDefinition.builder()
                 .name("read_file")
@@ -204,6 +209,48 @@ class ToolDispatcherTest {
             when(toolRegistry.get("read_file")).thenReturn(Optional.of(mockTool));
 
             assertFalse(dispatcher.requiresHitl("read_file", null));
+        }
+
+        @Test
+        @DisplayName("shell script_path 默认需要 HITL")
+        void shellScriptPathRequiresHitl() {
+            assertTrue(dispatcher.requiresHitl("shell", null, Map.of("script_path", "scripts/check.sh")));
+        }
+
+        @Test
+        @DisplayName("shell script_content 命中危险模式需要 HITL")
+        void shellScriptContentDangerousRequiresHitl() {
+            String script = "rm -rf /tmp/test";
+            when(dangerousCommandDetector.isDangerous(script)).thenReturn(true);
+            when(dangerousCommandDetector.getDangerReason(script)).thenReturn("Recursive delete operation");
+
+            assertTrue(dispatcher.requiresHitl("shell", null, Map.of("script_content", script)));
+        }
+
+        @Test
+        @DisplayName("remote_exec script_path 默认需要 HITL")
+        void remoteScriptPathRequiresHitl() {
+            assertTrue(dispatcher.requiresHitl("remote_exec", null, Map.of(
+                    "alias", "node-1",
+                    "script_path", "scripts/check.sh"
+            )));
+        }
+
+        @Test
+        @DisplayName("remote_exec script_content 根据分类结果触发 HITL")
+        void remoteScriptContentRequiresHitlByClassifier() {
+            String script = "systemctl restart nginx";
+            var classification = new RemoteCommandClassifier.Classification(
+                    RemoteCommandClassifier.SafetyLevel.SIDE_EFFECT,
+                    "Command with potential side effects",
+                    "strict"
+            );
+            when(remoteCommandClassifier.classify(script, "strict")).thenReturn(classification);
+
+            assertTrue(dispatcher.requiresHitl("remote_exec", null, Map.of(
+                    "alias", "node-1",
+                    "script_content", script
+            )));
         }
     }
 

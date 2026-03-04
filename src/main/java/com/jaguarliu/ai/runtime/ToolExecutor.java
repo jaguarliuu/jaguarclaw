@@ -35,6 +35,17 @@ import java.util.Set;
 @RequiredArgsConstructor
 public class ToolExecutor {
 
+    /**
+     * HITL 拒绝标记：用于运行时识别并阻断自动重试循环。
+     */
+    public static final String HITL_REJECTED_MARKER = "HITL_REJECTED";
+
+    /**
+     * HITL 拒绝错误文案（会被 ToolResult.error 包装为 "Error: ..."）。
+     */
+    public static final String HITL_REJECTED_MESSAGE =
+            HITL_REJECTED_MARKER + ": Tool execution rejected by user";
+
     private final ToolRegistry toolRegistry;
     private final ToolDispatcher toolDispatcher;
     private final HitlManager hitlManager;
@@ -100,7 +111,10 @@ public class ToolExecutor {
             if (decision == null || !decision.isApproved()) {
                 log.info("Tool rejected by HITL: name={}, callId={}", toolName, callId);
 
-                ToolResult rejectResult = ToolResult.error("Tool execution rejected by user");
+                ToolResult rejectResult = ToolResult.error(
+                        HITL_REJECTED_MESSAGE +
+                        ". Do not retry automatically; ask user for explicit approval."
+                );
 
                 // 发布 tool.result 事件（被拒绝）
                 eventBus.publish(AgentEvent.toolResult(

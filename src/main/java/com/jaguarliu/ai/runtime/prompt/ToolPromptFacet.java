@@ -52,6 +52,19 @@ public class ToolPromptFacet implements PromptFacet {
             sb.append("\n");
         }
 
+        boolean hasScriptableTool = tools.stream().anyMatch(t ->
+                "shell".equals(t.getName()) || "remote_exec".equals(t.getName()));
+        if (hasScriptableTool) {
+            sb.append("""
+
+                    ### Script-First Execution Rule
+                    - For multi-step operations (inspection, loops, retries, batch checks), write a script first and execute it.
+                    - Prefer `write_file` + `script_path` for shell/remote_exec over long inline command chains.
+                    - Use direct `command` only for short, one-off checks.
+
+                    """);
+        }
+
         sb.append("\nUse tools when they help accomplish the task. Always explain what you're doing.\n\n");
         return sb.toString();
     }
