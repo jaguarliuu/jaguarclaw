@@ -11,6 +11,7 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.Base64;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.*;
@@ -355,7 +356,13 @@ public class SshConnector implements Connector {
             return ExecResult.ErrorType.UNKNOWN;
         }
 
-        message = message.toLowerCase();
+        message = message.toLowerCase(Locale.ROOT);
+        if (message.contains("invalid privatekey")
+                || message.contains("private key")
+                || message.contains("passphrase")
+                || message.contains("encrypted")) {
+            return ExecResult.ErrorType.VALIDATION_ERROR;
+        }
         if (message.contains("auth") || message.contains("password")) {
             return ExecResult.ErrorType.AUTHENTICATION_FAILED;
         }
@@ -393,7 +400,7 @@ public class SshConnector implements Connector {
         } catch (com.jcraft.jsch.JSchException e) {
             log.debug("SSH test connection failed for node {}: {}", node.getAlias(), e.getClass().getSimpleName());
             ExecResult.ErrorType errorType = mapJSchException(e);
-            return ConnectionTestOutcome.fail(errorType, mapJSchMessage(errorType));
+            return ConnectionTestOutcome.fail(errorType, mapJSchMessage(errorType, e.getMessage(), node.getAuthType()));
         } catch (Exception e) {
             log.debug("SSH test connection failed for node {}: {}", node.getAlias(), e.getClass().getSimpleName());
             return ConnectionTestOutcome.fail(ExecResult.ErrorType.UNKNOWN, "SSH connection test failed");
@@ -402,10 +409,26 @@ public class SshConnector implements Connector {
         }
     }
 
-    private String mapJSchMessage(ExecResult.ErrorType errorType) {
+    private String mapJSchMessage(ExecResult.ErrorType errorType, String rawMessage, String authType) {
+        String message = rawMessage != null ? rawMessage.toLowerCase(Locale.ROOT) : "";
+        boolean keyAuth = "key".equalsIgnoreCase(authType);
+
         return switch (errorType) {
-            case AUTHENTICATION_FAILED -> "SSH authentication failed";
-            case NETWORK_ERROR -> "SSH network connection failed";
+            case VALIDATION_ERROR -> keyAuth
+                    ? "SSH private key is invalid, encrypted, or unsupported. Use unencrypted OpenSSH/PEM private key content."
+                    : "SSH connection configuration is invalid";
+            case AUTHENTICATION_FAILED -> keyAuth
+                    ? "SSH key authentication failed. Check username, key pair, and ensure server has the matching public key."
+                    : "SSH authentication failed";
+            case NETWORK_ERROR -> {
+                if (message.contains("connection refused")) {
+                    yield "SSH connection refused. Check host/port and sshd service status.";
+                }
+                if (message.contains("timeout") || message.contains("timed out")) {
+                    yield "SSH connection timed out. Check network reachability and firewall rules.";
+                }
+                yield "SSH network connection failed";
+            }
             case PERMISSION_DENIED -> "SSH permission denied";
             default -> "SSH connection failed";
         };
@@ -417,7 +440,14 @@ public class SshConnector implements Connector {
         String authType = node.getAuthType() != null ? node.getAuthType() : "password";
 
         if ("key".equals(authType)) {
-            // 凭据是私钥内容
+            // 凭据是私钥内容（明确校验，避免返回模糊错误）
+            if (credential == null || credential.isBlank()) {
+                throw new IllegalArgumentException("SSH private key content is required");
+            }
+            if (!looksLikePrivateKey(credential)) {
+                throw new IllegalArgumentException(
+                        "SSH private key format is invalid. Paste the full private key content including BEGIN/END lines");
+            }
             jsch.addIdentity("node-" + node.getAlias(), credential.getBytes(StandardCharsets.UTF_8), null, null);
         }
 
@@ -447,5 +477,14 @@ public class SshConnector implements Connector {
         session.setTimeout(timeoutMs);
 
         return session;
+    }
+
+    private boolean looksLikePrivateKey(String credential) {
+        if (credential == null) {
+            return false;
+        }
+        String normalized = credential.trim();
+        return normalized.contains("BEGIN ") && normalized.contains("PRIVATE KEY")
+                && normalized.contains("END ") && normalized.contains("PRIVATE KEY");
     }
 }
