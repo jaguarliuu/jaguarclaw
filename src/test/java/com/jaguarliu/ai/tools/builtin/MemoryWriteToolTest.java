@@ -6,6 +6,7 @@ import com.jaguarliu.ai.memory.store.MemoryStore;
 import com.jaguarliu.ai.tools.ToolDefinition;
 import com.jaguarliu.ai.tools.ToolExecutionContext;
 import com.jaguarliu.ai.tools.ToolResult;
+import com.jaguarliu.ai.tools.builtin.memory.MemoryWriteTool;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.*;

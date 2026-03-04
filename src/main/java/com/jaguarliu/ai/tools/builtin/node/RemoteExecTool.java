@@ -1,4 +1,4 @@
-package com.jaguarliu.ai.tools.builtin;
+package com.jaguarliu.ai.tools.builtin.node;
 
 import com.jaguarliu.ai.nodeconsole.AuditLogService;
 import com.jaguarliu.ai.nodeconsole.NodeEntity;

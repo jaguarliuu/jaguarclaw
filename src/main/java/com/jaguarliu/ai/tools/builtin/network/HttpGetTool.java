@@ -1,4 +1,4 @@
-package com.jaguarliu.ai.tools.builtin;
+package com.jaguarliu.ai.tools.builtin.network;
 
 import com.jaguarliu.ai.tools.Tool;
 import com.jaguarliu.ai.tools.ToolConfigProperties;

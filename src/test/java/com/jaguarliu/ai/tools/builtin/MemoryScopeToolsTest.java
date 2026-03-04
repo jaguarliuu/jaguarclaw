@@ -6,6 +6,8 @@ import com.jaguarliu.ai.memory.search.MemorySearchService;
 import com.jaguarliu.ai.memory.store.MemoryStore;
 import com.jaguarliu.ai.tools.ToolExecutionContext;
 import com.jaguarliu.ai.tools.ToolResult;
+import com.jaguarliu.ai.tools.builtin.memory.MemorySearchTool;
+import com.jaguarliu.ai.tools.builtin.memory.MemoryWriteTool;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

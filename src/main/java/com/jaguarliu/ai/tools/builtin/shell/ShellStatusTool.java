@@ -1,10 +1,10 @@
-package com.jaguarliu.ai.tools.builtin;
+package com.jaguarliu.ai.tools.builtin.shell;
 
 import com.jaguarliu.ai.tools.Tool;
 import com.jaguarliu.ai.tools.ToolDefinition;
 import com.jaguarliu.ai.tools.ToolResult;
-import com.jaguarliu.ai.tools.builtin.process.ManagedProcess;
-import com.jaguarliu.ai.tools.builtin.process.ProcessManager;
+import com.jaguarliu.ai.tools.builtin.shell.process.ManagedProcess;
+import com.jaguarliu.ai.tools.builtin.shell.process.ProcessManager;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;

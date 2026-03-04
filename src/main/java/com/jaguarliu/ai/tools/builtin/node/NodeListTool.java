@@ -1,4 +1,4 @@
-package com.jaguarliu.ai.tools.builtin;
+package com.jaguarliu.ai.tools.builtin.node;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jaguarliu.ai.nodeconsole.NodeService;

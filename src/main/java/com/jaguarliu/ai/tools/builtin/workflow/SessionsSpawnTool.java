@@ -1,4 +1,4 @@
-package com.jaguarliu.ai.tools.builtin;
+package com.jaguarliu.ai.tools.builtin.workflow;
 
 import com.jaguarliu.ai.subagent.SubagentService;
 import com.jaguarliu.ai.subagent.model.SubagentSpawnRequest;

@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jaguarliu.ai.nodeconsole.NodeEntity;
 import com.jaguarliu.ai.nodeconsole.NodeService;
 import com.jaguarliu.ai.tools.ToolResult;
+import com.jaguarliu.ai.tools.builtin.node.NodeStatusCheckTool;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -97,4 +98,3 @@ class NodeStatusCheckToolTest {
         assertEquals(1, reports.size());
     }
 }
-

@@ -5,6 +5,7 @@ import com.jaguarliu.ai.subagent.model.SubagentSpawnResult;
 import com.jaguarliu.ai.tools.ToolDefinition;
 import com.jaguarliu.ai.tools.ToolExecutionContext;
 import com.jaguarliu.ai.tools.ToolResult;
+import com.jaguarliu.ai.tools.builtin.workflow.SessionsSpawnTool;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;

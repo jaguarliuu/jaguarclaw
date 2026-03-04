@@ -1,4 +1,4 @@
-package com.jaguarliu.ai.tools.builtin;
+package com.jaguarliu.ai.tools.builtin.skill;
 
 import com.jaguarliu.ai.skills.registry.SkillRegistry;
 import com.jaguarliu.ai.tools.Tool;

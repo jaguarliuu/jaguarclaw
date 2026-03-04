@@ -1,4 +1,4 @@
-package com.jaguarliu.ai.tools.builtin.process;
+package com.jaguarliu.ai.tools.builtin.shell.process;
 
 import com.jaguarliu.ai.tools.ToolsProperties;
 import com.jaguarliu.ai.tools.WorkspaceResolver;

@@ -3,7 +3,8 @@ package com.jaguarliu.ai.gateway.rpc.handler.tool;
 import com.jaguarliu.ai.gateway.rpc.RpcHandler;
 import com.jaguarliu.ai.gateway.rpc.model.RpcRequest;
 import com.jaguarliu.ai.gateway.rpc.model.RpcResponse;
-import com.jaguarliu.ai.tools.ToolDefinition;
+import com.jaguarliu.ai.tools.ToolCatalogEntry;
+import com.jaguarliu.ai.tools.ToolCatalogGroup;
 import com.jaguarliu.ai.tools.ToolRegistry;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -31,19 +32,27 @@ public class ToolListHandler implements RpcHandler {
 
     @Override
     public Mono<RpcResponse> handle(String connectionId, RpcRequest request) {
-        List<ToolDefinition> tools = toolRegistry.listDefinitions();
+        List<ToolCatalogEntry> catalog = toolRegistry.listCatalog();
+        List<ToolCatalogGroup> groups = toolRegistry.listCatalogGroups();
 
-        List<Map<String, Object>> toolDtos = tools.stream()
-                .map(t -> Map.<String, Object>of(
-                        "name", t.getName(),
-                        "description", t.getDescription(),
-                        "hitl", t.isHitl()
+        List<Map<String, Object>> toolDtos = catalog.stream()
+                .map(ToolCatalogEntry::toSimpleDto)
+                .toList();
+
+        List<Map<String, Object>> groupDtos = groups.stream()
+                .map(g -> Map.<String, Object>of(
+                        "category", g.category(),
+                        "label", g.label(),
+                        "order", g.order(),
+                        "tools", g.tools().stream().map(ToolCatalogEntry::toSimpleDto).toList()
                 ))
                 .toList();
 
         return Mono.just(RpcResponse.success(request.getId(), Map.of(
                 "tools", toolDtos,
-                "count", toolDtos.size()
+                "groups", groupDtos,
+                "count", toolDtos.size(),
+                "groupCount", groupDtos.size()
         )));
     }
 }

@@ -4,6 +4,7 @@ import com.jaguarliu.ai.skills.model.SkillEntry;
 import com.jaguarliu.ai.skills.model.SkillMetadata;
 import com.jaguarliu.ai.skills.registry.SkillRegistry;
 import com.jaguarliu.ai.tools.ToolDefinition;
+import com.jaguarliu.ai.tools.builtin.skill.UseSkillTool;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -69,4 +70,3 @@ class UseSkillToolTest {
                 .build();
     }
 }
-

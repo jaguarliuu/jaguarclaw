@@ -1,4 +1,4 @@
-package com.jaguarliu.ai.tools.builtin;
+package com.jaguarliu.ai.tools.builtin.memory;
 
 import com.jaguarliu.ai.memory.model.MemoryScope;
 import com.jaguarliu.ai.memory.search.MemorySearchService;

@@ -12,7 +12,7 @@ import com.jaguarliu.ai.tools.ToolExecutionContext;
 import com.jaguarliu.ai.tools.ToolRegistry;
 import com.jaguarliu.ai.tools.ToolResult;
 import com.jaguarliu.ai.tools.ToolVisibilityResolver;
-import com.jaguarliu.ai.tools.builtin.SessionsSpawnTool;
+import com.jaguarliu.ai.tools.builtin.workflow.SessionsSpawnTool;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

@@ -2,6 +2,7 @@ package com.jaguarliu.ai.tools.builtin;
 
 import com.jaguarliu.ai.tools.ToolResult;
 import com.jaguarliu.ai.tools.ToolsProperties;
+import com.jaguarliu.ai.tools.builtin.shell.ShellTool;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -57,4 +58,3 @@ class ShellToolTest {
         return System.getProperty("os.name").toLowerCase().contains("win");
     }
 }
-

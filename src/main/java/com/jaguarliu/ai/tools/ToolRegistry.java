@@ -7,6 +7,7 @@ import org.springframework.context.ApplicationContext;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -132,7 +133,7 @@ public class ToolRegistry implements SmartInitializingSingleton {
      * 转换为 OpenAI Function Calling 格式（多维可见性聚合版）
      */
     public List<Map<String, Object>> toOpenAiTools(ToolVisibilityResolver.VisibilityRequest visibilityRequest) {
-        return resolveVisibility(visibilityRequest).tools().stream()
+        return orderedVisibleTools(visibilityRequest).stream()
                 .map(tool -> tool.getDefinition().toOpenAiFormat())
                 .toList();
     }
@@ -154,8 +155,50 @@ public class ToolRegistry implements SmartInitializingSingleton {
      * 列出工具定义（多维可见性聚合版）
      */
     public List<ToolDefinition> listDefinitions(ToolVisibilityResolver.VisibilityRequest visibilityRequest) {
-        return resolveVisibility(visibilityRequest).tools().stream()
+        return orderedVisibleTools(visibilityRequest).stream()
                 .map(Tool::getDefinition)
+                .toList();
+    }
+
+    /**
+     * 列出统一工具目录（带分类、来源、作用域元数据）
+     */
+    public List<ToolCatalogEntry> listCatalog() {
+        return listCatalog(ToolVisibilityResolver.VisibilityRequest.builder().build());
+    }
+
+    /**
+     * 列出统一工具目录（多维可见性聚合版）
+     */
+    public List<ToolCatalogEntry> listCatalog(ToolVisibilityResolver.VisibilityRequest visibilityRequest) {
+        return orderedVisibleTools(visibilityRequest).stream()
+                .map(ToolCatalogEntry::from)
+                .toList();
+    }
+
+    /**
+     * 列出统一工具目录分组（按 category 聚合，保持稳定顺序）
+     */
+    public List<ToolCatalogGroup> listCatalogGroups() {
+        return listCatalogGroups(ToolVisibilityResolver.VisibilityRequest.builder().build());
+    }
+
+    /**
+     * 列出统一工具目录分组（多维可见性聚合版）
+     */
+    public List<ToolCatalogGroup> listCatalogGroups(ToolVisibilityResolver.VisibilityRequest visibilityRequest) {
+        Map<String, List<ToolCatalogEntry>> grouped = new LinkedHashMap<>();
+        for (ToolCatalogEntry entry : listCatalog(visibilityRequest)) {
+            grouped.computeIfAbsent(entry.category(), ignored -> new java.util.ArrayList<>()).add(entry);
+        }
+
+        return grouped.entrySet().stream()
+                .map(e -> new ToolCatalogGroup(
+                        e.getKey(),
+                        ToolCatalogEntry.categoryLabel(e.getKey()),
+                        e.getValue().isEmpty() ? 999 : e.getValue().get(0).categoryOrder(),
+                        List.copyOf(e.getValue())
+                ))
                 .toList();
     }
 
@@ -189,7 +232,7 @@ public class ToolRegistry implements SmartInitializingSingleton {
      * @return 工具列表
      */
     public List<Map<String, Object>> toOpenAiToolsProgressive(Set<String> l1ToolIds) {
-        return enabledTools()
+        return orderedVisibleTools(ToolVisibilityResolver.VisibilityRequest.builder().build()).stream()
                 .map(tool -> {
                     ToolDefinition def = tool.getDefinition();
                     if (l1ToolIds != null && l1ToolIds.contains(tool.getName())) {
@@ -213,23 +256,11 @@ public class ToolRegistry implements SmartInitializingSingleton {
             Set<String> excludedMcpServers,
             Set<String> l1ToolIds
     ) {
-        return enabledTools()
-                .filter(tool -> {
-                    // 白名单过滤
-                    if (allowedTools != null && !allowedTools.isEmpty()) {
-                        if (!allowedTools.contains(tool.getName())) {
-                            return false;
-                        }
-                    }
-                    // MCP 服务器排除
-                    if (excludedMcpServers != null && !excludedMcpServers.isEmpty()) {
-                        String serverName = tool.getMcpServerName();
-                        if (serverName != null && excludedMcpServers.contains(serverName)) {
-                            return false;
-                        }
-                    }
-                    return true;
-                })
+        ToolVisibilityResolver.VisibilityRequest request = ToolVisibilityResolver.VisibilityRequest.builder()
+                .strategyAllowedTools(allowedTools)
+                .excludedMcpServers(excludedMcpServers)
+                .build();
+        return orderedVisibleTools(request).stream()
                 .map(tool -> {
                     ToolDefinition def = tool.getDefinition();
                     if (l1ToolIds != null && l1ToolIds.contains(tool.getName())) {
@@ -274,5 +305,11 @@ public class ToolRegistry implements SmartInitializingSingleton {
                 enabledTools().toList(),
                 visibilityRequest
         );
+    }
+
+    private List<Tool> orderedVisibleTools(ToolVisibilityResolver.VisibilityRequest visibilityRequest) {
+        return resolveVisibility(visibilityRequest).tools().stream()
+                .sorted(ToolCatalogEntry.toolOrder())
+                .toList();
     }
 }
