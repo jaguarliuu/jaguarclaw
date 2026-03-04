@@ -1,0 +1,10 @@
+numpy
+pandas
+openpyxl
+xlrd
+XlsxWriter
+python-docx
+PyPDF2
+chardet
+PyYAML
+tabulate

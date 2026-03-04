@@ -8,6 +8,8 @@
     "start": "electron .",
     "prestart": "node -e \"const fs=require('fs'); if(!fs.existsSync('resources')) fs.mkdirSync('resources'); fs.copyFileSync('assets/icon.png', 'resources/icon.png');\"",
     "dist": "electron-builder",
+    "prepare-runtime": "node scripts/prepare-runtime.js",
+    "package-runtime": "node scripts/package-runtime.js",
     "download-jre": "node scripts/download-jre.js",
     "download-jre-win": "node scripts/download-jre.js --win",
     "build": "node scripts/build.js",

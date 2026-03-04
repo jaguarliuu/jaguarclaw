@@ -1,5 +1,5 @@
 const { app, BrowserWindow, dialog, ipcMain } = require('electron');
-const { spawn, execSync } = require('child_process');
+const { spawn, execSync, execFileSync } = require('child_process');
 const path = require('path');
 const http = require('http');
 const portfinder = require('portfinder');
@@ -13,14 +13,15 @@ let javaProcess = null;
 let serverPort = null;
 let javaErrorLogs = [];  // 收集 Java 错误日志
 let startupLogs = [];
-const STARTUP_TOTAL_STEPS = 5;
+const STARTUP_TOTAL_STEPS = 6;
 const STARTUP_PROGRESS = Object.freeze({
   prepare: 1,
-  setup: 2,
-  port: 3,
-  backend: 4,
-  health: 5,
-  ready: 5,
+  runtime: 2,
+  setup: 3,
+  port: 4,
+  backend: 5,
+  health: 6,
+  ready: 6,
 });
 let currentStartupStatus = {
   message: 'Initializing...',
@@ -45,10 +46,27 @@ const dataDir = path.join(appDataPath, 'data');
 const dbPath = path.join(appDataPath, 'jaguarclaw.db');
 const workspacePath = path.join(appDataPath, 'workspace');
 const skillsDir = path.join(appDataPath, 'skills');
+const runtimeStoreRoot = path.join(appDataPath, 'runtime');
 const builtinSkillsDir = path.join(resourcesPath, 'skills');
 const configPath = path.join(appDataPath, 'config.json');
 const startupLogPath = path.join(appDataPath, 'startup.log');
 const STARTUP_LOG_LIMIT = 300;
+
+function resolveResourceFile(fileName) {
+  const candidates = [
+    path.join(resourcesPath, fileName),
+    path.join(__dirname, 'resources', fileName),
+  ];
+  return candidates.find((candidate) => fs.existsSync(candidate)) || null;
+}
+
+function resolveResourceDirectory(dirName) {
+  const candidates = [
+    path.join(resourcesPath, dirName),
+    path.join(__dirname, 'resources', dirName),
+  ];
+  return candidates.find((candidate) => fs.existsSync(candidate) && fs.statSync(candidate).isDirectory()) || null;
+}
 
 function sendToSplash(channel, payload) {
   if (splashWindow && !splashWindow.isDestroyed()) {
@@ -108,8 +126,127 @@ function appendStartupLog(level, message) {
 }
 
 function ensureDirectories() {
-  for (const dir of [appDataPath, dataDir, workspacePath, skillsDir]) {
+  for (const dir of [appDataPath, dataDir, workspacePath, skillsDir, runtimeStoreRoot]) {
     fs.mkdirSync(dir, { recursive: true });
+  }
+}
+
+function resolveRuntimeVersion() {
+  const runtimeVersionFile = resolveResourceFile('runtime.version');
+  if (runtimeVersionFile) {
+    const value = fs.readFileSync(runtimeVersionFile, 'utf8').trim();
+    if (value) return value;
+  }
+
+  const runtimeZip = resolveResourceFile('runtime.zip');
+  if (runtimeZip) {
+    const stat = fs.statSync(runtimeZip);
+    return `zip-${stat.size}-${Math.floor(stat.mtimeMs)}`;
+  }
+
+  return 'builtin';
+}
+
+function sanitizeVersionSegment(input) {
+  return String(input || 'builtin').replace(/[^a-zA-Z0-9._-]/g, '_');
+}
+
+function normalizeExtractedRuntimeRoot(extractRoot) {
+  const entries = fs.readdirSync(extractRoot, { withFileTypes: true })
+    .filter((entry) => !entry.name.startsWith('.'));
+
+  // 如果 zip 内只有一个顶层目录，使用该目录作为 runtime 根目录
+  if (entries.length === 1 && entries[0].isDirectory()) {
+    return path.join(extractRoot, entries[0].name);
+  }
+  return extractRoot;
+}
+
+function extractZipArchive(archivePath, destinationDir) {
+  fs.mkdirSync(destinationDir, { recursive: true });
+
+  if (process.platform === 'win32') {
+    const psCommand = `Expand-Archive -LiteralPath '${archivePath.replace(/'/g, "''")}' -DestinationPath '${destinationDir.replace(/'/g, "''")}' -Force`;
+    execFileSync('powershell.exe', [
+      '-NoProfile',
+      '-NonInteractive',
+      '-ExecutionPolicy',
+      'Bypass',
+      '-Command',
+      psCommand,
+    ], { stdio: 'pipe' });
+    return;
+  }
+
+  if (process.platform === 'darwin') {
+    execFileSync('/usr/bin/ditto', ['-x', '-k', archivePath, destinationDir], { stdio: 'pipe' });
+    return;
+  }
+
+  execFileSync('unzip', ['-q', archivePath, '-d', destinationDir], { stdio: 'pipe' });
+}
+
+function ensureBundledRuntime() {
+  const runtimeDirInResources = resolveResourceDirectory('runtime');
+  const runtimeZipInResources = resolveResourceFile('runtime.zip');
+
+  // 支持直接打包目录（开发/调试场景）
+  if (runtimeDirInResources) {
+    return {
+      enabled: true,
+      home: runtimeDirInResources,
+      source: 'resource-dir',
+    };
+  }
+
+  // 生产主路径：resources/runtime.zip -> appData/runtime/<version>
+  if (!runtimeZipInResources) {
+    return { enabled: false, home: null, source: 'none' };
+  }
+
+  const version = sanitizeVersionSegment(resolveRuntimeVersion());
+  const targetDir = path.join(runtimeStoreRoot, version);
+  const markerPath = path.join(targetDir, '.ready.marker');
+  if (fs.existsSync(markerPath)) {
+    return { enabled: true, home: targetDir, source: 'zip-cache', version };
+  }
+
+  const tmpRoot = path.join(runtimeStoreRoot, `.extract-${version}-${Date.now()}`);
+  const tmpArchive = path.join(runtimeStoreRoot, `.runtime-${version}-${Date.now()}.zip`);
+  fs.rmSync(tmpRoot, { recursive: true, force: true });
+  fs.mkdirSync(tmpRoot, { recursive: true });
+
+  try {
+    let archiveForExtraction = runtimeZipInResources;
+    // app.asar 内文件不是宿主系统真实文件路径，先落地到临时 zip 再解压
+    if (runtimeZipInResources.includes('.asar')) {
+      fs.copyFileSync(runtimeZipInResources, tmpArchive);
+      archiveForExtraction = tmpArchive;
+    }
+
+    extractZipArchive(archiveForExtraction, tmpRoot);
+    const extractedRoot = normalizeExtractedRuntimeRoot(tmpRoot);
+
+    fs.rmSync(targetDir, { recursive: true, force: true });
+    if (path.resolve(extractedRoot) === path.resolve(tmpRoot)) {
+      fs.renameSync(tmpRoot, targetDir);
+    } else {
+      fs.renameSync(extractedRoot, targetDir);
+      fs.rmSync(tmpRoot, { recursive: true, force: true });
+    }
+
+    fs.writeFileSync(markerPath, JSON.stringify({
+      source: 'runtime.zip',
+      version,
+      generatedAt: new Date().toISOString(),
+    }, null, 2), 'utf8');
+
+    return { enabled: true, home: targetDir, source: 'zip-extracted', version };
+  } catch (error) {
+    fs.rmSync(tmpRoot, { recursive: true, force: true });
+    throw new Error(`Failed to prepare bundled runtime: ${error.message}`);
+  } finally {
+    fs.rmSync(tmpArchive, { force: true });
   }
 }
 
@@ -264,7 +401,7 @@ function createSplashWindow() {
           <div id="status" class="status">Initializing...</div>
         </div>
         <div class="progress-row">
-          <div id="progressText">Step 0/5</div>
+          <div id="progressText">Step 0/6</div>
           <div id="progressPercent">0%</div>
         </div>
         <div class="progress-track">
@@ -331,7 +468,7 @@ function createSplashWindow() {
   });
 }
 
-function startJavaBackend(port, encryptionKey) {
+function startJavaBackend(port, encryptionKey, runtimeInfo) {
   const javaBin = process.platform === 'win32' ? 'java.exe' : 'java';
   const javaExe = path.join(jrePath, 'bin', javaBin);
 
@@ -346,12 +483,21 @@ function startJavaBackend(port, encryptionKey) {
     `--skills.user-dir=${skillsDir}`,
     `--skills.builtin-dir=${builtinSkillsDir}`,
   ];
+  if (runtimeInfo && runtimeInfo.enabled && runtimeInfo.home) {
+    args.push('--tools.runtime.enabled=true');
+    args.push(`--tools.runtime.home=${runtimeInfo.home}`);
+  }
 
   // 设置环境变量
   const env = {
     ...process.env,
-    NODE_CONSOLE_ENCRYPTION_KEY: encryptionKey
+    NODE_CONSOLE_ENCRYPTION_KEY: encryptionKey,
   };
+  if (runtimeInfo && runtimeInfo.enabled && runtimeInfo.home) {
+    env.TOOLS_RUNTIME_ENABLED = 'true';
+    env.TOOLS_RUNTIME_HOME = runtimeInfo.home;
+    env.JAGUAR_RUNTIME_HOME = runtimeInfo.home;
+  }
 
   appendStartupLog('info', `Starting backend process on port ${port}`);
   appendStartupLog('info', `Java executable: ${javaExe}`);
@@ -642,6 +788,15 @@ app.whenReady().then(async () => {
     appendStartupLog('info', '=== JaguarClaw startup ===');
     publishStartupStatus('Preparing startup environment...', 'prepare');
 
+    appendStartupLog('info', 'Checking bundled runtime...');
+    publishStartupStatus('Preparing bundled runtime...', 'runtime');
+    const runtimeInfo = ensureBundledRuntime();
+    if (runtimeInfo.enabled) {
+      appendStartupLog('info', `Bundled runtime ready: ${runtimeInfo.home} (${runtimeInfo.source})`);
+    } else {
+      appendStartupLog('info', 'Bundled runtime not found. System runtime will be used if required.');
+    }
+
     // 获取或生成加密密钥
     appendStartupLog('info', 'Loading encryption key...');
     const encryptionKey = getOrCreateEncryptionKey();
@@ -658,7 +813,7 @@ app.whenReady().then(async () => {
     appendStartupLog('info', `Using backend port: ${serverPort}`);
 
     // Start Java backend with encryption key
-    startJavaBackend(serverPort, encryptionKey);
+    startJavaBackend(serverPort, encryptionKey, runtimeInfo);
 
     // Wait for backend to be ready
     publishStartupStatus('Waiting for backend health check...', 'health');

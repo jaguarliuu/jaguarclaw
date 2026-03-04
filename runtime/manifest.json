@@ -1,0 +1,28 @@
+{
+  "version": "2026.03.0",
+  "target": {
+    "os": "win32",
+    "arch": "x64"
+  },
+  "python": {
+    "version": "3.11.x",
+    "bin": "python/python.exe",
+    "packages": [
+      "numpy",
+      "pandas",
+      "openpyxl",
+      "xlrd",
+      "XlsxWriter",
+      "python-docx",
+      "PyPDF2",
+      "chardet",
+      "PyYAML",
+      "tabulate"
+    ]
+  },
+  "node": {
+    "version": "20.x",
+    "bin": "node/node.exe",
+    "notes": "Use built-in Node runtime; no global npm packages by default."
+  }
+}

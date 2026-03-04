@@ -108,6 +108,11 @@ tools:
   workspace: ${TOOLS_WORKSPACE:./workspace}
   max-file-size: 20971520  # 20MB
   upload-dir: uploads
+  runtime:
+    enabled: ${TOOLS_RUNTIME_ENABLED:false}
+    home: ${TOOLS_RUNTIME_HOME:}
+    # 逗号分隔，例如: node,python,python/Scripts
+    bin-paths: ${TOOLS_RUNTIME_BIN_PATHS:}
 skills:
   project-dir: ""
   user-dir: ""
