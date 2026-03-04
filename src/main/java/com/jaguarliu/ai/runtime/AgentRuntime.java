@@ -8,8 +8,6 @@ import com.jaguarliu.ai.llm.model.LlmResponse;
 import com.jaguarliu.ai.llm.model.ToolCall;
 import com.jaguarliu.ai.memory.flush.PreCompactionFlushHook;
 import com.jaguarliu.ai.session.SessionFileService;
-import com.jaguarliu.ai.skills.selector.SkillSelection;
-import com.jaguarliu.ai.skills.selector.SkillSelector;
 import com.jaguarliu.ai.subagent.SubagentCompletionTracker;
 import com.jaguarliu.ai.tools.ToolDispatcher;
 import com.jaguarliu.ai.tools.ToolRegistry;
@@ -43,7 +41,7 @@ import java.util.concurrent.TimeoutException;
  * 流程：
  * 1. 调用 LLM（带 tools）
  * 2. 如果返回 tool_calls → ToolExecutor 执行
- * 3. 如果返回 [USE_SKILL:xxx] → SkillActivator 激活
+ * 3. 如果返回 use_skill tool call → SkillActivator 激活
  * 4. 将工具结果追加到上下文
  * 5. LoopOrchestrator 检查是否继续
  */
@@ -60,7 +58,6 @@ public class AgentRuntime {
     private final CancellationManager cancellationManager;
     private final HitlManager hitlManager;
     private final ContextBuilder contextBuilder;
-    private final SkillSelector skillSelector;
     private final PreCompactionFlushHook flushHook;
     private final SubagentCompletionTracker subagentCompletionTracker;
     private final SessionFileService sessionFileService;
@@ -146,45 +143,6 @@ public class AgentRuntime {
 
             // 没有 tool_calls
             if (!result.hasToolCalls()) {
-                // 检测 Skill 自动激活
-                Optional<SkillActivator.SkillActivation> activation =
-                        skillActivator.detectAutoActivation(result.content(), context);
-
-                if (activation.isPresent()) {
-                    String skillName = activation.get().skillName();
-
-                    // 提取历史并激活
-                    List<LlmRequest.Message> cleanHistory = extractHistory(messages);
-
-                    Optional<SkillActivator.SkillAwareRequest> skillRequest =
-                            skillActivator.applyActivation(activation.get(), cleanHistory, 
-                                    context.getOriginalInput(), context.getAgentId());
-
-                    if (skillRequest.isPresent()) {
-                        context.incrementSkillActivation(skillName);
-                        skillActivator.publishActivationEvent(context, activation.get());
-
-                        // Extract history BEFORE modifying messages
-                        List<LlmRequest.Message> historyForContext = extractHistory(messages);
-
-                        messages.clear();
-                        messages.addAll(skillRequest.get().messages());
-                        
-                        // 设置 active skill（使用 ContextBuilder 创建）
-                        Optional<ContextBuilder.SkillAwareRequest> ctxRequest =
-                                contextBuilder.handleSkillActivationByName(skillName,
-                                        context.getOriginalInput(), historyForContext, true, context.getAgentId());
-                        
-                        if (ctxRequest.isPresent()) {
-                            context.setActiveSkill(ctxRequest.get());
-                            context.setSkillBasePath(ctxRequest.get().skillBasePath());
-                        }
-
-                        log.info("Re-invoking with skill: {}, runId={}", skillName, context.getRunId());
-                        continue;
-                    }
-                }
-
                 // SubAgent 屏障等待
                 if (!pendingSubRunIds.isEmpty() && context.isMain()) {
                     log.info("Waiting for {} pending subagents: runId={}",
@@ -212,7 +170,47 @@ public class AgentRuntime {
             log.info("Step {} has {} tool calls: runId={}",
                     context.getCurrentStep(), result.toolCalls().size(), context.getRunId());
 
-            int preStepMessageCount = messages.size();
+            // 前置 use_skill 激活：先激活 skill，再进入下一轮调用，避免同轮普通工具抢跑。
+            Optional<SkillActivator.SkillActivation> toolActivation =
+                    skillActivator.detectToolActivation(result.toolCalls(), context);
+            if (toolActivation.isPresent()
+                    && (context.getActiveSkill() == null || !context.getActiveSkill().hasActiveSkill())) {
+                String skillName = toolActivation.get().skillName();
+                List<LlmRequest.Message> cleanHistory = extractHistory(messages);
+
+                Optional<SkillActivator.SkillAwareRequest> skillRequest =
+                        skillActivator.applyActivation(toolActivation.get(), cleanHistory,
+                                context.getOriginalInput(), context.getAgentId());
+
+                if (skillRequest.isPresent()) {
+                    context.incrementSkillActivation(skillName);
+                    skillActivator.publishActivationEvent(context, toolActivation.get());
+
+                    List<LlmRequest.Message> historyForContext = extractHistory(messages);
+                    messages.clear();
+                    messages.addAll(skillRequest.get().messages());
+
+                    Optional<ContextBuilder.SkillAwareRequest> ctxRequest =
+                            contextBuilder.handleSkillActivationByName(skillName,
+                                    context.getOriginalInput(), historyForContext, true, context.getAgentId());
+                    if (ctxRequest.isPresent()) {
+                        context.setActiveSkill(ctxRequest.get());
+                        context.setSkillBasePath(ctxRequest.get().skillBasePath());
+                    }
+
+                    long skippedCalls = result.toolCalls().stream()
+                            .filter(tc -> !"use_skill".equals(tc.getName()))
+                            .count();
+                    if (skippedCalls > 0) {
+                        log.info("Pre-activated skill via use_skill and skipped {} non-skill tool calls in this step: runId={}",
+                                skippedCalls, context.getRunId());
+                    }
+                    log.info("Re-invoking with skill (via pre-tool activation): {}, runId={}",
+                            skillName, context.getRunId());
+                    continue;
+                }
+            }
+
             messages.add(LlmRequest.Message.assistantWithToolCalls(result.toolCalls()));
 
             // 使用 ToolExecutor 执行工具
@@ -233,46 +231,6 @@ public class AgentRuntime {
                         log.info("Tracked spawned subagent: subRunId={}, runId={}",
                                 subRunId, context.getRunId());
                     }
-                }
-            }
-
-            // 检测 use_skill 工具激活
-            Optional<SkillActivator.SkillActivation> toolActivation =
-                    skillActivator.detectToolActivation(result.toolCalls(), context);
-
-            if (toolActivation.isPresent() && 
-                    (context.getActiveSkill() == null || !context.getActiveSkill().hasActiveSkill())) {
-                String skillName = toolActivation.get().skillName();
-
-                List<LlmRequest.Message> cleanHistory = extractHistory(
-                        messages.subList(0, preStepMessageCount));
-
-                Optional<SkillActivator.SkillAwareRequest> skillRequest =
-                        skillActivator.applyActivation(toolActivation.get(), cleanHistory,
-                                context.getOriginalInput(), context.getAgentId());
-
-                if (skillRequest.isPresent()) {
-                    skillActivator.publishActivationEvent(context, toolActivation.get());
-
-                    // Extract history BEFORE modifying messages
-                    List<LlmRequest.Message> historyForContext = extractHistory(messages);
-
-                    messages.clear();
-                    messages.addAll(skillRequest.get().messages());
-                    
-                    // 设置 active skill（使用 ContextBuilder 创建）
-                    Optional<ContextBuilder.SkillAwareRequest> ctxRequest =
-                            contextBuilder.handleSkillActivationByName(skillName,
-                                    context.getOriginalInput(), historyForContext, true, context.getAgentId());
-                    
-                    if (ctxRequest.isPresent()) {
-                        context.setActiveSkill(ctxRequest.get());
-                        context.setSkillBasePath(ctxRequest.get().skillBasePath());
-                    }
-
-                    log.info("Re-invoking with skill (via tool): {}, runId={}",
-                            skillName, context.getRunId());
-                    continue;
                 }
             }
 
