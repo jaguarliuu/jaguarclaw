@@ -38,7 +38,7 @@ public class NodeListTool implements Tool {
                                 ),
                                 "tag", Map.of(
                                         "type", "string",
-                                        "description", "按标签过滤（模糊匹配）"
+                                        "description", "按标签过滤（逗号标签中的单个值，大小写不敏感）"
                                 )
                         ),
                         "required", List.of()
