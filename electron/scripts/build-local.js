@@ -29,6 +29,8 @@ const ROOT = path.resolve(__dirname, '..', '..');
 const ELECTRON_DIR = path.resolve(__dirname, '..');
 const RESOURCES_DIR = path.join(ELECTRON_DIR, 'resources');
 const UI_DIR = path.join(ROOT, 'jaguarclaw-ui');
+const LOCAL_BUILDER_CONFIG = path.join(ELECTRON_DIR, 'builder.local.json');
+const LOCAL_OUTPUT_DIR = path.join(ELECTRON_DIR, 'dist');
 const LOCAL_ICON = path.join(ELECTRON_DIR, 'assets','local-icon.ico');
 const DEFAULT_ICON = path.join(ELECTRON_DIR, 'assets', 'icon.ico');
 
@@ -132,9 +134,21 @@ try {
   // Use spawnSync with args array to safely pass user-provided productName
   console.log('\n=== Step 7: Building Windows installer ===');
 
+  // Keep local outputs deterministic and prevent historical installers from
+  // being accidentally included in subsequent builds.
+  for (const outputDir of ['dist', 'release']) {
+    const outputPath = path.join(ELECTRON_DIR, outputDir);
+    if (fs.existsSync(outputPath)) {
+      fs.rmSync(outputPath, { recursive: true, force: true });
+      console.log(`Cleaned ${outputDir}/`);
+    }
+  }
+
   const ebArgs = [
     'electron-builder',
     '--win',
+    '--config',
+    LOCAL_BUILDER_CONFIG,
     `--config.productName=${productName}`,
     `--config.win.icon=${iconPath.replace(/\\/g, '/')}`,
   ];
@@ -154,7 +168,7 @@ try {
   }
 
   console.log('\n=== Build complete! ===');
-  console.log(`Installer is in: ${path.join(ELECTRON_DIR, 'release')}`);
+  console.log(`Installer is in: ${LOCAL_OUTPUT_DIR}`);
 } catch (err) {
   console.error('\nBuild failed:', err.message);
   process.exit(1);
