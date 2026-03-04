@@ -34,6 +34,24 @@ public class SkillMetadata {
     private String description;
 
     /**
+     * 技能标签（可选）
+     * 用于提升索引召回能力，例如：["frontend", "react", "ui"]
+     */
+    private List<String> tags;
+
+    /**
+     * 触发短语（可选）
+     * 用于提示模型在匹配任务时优先激活 skill
+     */
+    private List<String> triggers;
+
+    /**
+     * 使用示例（可选）
+     * 建议 1-2 条短示例
+     */
+    private List<String> examples;
+
+    /**
      * 允许的工具白名单
      * 为 null 时不限制；非空时只允许列表中的工具
      */

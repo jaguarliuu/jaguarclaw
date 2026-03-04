@@ -144,34 +144,29 @@ public class SkillValidator {
      */
     @SuppressWarnings("unchecked")
     private void validateOptionalFieldTypes(Map<String, Object> frontmatter, List<SkillParseError> errors) {
-        // allowed-tools: 应该是 List<String>
-        if (frontmatter.containsKey("allowed-tools")) {
-            Object value = frontmatter.get("allowed-tools");
-            if (value != null && !(value instanceof List)) {
-                errors.add(SkillParseError.invalidFieldType("allowed-tools", "list", getTypeName(value)));
-            } else if (value instanceof List) {
-                List<?> list = (List<?>) value;
-                for (int i = 0; i < list.size(); i++) {
-                    if (!(list.get(i) instanceof String)) {
-                        errors.add(SkillParseError.invalidFieldType(
-                                "allowed-tools[" + i + "]", "string", getTypeName(list.get(i))));
-                    }
-                }
-            }
-        }
+        validateStringListField(frontmatter, "tags", errors);
+        validateStringListField(frontmatter, "triggers", errors);
+        validateStringListField(frontmatter, "examples", errors);
+        validateStringListField(frontmatter, "allowed-tools", errors);
+        validateStringListField(frontmatter, "confirm-before", errors);
+    }
 
-        // confirm-before: 应该是 List<String>
-        if (frontmatter.containsKey("confirm-before")) {
-            Object value = frontmatter.get("confirm-before");
-            if (value != null && !(value instanceof List)) {
-                errors.add(SkillParseError.invalidFieldType("confirm-before", "list", getTypeName(value)));
-            } else if (value instanceof List) {
-                List<?> list = (List<?>) value;
-                for (int i = 0; i < list.size(); i++) {
-                    if (!(list.get(i) instanceof String)) {
-                        errors.add(SkillParseError.invalidFieldType(
-                                "confirm-before[" + i + "]", "string", getTypeName(list.get(i))));
-                    }
+    private void validateStringListField(Map<String, Object> frontmatter,
+                                         String fieldName,
+                                         List<SkillParseError> errors) {
+        if (!frontmatter.containsKey(fieldName)) {
+            return;
+        }
+        Object value = frontmatter.get(fieldName);
+        if (value != null && !(value instanceof List)) {
+            errors.add(SkillParseError.invalidFieldType(fieldName, "list", getTypeName(value)));
+            return;
+        }
+        if (value instanceof List<?> list) {
+            for (int i = 0; i < list.size(); i++) {
+                if (!(list.get(i) instanceof String)) {
+                    errors.add(SkillParseError.invalidFieldType(
+                            fieldName + "[" + i + "]", "string", getTypeName(list.get(i))));
                 }
             }
         }

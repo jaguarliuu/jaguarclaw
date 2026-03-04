@@ -105,15 +105,16 @@ public class SkillActivator {
             }
 
             skillName = skillName.trim();
+            log.info("skill.candidate source=tool skill={} runId={}", skillName, context.getRunId());
 
             // 检查激活限制
             if (context.isSkillActivationLimitReached(skillName)) {
-                log.info("Skill activation limit reached: skill={}, runId={}",
+                log.info("skill.activation_skipped reason=limit_reached skill={} runId={}",
                         skillName, context.getRunId());
                 continue;
             }
 
-            log.info("Detected tool-based skill activation: skill={}, runId={}",
+            log.info("skill.candidate_matched source=tool skill={} runId={}",
                     skillName, context.getRunId());
 
             return Optional.of(new SkillActivation(
@@ -161,9 +162,10 @@ public class SkillActivator {
             }
 
             ContextBuilder.SkillAwareRequest request = skillRequest.get();
+            int allowedToolsCount = request.allowedTools() != null ? request.allowedTools().size() : 0;
 
-            log.info("Skill activated successfully: skill={}, allowedTools={}",
-                    skillName, request.allowedTools().size());
+            log.info("skill.activated skill={} trigger={} allowedTools={} ",
+                    skillName, activation.triggerType(), allowedToolsCount);
 
             return Optional.of(new SkillAwareRequest(
                     request.request().getMessages(),

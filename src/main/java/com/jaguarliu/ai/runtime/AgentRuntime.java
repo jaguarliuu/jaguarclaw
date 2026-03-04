@@ -174,6 +174,12 @@ public class AgentRuntime {
             Optional<SkillActivator.SkillActivation> toolActivation =
                     skillActivator.detectToolActivation(result.toolCalls(), context);
             if (toolActivation.isPresent()
+                    && context.getActiveSkill() != null
+                    && context.getActiveSkill().hasActiveSkill()) {
+                log.info("skill.activation_skipped reason=already_active skill={} runId={}",
+                        toolActivation.get().skillName(), context.getRunId());
+            }
+            if (toolActivation.isPresent()
                     && (context.getActiveSkill() == null || !context.getActiveSkill().hasActiveSkill())) {
                 String skillName = toolActivation.get().skillName();
                 List<LlmRequest.Message> cleanHistory = extractHistory(messages);
@@ -202,13 +208,15 @@ public class AgentRuntime {
                             .filter(tc -> !"use_skill".equals(tc.getName()))
                             .count();
                     if (skippedCalls > 0) {
-                        log.info("Pre-activated skill via use_skill and skipped {} non-skill tool calls in this step: runId={}",
-                                skippedCalls, context.getRunId());
+                        log.info("skill.late_activation_prevented skill={} skippedCalls={} runId={}",
+                                skillName, skippedCalls, context.getRunId());
                     }
                     log.info("Re-invoking with skill (via pre-tool activation): {}, runId={}",
                             skillName, context.getRunId());
                     continue;
                 }
+                log.warn("skill.activation_skipped reason=apply_failed skill={} runId={}",
+                        skillName, context.getRunId());
             }
 
             messages.add(LlmRequest.Message.assistantWithToolCalls(result.toolCalls()));

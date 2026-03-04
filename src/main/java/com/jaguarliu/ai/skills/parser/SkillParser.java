@@ -183,6 +183,9 @@ public class SkillParser {
         String description = ((String) frontmatter.get("description")).trim();
 
         // 提取可选字段
+        List<String> tags = (List<String>) frontmatter.get("tags");
+        List<String> triggers = (List<String>) frontmatter.get("triggers");
+        List<String> examples = (List<String>) frontmatter.get("examples");
         List<String> allowedTools = (List<String>) frontmatter.get("allowed-tools");
         List<String> confirmBefore = (List<String>) frontmatter.get("confirm-before");
 
@@ -204,6 +207,9 @@ public class SkillParser {
         return SkillMetadata.builder()
                 .name(name)
                 .description(description)
+                .tags(tags)
+                .triggers(triggers)
+                .examples(examples)
                 .allowedTools(allowedTools)
                 .confirmBefore(confirmBefore)
                 .requires(requires)

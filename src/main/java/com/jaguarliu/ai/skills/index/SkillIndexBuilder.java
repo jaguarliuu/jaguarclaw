@@ -84,7 +84,7 @@ public class SkillIndexBuilder {
             skillsXml.append(String.format(
                     "  <skill name=\"%s\">%s</skill>\n",
                     escapeXml(entry.getMetadata().getName()),
-                    escapeXml(entry.getMetadata().getDescription())
+                    escapeXml(buildIndexDescription(entry))
             ));
         }
 
@@ -133,7 +133,7 @@ public class SkillIndexBuilder {
             sb.append(String.format(
                     "  <skill name=\"%s\">%s</skill>\n",
                     escapeXml(entry.getMetadata().getName()),
-                    escapeXml(entry.getMetadata().getDescription())
+                    escapeXml(buildIndexDescription(entry))
             ));
         }
 
@@ -231,6 +231,30 @@ public class SkillIndexBuilder {
                 .replace(">", "&gt;")
                 .replace("\"", "&quot;")
                 .replace("'", "&apos;");
+    }
+
+    private String buildIndexDescription(SkillEntry entry) {
+        StringBuilder sb = new StringBuilder(entry.getMetadata().getDescription());
+        List<String> tags = entry.getMetadata().getTags();
+        List<String> triggers = entry.getMetadata().getTriggers();
+
+        if (tags != null && !tags.isEmpty()) {
+            sb.append(" [tags: ").append(String.join(", ", tags.stream().limit(3).toList()));
+            if (tags.size() > 3) {
+                sb.append(", ...");
+            }
+            sb.append("]");
+        }
+
+        if (triggers != null && !triggers.isEmpty()) {
+            sb.append(" [triggers: ").append(String.join(" | ", triggers.stream().limit(2).toList()));
+            if (triggers.size() > 2) {
+                sb.append(" | ...");
+            }
+            sb.append("]");
+        }
+
+        return sb.toString();
     }
 
     /**

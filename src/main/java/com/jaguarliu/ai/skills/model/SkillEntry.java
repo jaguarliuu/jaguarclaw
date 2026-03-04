@@ -72,6 +72,16 @@ public class SkillEntry {
         if (metadata != null) {
             tokens += estimateTokens(metadata.getName());
             tokens += estimateTokens(metadata.getDescription());
+            if (metadata.getTags() != null) {
+                for (String tag : metadata.getTags()) {
+                    tokens += estimateTokens(tag);
+                }
+            }
+            if (metadata.getTriggers() != null) {
+                for (String trigger : metadata.getTriggers()) {
+                    tokens += estimateTokens(trigger);
+                }
+            }
         }
         return Math.max(tokens, 30);
     }
