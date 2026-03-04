@@ -181,17 +181,40 @@ public class SshConnector implements Connector {
 
     @Override
     public boolean testConnection(String credential, NodeEntity node) {
+        return testConnectionWithDetails(credential, node).success();
+    }
+
+    @Override
+    public ConnectionTestOutcome testConnectionWithDetails(String credential, NodeEntity node) {
         Session session = null;
         try {
             session = createSession(credential, node, SSH_CONNECT_TIMEOUT_MS);
             session.connect(SSH_CONNECT_TIMEOUT_MS);
-            return session.isConnected();
+            return session.isConnected()
+                    ? ConnectionTestOutcome.ok()
+                    : ConnectionTestOutcome.fail(ExecResult.ErrorType.NETWORK_ERROR, "SSH connection was not established");
+        } catch (IllegalArgumentException e) {
+            log.debug("SSH test connection invalid config for node {}: {}", node.getAlias(), e.getClass().getSimpleName());
+            return ConnectionTestOutcome.fail(ExecResult.ErrorType.VALIDATION_ERROR, e.getMessage());
+        } catch (com.jcraft.jsch.JSchException e) {
+            log.debug("SSH test connection failed for node {}: {}", node.getAlias(), e.getClass().getSimpleName());
+            ExecResult.ErrorType errorType = mapJSchException(e);
+            return ConnectionTestOutcome.fail(errorType, mapJSchMessage(errorType));
         } catch (Exception e) {
             log.debug("SSH test connection failed for node {}: {}", node.getAlias(), e.getClass().getSimpleName());
-            return false;
+            return ConnectionTestOutcome.fail(ExecResult.ErrorType.UNKNOWN, "SSH connection test failed");
         } finally {
             if (session != null) session.disconnect();
         }
+    }
+
+    private String mapJSchMessage(ExecResult.ErrorType errorType) {
+        return switch (errorType) {
+            case AUTHENTICATION_FAILED -> "SSH authentication failed";
+            case NETWORK_ERROR -> "SSH network connection failed";
+            case PERMISSION_DENIED -> "SSH permission denied";
+            default -> "SSH connection failed";
+        };
     }
 
     private Session createSession(String credential, NodeEntity node, int timeoutMs) throws JSchException {

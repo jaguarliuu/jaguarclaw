@@ -101,7 +101,7 @@ public class GatewayWebSocketHandler implements WebSocketHandler {
      */
     private Mono<WebSocketMessage> handleMessage(String connectionId, WebSocketSession session, WebSocketMessage message) {
         String payload = message.getPayloadAsText();
-        log.debug("Received message: connectionId={}, payload={}", connectionId, payload);
+        log.debug("Received message: connectionId={}, bytes={}", connectionId, payload != null ? payload.length() : 0);
 
         return rpcRouter.route(connectionId, payload)
                 .map(session::textMessage);

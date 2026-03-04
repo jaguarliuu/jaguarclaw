@@ -4,9 +4,9 @@ import { useNodeConsole } from '@/composables/useNodeConsole'
 import { useI18n } from '@/i18n'
 import Select from '@/components/common/Select.vue'
 import type { SelectOption } from '@/components/common/Select.vue'
-import type { ConnectorType, AuthType, SafetyPolicy, NodeInfo } from '@/types'
+import type { ConnectorType, AuthType, SafetyPolicy, NodeInfo, NodeRegisterPayload } from '@/types'
 
-const { nodes, loading, error, loadNodes, registerNode, removeNode, testNode } = useNodeConsole()
+const { nodes, loading, error, loadNodes, registerNode, updateNode, removeNode, testNode } = useNodeConsole()
 const { t } = useI18n()
 
 // Form state
@@ -24,6 +24,8 @@ const formSafetyPolicy = ref<SafetyPolicy>('strict')
 const formError = ref<string | null>(null)
 const submitting = ref(false)
 const credentialVisible = ref(false)
+const editingNodeId = ref<string | null>(null)
+const nodeTestMessages = ref<Record<string, string>>({})
 
 // Testing state per node
 const testingNodes = ref<Set<string>>(new Set())
@@ -48,20 +50,39 @@ function resetForm() {
 
 function openForm() {
   resetForm()
+  editingNodeId.value = null
+  showForm.value = true
+}
+
+function openEditForm(node: NodeInfo) {
+  resetForm()
+  editingNodeId.value = node.id
+  formAlias.value = node.alias
+  formDisplayName.value = node.displayName || ''
+  formConnectorType.value = node.connectorType
+  formHost.value = node.host || ''
+  formPort.value = node.port || undefined
+  formUsername.value = node.username || ''
+  formAuthType.value = node.authType || 'password'
+  formTags.value = node.tags || ''
+  formSafetyPolicy.value = node.safetyPolicy
   showForm.value = true
 }
 
 function closeForm() {
   showForm.value = false
+  editingNodeId.value = null
   resetForm()
 }
+
+const isEditing = computed(() => !!editingNodeId.value)
 
 async function handleSubmit() {
   if (!formAlias.value.trim()) {
     formError.value = t('sections.nodes.errors.aliasRequired')
     return
   }
-  if (!formCredential.value.trim()) {
+  if (!isEditing.value && !formCredential.value.trim()) {
     formError.value = t('sections.nodes.errors.credentialRequired')
     return
   }
@@ -69,7 +90,7 @@ async function handleSubmit() {
   submitting.value = true
   formError.value = null
   try {
-    await registerNode({
+    const payload: Partial<NodeRegisterPayload> = {
       alias: formAlias.value.trim(),
       displayName: formDisplayName.value.trim() || undefined,
       connectorType: formConnectorType.value,
@@ -77,13 +98,28 @@ async function handleSubmit() {
       port: formPort.value || undefined,
       username: formUsername.value.trim() || undefined,
       authType: formAuthType.value,
-      credential: formCredential.value,
       tags: formTags.value.trim() || undefined,
       safetyPolicy: formSafetyPolicy.value
-    })
+    }
+
+    const newCredential = formCredential.value.trim()
+    if (newCredential) {
+      payload.credential = newCredential
+    }
+
+    if (isEditing.value && editingNodeId.value) {
+      await updateNode(editingNodeId.value, payload)
+    } else {
+      await registerNode(payload as NodeRegisterPayload)
+    }
+
     closeForm()
   } catch (e) {
-    formError.value = e instanceof Error ? e.message : t('sections.nodes.errors.failedToRegister')
+    formError.value = e instanceof Error
+      ? e.message
+      : isEditing.value
+        ? t('sections.nodes.errors.failedToUpdate')
+        : t('sections.nodes.errors.failedToRegister')
   } finally {
     submitting.value = false
   }
@@ -92,7 +128,12 @@ async function handleSubmit() {
 async function handleTest(nodeId: string) {
   testingNodes.value.add(nodeId)
   try {
-    await testNode(nodeId)
+    const result = await testNode(nodeId)
+    if (result.success) {
+      delete nodeTestMessages.value[nodeId]
+    } else {
+      nodeTestMessages.value[nodeId] = result.message || t('sections.nodes.errors.failedToTest')
+    }
   } catch {
     // Error handled in composable
   } finally {
@@ -192,7 +233,7 @@ onMounted(() => {
 
     <!-- Add Form -->
     <div v-if="showForm" class="form-panel">
-      <h3 class="form-title">{{ t('sections.nodes.formTitle') }}</h3>
+      <h3 class="form-title">{{ isEditing ? t('sections.nodes.editTitle') : t('sections.nodes.formTitle') }}</h3>
 
       <div class="form-grid">
         <div class="form-group">
@@ -289,7 +330,11 @@ onMounted(() => {
       <div class="form-actions">
         <button class="cancel-btn" @click="closeForm">{{ t('common.cancel') }}</button>
         <button class="submit-btn" :disabled="submitting" @click="handleSubmit">
-          {{ submitting ? t('sections.nodes.registeringBtn') : t('sections.nodes.registerBtn') }}
+          {{
+            submitting
+              ? (isEditing ? t('sections.nodes.updatingBtn') : t('sections.nodes.registeringBtn'))
+              : (isEditing ? t('sections.nodes.updateBtn') : t('sections.nodes.registerBtn'))
+          }}
         </button>
       </div>
     </div>
@@ -309,6 +354,12 @@ onMounted(() => {
             " />
           </div>
           <div class="node-actions">
+            <button
+              class="edit-btn"
+              @click="openEditForm(node)"
+            >
+              {{ t('common.edit') }}
+            </button>
             <button
               class="test-btn"
               :disabled="testingNodes.has(node.id)"
@@ -337,6 +388,9 @@ onMounted(() => {
             <span v-for="tag in node.tags.split(',')" :key="tag" class="tag">{{ tag.trim() }}</span>
           </span>
           <span class="node-policy">{{ t('sections.nodes.policyLabel', { name: node.safetyPolicy }) }}</span>
+        </div>
+        <div v-if="nodeTestMessages[node.id]" class="node-test-message">
+          {{ nodeTestMessages[node.id] }}
         </div>
       </div>
     </div>
@@ -621,7 +675,7 @@ onMounted(() => {
   gap: 6px;
 }
 
-.test-btn, .delete-btn, .confirm-delete-btn, .cancel-delete-btn {
+.edit-btn, .test-btn, .delete-btn, .confirm-delete-btn, .cancel-delete-btn {
   padding: 4px 10px;
   border: var(--border);
   border-radius: var(--radius-md);
@@ -631,7 +685,7 @@ onMounted(() => {
   cursor: pointer;
 }
 
-.test-btn:hover, .delete-btn:hover {
+.edit-btn:hover, .test-btn:hover, .delete-btn:hover {
   background: var(--color-gray-bg);
 }
 
@@ -684,6 +738,13 @@ onMounted(() => {
   font-family: var(--font-mono);
   font-size: 11px;
   color: var(--color-gray-dark);
+}
+
+.node-test-message {
+  margin-top: 6px;
+  font-size: 12px;
+  color: #b91c1c;
+  font-family: var(--font-mono);
 }
 
 /* States */

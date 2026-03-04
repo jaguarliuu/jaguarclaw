@@ -338,6 +338,16 @@ export interface NodeRegisterPayload {
   safetyPolicy?: SafetyPolicy
 }
 
+export interface NodeTestResult {
+  success: boolean
+  nodeId: string
+  nodeAlias: string
+  errorType: string | null
+  message: string
+  durationMs: number
+  testedAt: string | null
+}
+
 // ==================== Delivery Config Types ====================
 
 export type DeliveryTargetType = 'email' | 'webhook'

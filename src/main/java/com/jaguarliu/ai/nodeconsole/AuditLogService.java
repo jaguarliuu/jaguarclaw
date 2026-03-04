@@ -45,7 +45,7 @@ public class AuditLogService {
                 .nodeId(nodeId)
                 .connectorType(connectorType)
                 .toolName(toolName)
-                .command(command)
+                .command(command != null ? LogSanitizer.commandSummary(command) : null)
                 .safetyLevel(safetyLevel)
                 .safetyPolicy(safetyPolicy)
                 .hitlRequired(hitlRequired)

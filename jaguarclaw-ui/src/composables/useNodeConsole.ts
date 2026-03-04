@@ -1,6 +1,6 @@
 import { ref, readonly } from 'vue'
 import { useWebSocket } from './useWebSocket'
-import type { NodeInfo, NodeRegisterPayload } from '@/types'
+import type { NodeInfo, NodeRegisterPayload, NodeTestResult } from '@/types'
 
 const nodes = ref<NodeInfo[]>([])
 const loading = ref(false)
@@ -62,12 +62,15 @@ export function useNodeConsole() {
     }
   }
 
-  async function testNode(id: string): Promise<boolean> {
+  async function testNode(id: string): Promise<NodeTestResult> {
     error.value = null
     try {
-      const result = await request<{ success: boolean }>('nodes.test', { id })
+      const result = await request<NodeTestResult>('nodes.test', { id })
       await loadNodes()
-      return result.success
+      if (!result.success) {
+        error.value = result.message || 'Connection test failed'
+      }
+      return result
     } catch (e) {
       console.error('[NodeConsole] Failed to test node:', e)
       error.value = e instanceof Error ? e.message : 'Failed to test node'

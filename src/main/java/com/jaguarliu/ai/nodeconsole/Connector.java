@@ -30,4 +30,14 @@ public interface Connector {
      * @return 是否连接成功
      */
     boolean testConnection(String credential, NodeEntity node);
+
+    /**
+     * 测试连接并返回结构化结果（默认实现向后兼容旧接口）
+     */
+    default ConnectionTestOutcome testConnectionWithDetails(String credential, NodeEntity node) {
+        boolean ok = testConnection(credential, node);
+        return ok
+                ? ConnectionTestOutcome.ok()
+                : ConnectionTestOutcome.fail(ExecResult.ErrorType.UNKNOWN, "Connection test failed");
+    }
 }

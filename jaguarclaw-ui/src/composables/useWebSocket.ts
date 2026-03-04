@@ -1,9 +1,11 @@
 import { ref, readonly } from 'vue'
 import type { ConnectionState, RpcRequest, RpcResponse, RpcEvent, AgentEventType } from '@/types'
 
+const WS_PROTOCOL = typeof window !== 'undefined' && window.location.protocol === 'https:' ? 'wss' : 'ws'
 const WS_URL = import.meta.env.DEV
   ? 'ws://localhost:8080/ws'
-  : `ws://${window.location.host}/ws`
+  : `${WS_PROTOCOL}://${window.location.host}/ws`
+const DEBUG_WS = import.meta.env.DEV
 
 const PUBLIC_METHODS = new Set([
   'ping',
@@ -13,6 +15,10 @@ const PUBLIC_METHODS = new Set([
 
 const AUTH_STORAGE_KEY = 'jaguarclaw.ws.auth.v1'
 const DEVICE_ID_STORAGE_KEY = 'jaguarclaw.device.id'
+const SENSITIVE_KEYS = new Set([
+  'credential', 'password', 'token', 'apiKey', 'apikey', 'accessToken', 'refreshToken',
+  'authorization', 'secret', 'privateKey'
+].map((k) => k.toLowerCase()))
 
 // Global state
 const connectionState = ref<ConnectionState>('disconnected')
@@ -67,6 +73,23 @@ class RpcRequestError extends Error {
     this.code = error.code
     this.method = method
   }
+}
+
+function sanitizeForLog(value: unknown): unknown {
+  if (value === null || value === undefined) return value
+  if (Array.isArray(value)) return value.map((v) => sanitizeForLog(v))
+  if (typeof value !== 'object') return value
+
+  const source = value as Record<string, unknown>
+  const sanitized: Record<string, unknown> = {}
+  for (const [key, fieldValue] of Object.entries(source)) {
+    if (SENSITIVE_KEYS.has(key.toLowerCase())) {
+      sanitized[key] = '[REDACTED]'
+    } else {
+      sanitized[key] = sanitizeForLog(fieldValue)
+    }
+  }
+  return sanitized
 }
 
 function generateId(): string {
@@ -195,7 +218,9 @@ function connect() {
   ws.onmessage = (event) => {
     try {
       const data = JSON.parse(event.data)
-      console.log('[WS] Received:', data)
+      if (DEBUG_WS) {
+        console.debug('[WS] Received:', sanitizeForLog(data))
+      }
 
       // Check message type
       if (data.type === 'response' && data.id && pendingRequests.has(data.id)) {
@@ -296,7 +321,9 @@ async function requestRaw<T = unknown>(method: string, payload?: unknown): Promi
     idempotencyKey: `idem-${id}`
   }
 
-  console.log('[WS] Sending:', rpcRequest)
+  if (DEBUG_WS) {
+    console.debug('[WS] Sending:', sanitizeForLog(rpcRequest))
+  }
 
   return new Promise((resolve, reject) => {
     pendingRequests.set(id, {
