@@ -1,0 +1,199 @@
+[
+  {
+    "id": "M01",
+    "scenario": "mixed_calls_correct_skill",
+    "userPrompt": "请做一个落地页并直接生成 html",
+    "expectedSkill": "frontend-design",
+    "availableSkills": ["frontend-design", "code-review", "git-commit", "data-analysis", "chart-visualization", "release-skills"],
+    "toolCalls": [{"name": "use_skill", "skill_name": "frontend-design"}, {"name": "write_file"}]
+  },
+  {
+    "id": "M02",
+    "scenario": "mixed_calls_correct_skill",
+    "userPrompt": "帮我审查这个 PR 并给建议",
+    "expectedSkill": "code-review",
+    "availableSkills": ["frontend-design", "code-review", "git-commit", "data-analysis"],
+    "toolCalls": [{"name": "use_skill", "skill_name": "code-review"}, {"name": "read_file"}]
+  },
+  {
+    "id": "M03",
+    "scenario": "mixed_calls_correct_skill",
+    "userPrompt": "根据改动生成 commit message 并写到文件",
+    "expectedSkill": "git-commit",
+    "availableSkills": ["code-review", "git-commit", "release-skills"],
+    "toolCalls": [{"name": "use_skill", "skill_name": "git-commit"}, {"name": "write_file"}]
+  },
+  {
+    "id": "M04",
+    "scenario": "mixed_calls_correct_skill",
+    "userPrompt": "查完数据后生成可视化图表",
+    "expectedSkill": "chart-visualization",
+    "availableSkills": ["chart-visualization", "data-analysis", "frontend-design"],
+    "toolCalls": [{"name": "use_skill", "skill_name": "chart-visualization"}, {"name": "write_file"}]
+  },
+  {
+    "id": "M05",
+    "scenario": "mixed_calls_correct_skill",
+    "userPrompt": "帮我完成一次发布流程",
+    "expectedSkill": "release-skills",
+    "availableSkills": ["release-skills", "git-commit"],
+    "toolCalls": [{"name": "use_skill", "skill_name": "release-skills"}, {"name": "shell"}]
+  },
+  {
+    "id": "M06",
+    "scenario": "mixed_calls_correct_skill",
+    "userPrompt": "分析这批订单数据并输出结论",
+    "expectedSkill": "data-analysis",
+    "availableSkills": ["data-analysis", "chart-visualization"],
+    "toolCalls": [{"name": "use_skill", "skill_name": "data-analysis"}, {"name": "sql_query"}]
+  },
+  {
+    "id": "M07",
+    "scenario": "mixed_calls_correct_skill",
+    "userPrompt": "做个响应式登录页面，先看参考再生成代码",
+    "expectedSkill": "frontend-design",
+    "availableSkills": ["frontend-design", "code-review"],
+    "toolCalls": [{"name": "use_skill", "skill_name": "frontend-design"}, {"name": "read_file"}, {"name": "write_file"}]
+  },
+  {
+    "id": "M08",
+    "scenario": "mixed_calls_correct_skill",
+    "userPrompt": "请深度 code review 并执行检查命令",
+    "expectedSkill": "code-review",
+    "availableSkills": ["code-review", "git-commit"],
+    "toolCalls": [{"name": "use_skill", "skill_name": "code-review"}, {"name": "shell"}]
+  },
+  {
+    "id": "U01",
+    "scenario": "single_use_skill_correct",
+    "userPrompt": "设计一个 dashboard 页面",
+    "expectedSkill": "frontend-design",
+    "availableSkills": ["frontend-design", "code-review"],
+    "toolCalls": [{"name": "use_skill", "skill_name": "frontend-design"}]
+  },
+  {
+    "id": "U02",
+    "scenario": "single_use_skill_correct",
+    "userPrompt": "审查这段 Java 代码",
+    "expectedSkill": "code-review",
+    "availableSkills": ["frontend-design", "code-review", "git-commit"],
+    "toolCalls": [{"name": "use_skill", "skill_name": "code-review"}]
+  },
+  {
+    "id": "U03",
+    "scenario": "single_use_skill_correct",
+    "userPrompt": "生成规范 commit message",
+    "expectedSkill": "git-commit",
+    "availableSkills": ["git-commit", "release-skills"],
+    "toolCalls": [{"name": "use_skill", "skill_name": "git-commit"}]
+  },
+  {
+    "id": "U04",
+    "scenario": "single_use_skill_correct",
+    "userPrompt": "做一张可视化图表",
+    "expectedSkill": "chart-visualization",
+    "availableSkills": ["chart-visualization", "data-analysis"],
+    "toolCalls": [{"name": "use_skill", "skill_name": "chart-visualization"}]
+  },
+  {
+    "id": "U05",
+    "scenario": "single_use_skill_correct",
+    "userPrompt": "执行发版步骤",
+    "expectedSkill": "release-skills",
+    "availableSkills": ["release-skills", "git-commit"],
+    "toolCalls": [{"name": "use_skill", "skill_name": "release-skills"}]
+  },
+  {
+    "id": "U06",
+    "scenario": "single_use_skill_correct",
+    "userPrompt": "给我做一次数据分析",
+    "expectedSkill": "data-analysis",
+    "availableSkills": ["data-analysis", "chart-visualization"],
+    "toolCalls": [{"name": "use_skill", "skill_name": "data-analysis"}]
+  },
+  {
+    "id": "T01",
+    "scenario": "typo_skill_name",
+    "userPrompt": "帮我设计着陆页",
+    "expectedSkill": "frontend-design",
+    "availableSkills": ["frontend-design", "code-review"],
+    "toolCalls": [{"name": "use_skill", "skill_name": "frontend_desgin"}],
+    "inferredEnumSkill": "frontend-design"
+  },
+  {
+    "id": "T02",
+    "scenario": "typo_skill_name",
+    "userPrompt": "请做代码审查",
+    "expectedSkill": "code-review",
+    "availableSkills": ["code-review", "git-commit"],
+    "toolCalls": [{"name": "use_skill", "skill_name": "code-reveiw"}],
+    "inferredEnumSkill": "code-review"
+  },
+  {
+    "id": "T03",
+    "scenario": "typo_skill_name",
+    "userPrompt": "生成 commit 文案",
+    "expectedSkill": "git-commit",
+    "availableSkills": ["git-commit", "release-skills"],
+    "toolCalls": [{"name": "use_skill", "skill_name": "gitcommit"}],
+    "inferredEnumSkill": "git-commit"
+  },
+  {
+    "id": "T04",
+    "scenario": "typo_skill_name",
+    "userPrompt": "制作图表",
+    "expectedSkill": "chart-visualization",
+    "availableSkills": ["chart-visualization", "data-analysis"],
+    "toolCalls": [{"name": "use_skill", "skill_name": "chart-visualisation"}],
+    "inferredEnumSkill": "chart-visualization"
+  },
+  {
+    "id": "N01",
+    "scenario": "missing_use_skill",
+    "userPrompt": "做一个产品首页",
+    "expectedSkill": "frontend-design",
+    "availableSkills": ["frontend-design", "code-review"],
+    "toolCalls": [{"name": "write_file"}]
+  },
+  {
+    "id": "N02",
+    "scenario": "missing_use_skill",
+    "userPrompt": "帮我做 code review",
+    "expectedSkill": "code-review",
+    "availableSkills": ["code-review", "git-commit"],
+    "toolCalls": []
+  },
+  {
+    "id": "N03",
+    "scenario": "missing_use_skill",
+    "userPrompt": "生成 commit message",
+    "expectedSkill": "git-commit",
+    "availableSkills": ["git-commit", "release-skills"],
+    "toolCalls": [{"name": "shell"}]
+  },
+  {
+    "id": "N04",
+    "scenario": "missing_use_skill",
+    "userPrompt": "分析后画图",
+    "expectedSkill": "chart-visualization",
+    "availableSkills": ["chart-visualization", "data-analysis"],
+    "toolCalls": [{"name": "write_file"}]
+  },
+  {
+    "id": "N05",
+    "scenario": "missing_use_skill",
+    "userPrompt": "发版准备",
+    "expectedSkill": "release-skills",
+    "availableSkills": ["release-skills", "git-commit"],
+    "toolCalls": [{"name": "shell"}, {"name": "write_file"}]
+  },
+  {
+    "id": "N06",
+    "scenario": "missing_use_skill",
+    "userPrompt": "做一份数据分析报告",
+    "expectedSkill": "data-analysis",
+    "availableSkills": ["data-analysis", "chart-visualization"],
+    "toolCalls": [{"name": "sql_query"}]
+  }
+]
+
