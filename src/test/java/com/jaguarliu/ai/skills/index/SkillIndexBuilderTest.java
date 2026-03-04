@@ -150,6 +150,23 @@ class SkillIndexBuilderTest {
             assertTrue(index.contains("&amp;"));
             assertTrue(index.contains("&quot;quotes&quot;"));
         }
+
+        @Test
+        @DisplayName("索引包含 tags 和 triggers 线索")
+        void indexIncludesTagsAndTriggersHints() throws IOException {
+            createSkillWithHints(
+                    "frontend-design",
+                    "Build polished frontend interfaces",
+                    List.of("frontend", "ui", "css"),
+                    List.of("create landing page", "design responsive page")
+            );
+            registry.refresh();
+
+            String index = indexBuilder.buildCompactIndex();
+
+            assertTrue(index.contains("tags: frontend, ui, css"));
+            assertTrue(index.contains("triggers: create landing page | design responsive page"));
+        }
     }
 
     @Nested
@@ -307,5 +324,27 @@ class SkillIndexBuilderTest {
                 # %s
                 Body content
                 """, name, description, name));
+    }
+
+    private void createSkillWithHints(String name,
+                                      String description,
+                                      List<String> tags,
+                                      List<String> triggers) throws IOException {
+        Path skillDir = skillsDir.resolve(name);
+        Files.createDirectories(skillDir);
+        String tagsYaml = String.join("\n", tags.stream().map(v -> "  - " + v).toList());
+        String triggersYaml = String.join("\n", triggers.stream().map(v -> "  - " + v).toList());
+        Files.writeString(skillDir.resolve("SKILL.md"), String.format("""
+                ---
+                name: %s
+                description: %s
+                tags:
+                %s
+                triggers:
+                %s
+                ---
+                # %s
+                Body content
+                """, name, description, tagsYaml, triggersYaml, name));
     }
 }

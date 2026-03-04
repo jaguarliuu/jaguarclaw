@@ -35,6 +35,9 @@ public class UseSkillTool implements Tool {
     @Override
     public ToolDefinition getDefinition() {
         String agentId = resolveAgentId();
+        List<String> availableSkillNames = skillRegistry.getAvailable(agentId).stream()
+                .map(e -> e.getMetadata().getName())
+                .collect(Collectors.toList());
 
         // 构建动态描述，包含当前可用的 skill 列表
         String skillList = skillRegistry.getAvailable(agentId).stream()
@@ -46,16 +49,21 @@ public class UseSkillTool implements Tool {
                 + "ALWAYS call this tool BEFORE writing code or creating files when a matching skill exists. "
                 + "Available skills:\n  " + (skillList.isEmpty() ? "(none)" : skillList);
 
+        Map<String, Object> skillNameSchema = new java.util.LinkedHashMap<>();
+        skillNameSchema.put("type", "string");
+        skillNameSchema.put("description", "The name of the skill to activate (e.g., 'frontend-design', 'pptx', 'xlsx')");
+        if (!availableSkillNames.isEmpty()) {
+            // Dynamic enum dramatically reduces skill-name hallucination.
+            skillNameSchema.put("enum", availableSkillNames);
+        }
+
         return ToolDefinition.builder()
                 .name("use_skill")
                 .description(description)
                 .parameters(Map.of(
                         "type", "object",
                         "properties", Map.of(
-                                "skill_name", Map.of(
-                                        "type", "string",
-                                        "description", "The name of the skill to activate (e.g., 'frontend-design', 'pptx', 'xlsx')"
-                                )
+                                "skill_name", skillNameSchema
                         ),
                         "required", List.of("skill_name")
                 ))

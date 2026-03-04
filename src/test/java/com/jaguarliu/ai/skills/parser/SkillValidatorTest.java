@@ -227,6 +227,36 @@ class SkillValidatorTest {
     class OptionalFieldTypeValidation {
 
         @Test
+        @DisplayName("tags 应该是列表")
+        void tagsShouldBeList() {
+            Map<String, Object> frontmatter = Map.of(
+                    "name", "test-skill",
+                    "description", "Test",
+                    "tags", "frontend"
+            );
+
+            List<SkillParseError> errors = validator.validate(frontmatter);
+
+            assertFalse(errors.isEmpty());
+            assertEquals(SkillParseError.ErrorCode.INVALID_FIELD_TYPE, errors.get(0).getCode());
+        }
+
+        @Test
+        @DisplayName("triggers 列表元素应该是字符串")
+        void triggersElementsShouldBeStrings() {
+            Map<String, Object> frontmatter = Map.of(
+                    "name", "test-skill",
+                    "description", "Test",
+                    "triggers", List.of("review code", 42)
+            );
+
+            List<SkillParseError> errors = validator.validate(frontmatter);
+
+            assertFalse(errors.isEmpty());
+            assertTrue(errors.get(0).getMessage().contains("triggers[1]"));
+        }
+
+        @Test
         @DisplayName("allowed-tools 应该是列表")
         void allowedToolsShouldBeList() {
             Map<String, Object> frontmatter = Map.of(

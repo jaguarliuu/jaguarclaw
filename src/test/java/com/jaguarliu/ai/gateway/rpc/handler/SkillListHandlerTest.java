@@ -45,6 +45,9 @@ class SkillListHandlerTest {
                 .metadata(SkillMetadata.builder()
                         .name("code-review")
                         .description("代码审查")
+                        .tags(List.of("code", "review"))
+                        .triggers(List.of("review this code"))
+                        .examples(List.of("/code-review src/main/App.java"))
                         .priority(0)
                         .build())
                 .available(true)
@@ -88,6 +91,9 @@ class SkillListHandlerTest {
         Map<String, Object> skill1 = skills.get(0);
         assertEquals("code-review", skill1.get("name"));
         assertEquals("代码审查", skill1.get("description"));
+        assertEquals(List.of("code", "review"), skill1.get("tags"));
+        assertEquals(List.of("review this code"), skill1.get("triggers"));
+        assertEquals(List.of("/code-review src/main/App.java"), skill1.get("examples"));
         assertEquals(true, skill1.get("available"));
         assertEquals("", skill1.get("unavailableReason"));
         assertEquals(0, skill1.get("priority"));
@@ -96,6 +102,9 @@ class SkillListHandlerTest {
         // 验证第二个 skill
         Map<String, Object> skill2 = skills.get(1);
         assertEquals("git-commit", skill2.get("name"));
+        assertEquals(List.of(), skill2.get("tags"));
+        assertEquals(List.of(), skill2.get("triggers"));
+        assertEquals(List.of(), skill2.get("examples"));
         assertEquals(false, skill2.get("available"));
         assertEquals("Missing binary: git", skill2.get("unavailableReason"));
     }

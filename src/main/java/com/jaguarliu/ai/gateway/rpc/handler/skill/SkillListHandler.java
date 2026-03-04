@@ -86,6 +86,9 @@ public class SkillListHandler implements RpcHandler {
         Map<String, Object> dto = new HashMap<>();
         dto.put("name", entry.getMetadata().getName());
         dto.put("description", entry.getMetadata().getDescription());
+        dto.put("tags", entry.getMetadata().getTags() != null ? entry.getMetadata().getTags() : List.of());
+        dto.put("triggers", entry.getMetadata().getTriggers() != null ? entry.getMetadata().getTriggers() : List.of());
+        dto.put("examples", entry.getMetadata().getExamples() != null ? entry.getMetadata().getExamples() : List.of());
         dto.put("available", entry.isAvailable());
         dto.put("unavailableReason", entry.getUnavailableReason() != null ? entry.getUnavailableReason() : "");
         dto.put("priority", entry.getMetadata().getPriority());

@@ -75,6 +75,14 @@ class SkillParserTest {
                     ---
                     name: code-review
                     description: Code review skill for analyzing code quality
+                    tags:
+                      - code
+                      - review
+                    triggers:
+                      - review this code
+                      - check code quality
+                    examples:
+                      - /code-review src/main/App.java
                     allowed-tools:
                       - read_file
                       - memory_search
@@ -114,6 +122,9 @@ class SkillParserTest {
             SkillMetadata metadata = result.getMetadata();
             assertEquals("code-review", metadata.getName());
             assertEquals("Code review skill for analyzing code quality", metadata.getDescription());
+            assertEquals(List.of("code", "review"), metadata.getTags());
+            assertEquals(List.of("review this code", "check code quality"), metadata.getTriggers());
+            assertEquals(List.of("/code-review src/main/App.java"), metadata.getExamples());
             assertEquals(List.of("read_file", "memory_search"), metadata.getAllowedTools());
             assertEquals(List.of("shell"), metadata.getConfirmBefore());
             assertEquals(1, metadata.getPriority());
