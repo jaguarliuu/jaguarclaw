@@ -40,10 +40,21 @@ public class NodeTestHandler implements RpcHandler {
                 return RpcResponse.error(request.getId(), "INVALID_PARAMS", "id is required");
             }
 
-            boolean success = nodeService.testConnection(id);
-            return RpcResponse.success(request.getId(), Map.of("success", success));
+            NodeService.ConnectionTestReport report = nodeService.testConnectionDetailed(id);
+            return RpcResponse.success(request.getId(), Map.of(
+                    "success", report.success(),
+                    "nodeId", report.nodeId(),
+                    "nodeAlias", report.nodeAlias(),
+                    "errorType", report.errorType(),
+                    "message", report.message(),
+                    "durationMs", report.durationMs(),
+                    "testedAt", report.testedAt() != null ? report.testedAt().toString() : null
+            ));
         }).onErrorResume(e -> {
-            log.error("Failed to test node: {}", e.getMessage());
+            log.error("Failed to test node: {}", LogSanitizer.sanitizeException(e));
+            if (e instanceof IllegalArgumentException iae) {
+                return Mono.just(RpcResponse.error(request.getId(), "INVALID_ARGUMENT", iae.getMessage()));
+            }
             return Mono.just(RpcResponse.error(request.getId(), "TEST_FAILED", "Connection test failed"));
         });
     }

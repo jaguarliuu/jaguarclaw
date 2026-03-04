@@ -101,15 +101,38 @@ public class K8sConnector implements Connector {
 
     @Override
     public boolean testConnection(String credential, NodeEntity node) {
+        return testConnectionWithDetails(credential, node).success();
+    }
+
+    @Override
+    public ConnectionTestOutcome testConnectionWithDetails(String credential, NodeEntity node) {
         try {
             ApiClient client = buildClient(credential, 10);
             CoreV1Api api = new CoreV1Api(client);
             api.listNamespace().execute();
-            return true;
+            return ConnectionTestOutcome.ok();
+        } catch (io.kubernetes.client.openapi.ApiException e) {
+            log.debug("K8s test connection failed for node {}: http {}", node.getAlias(), e.getCode());
+            ExecResult.ErrorType errorType = mapK8sApiException(e);
+            return ConnectionTestOutcome.fail(errorType, mapK8sApiMessage(e.getCode()));
+        } catch (IllegalArgumentException e) {
+            log.debug("K8s test connection invalid config for node {}: {}", node.getAlias(), e.getClass().getSimpleName());
+            return ConnectionTestOutcome.fail(ExecResult.ErrorType.VALIDATION_ERROR, "Invalid kubeconfig");
         } catch (Exception e) {
             log.debug("K8s test connection failed for node {}: {}", node.getAlias(), e.getClass().getSimpleName());
-            return false;
+            return ConnectionTestOutcome.fail(ExecResult.ErrorType.UNKNOWN, "Kubernetes connection test failed");
         }
+    }
+
+    private String mapK8sApiMessage(int statusCode) {
+        return switch (statusCode) {
+            case 401 -> "Kubernetes authentication failed";
+            case 403 -> "Kubernetes permission denied";
+            case 404 -> "Kubernetes resource not found";
+            case 408, 504 -> "Kubernetes API timed out";
+            case 500, 502, 503 -> "Kubernetes API internal error";
+            default -> "Kubernetes API request failed";
+        };
     }
 
     private ApiClient buildClient(String kubeconfig, int timeoutSeconds) throws Exception {

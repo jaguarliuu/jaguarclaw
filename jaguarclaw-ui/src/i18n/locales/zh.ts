@@ -486,6 +486,7 @@ export default {
       empty: '暂无已注册节点。',
       emptyHint: '添加 SSH、Kubernetes 或数据库节点以启用远程操作。',
       formTitle: '注册节点',
+      editTitle: '编辑节点',
       fields: {
         aliasLabel: '别名 *',
         aliasPlaceholder: '如 prod-web-1',
@@ -534,11 +535,15 @@ export default {
       testingBtn: '测试中...',
       registerBtn: '注册',
       registeringBtn: '注册中...',
+      updateBtn: '更新',
+      updatingBtn: '更新中...',
       policyLabel: '策略：{name}',
       errors: {
         aliasRequired: '别名不能为空',
         credentialRequired: '凭证不能为空',
         failedToRegister: '节点注册失败',
+        failedToUpdate: '节点更新失败',
+        failedToTest: '节点连接测试失败',
       },
     },
     datasources: {

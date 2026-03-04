@@ -488,6 +488,7 @@ export default {
       empty: 'No nodes registered yet.',
       emptyHint: 'Add SSH, Kubernetes, or Database nodes to enable remote operations.',
       formTitle: 'Register Node',
+      editTitle: 'Edit Node',
       fields: {
         aliasLabel: 'Alias *',
         aliasPlaceholder: 'e.g. prod-web-1',
@@ -536,11 +537,15 @@ export default {
       testingBtn: 'Testing...',
       registerBtn: 'Register',
       registeringBtn: 'Registering...',
+      updateBtn: 'Update',
+      updatingBtn: 'Updating...',
       policyLabel: 'policy: {name}',
       errors: {
         aliasRequired: 'Alias is required',
         credentialRequired: 'Credential is required',
         failedToRegister: 'Failed to register node',
+        failedToUpdate: 'Failed to update node',
+        failedToTest: 'Failed to test node connection',
       },
     },
     datasources: {

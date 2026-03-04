@@ -23,6 +23,7 @@ public class NodeService {
     private final NodeConsoleProperties properties;
     private final NodeValidator nodeValidator;
     private final RemoteCommandClassifier remoteCommandClassifier;
+    private final AuditLogService auditLogService;
 
     /**
      * 注册新节点
@@ -127,28 +128,56 @@ public class NodeService {
      * 测试节点连接
      */
     public boolean testConnection(String id) {
+        return testConnectionDetailed(id).success();
+    }
+
+    /**
+     * 测试节点连接（带详细结果）
+     */
+    public ConnectionTestReport testConnectionDetailed(String id) {
         NodeEntity node = nodeRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Node not found: " + id));
 
-        String credential = credentialCipher.decrypt(node.getEncryptedCredential(), node.getCredentialIv());
-        Connector connector = connectorFactory.get(node.getConnectorType());
-
-        boolean success;
+        LocalDateTime testedAt = LocalDateTime.now();
+        long start = System.currentTimeMillis();
+        ConnectionTestOutcome outcome;
         try {
-            success = connector.testConnection(credential, node);
+            String credential = credentialCipher.decrypt(node.getEncryptedCredential(), node.getCredentialIv());
+            Connector connector = connectorFactory.get(node.getConnectorType());
+            outcome = connector.testConnectionWithDetails(credential, node);
         } catch (Exception e) {
             // 仅记录异常类型，避免泄露连接细节（host/port/username）
             log.warn("Connection test failed for node {}: {}", node.getAlias(), e.getClass().getSimpleName());
             log.debug("Connection test exception details for node {}", node.getAlias(), e);
-            success = false;
+            outcome = ConnectionTestOutcome.fail(ExecResult.ErrorType.UNKNOWN, "Connection test failed");
         }
 
-        node.setLastTestedAt(LocalDateTime.now());
-        node.setLastTestSuccess(success);
+        long durationMs = System.currentTimeMillis() - start;
+        node.setLastTestedAt(testedAt);
+        node.setLastTestSuccess(outcome.success());
         nodeRepository.save(node);
 
-        log.info("Connection test for node {}: {}", node.getAlias(), success ? "success" : "failed");
-        return success;
+        String errorType = outcome.errorType() != null ? outcome.errorType().name() : ExecResult.ErrorType.UNKNOWN.name();
+        String message = outcome.success() ? "Connection successful" : (outcome.message() != null ? outcome.message() : "Connection test failed");
+        auditLogService.logNodeOperation(
+                "node.test",
+                node.getAlias(),
+                node.getId(),
+                node.getConnectorType(),
+                outcome.success() ? "success" : "error",
+                String.format("errorType=%s, message=%s", errorType, message)
+        );
+
+        log.info("Connection test for node {}: {}", node.getAlias(), outcome.success() ? "success" : "failed");
+        return new ConnectionTestReport(
+                node.getId(),
+                node.getAlias(),
+                outcome.success(),
+                outcome.success() ? null : errorType,
+                message,
+                durationMs,
+                testedAt
+        );
     }
 
     /**
@@ -160,8 +189,14 @@ public class NodeService {
 
         // 检查命令安全性（根据 safetyPolicy）
         String safetyPolicy = node.getSafetyPolicy();
+        String commandForPolicy = command;
+        if ("k8s".equalsIgnoreCase(node.getConnectorType())
+                && command != null
+                && !command.trim().toLowerCase(Locale.ROOT).startsWith("kubectl ")) {
+            commandForPolicy = "kubectl " + command;
+        }
         RemoteCommandClassifier.Classification classification =
-            remoteCommandClassifier.classify(command, safetyPolicy);
+            remoteCommandClassifier.classify(commandForPolicy, safetyPolicy);
 
         // 如果命令被阻止（DESTRUCTIVE），直接拒绝执行
         if (classification.isBlocked()) {
@@ -251,7 +286,7 @@ public class NodeService {
 
         return nodes.stream()
                 .filter(n -> type == null || type.isBlank() || n.getConnectorType().equals(type))
-                .filter(n -> tag == null || tag.isBlank() || (n.getTags() != null && n.getTags().contains(tag)))
+                .filter(n -> tag == null || tag.isBlank() || hasTag(n.getTags(), tag))
                 .map(node -> {
                     Map<String, Object> info = new LinkedHashMap<>();
                     info.put("alias", node.getAlias());
@@ -267,6 +302,28 @@ public class NodeService {
                 })
                 .toList();
     }
+
+    private static boolean hasTag(String tags, String expectedTag) {
+        if (tags == null || tags.isBlank() || expectedTag == null || expectedTag.isBlank()) {
+            return false;
+        }
+        String needle = expectedTag.trim().toLowerCase(Locale.ROOT);
+        return Arrays.stream(tags.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isBlank())
+                .map(s -> s.toLowerCase(Locale.ROOT))
+                .anyMatch(needle::equals);
+    }
+
+    public record ConnectionTestReport(
+            String nodeId,
+            String nodeAlias,
+            boolean success,
+            String errorType,
+            String message,
+            long durationMs,
+            LocalDateTime testedAt
+    ) {}
 
     /**
      * 将 NodeEntity 转换为前端 DTO（显式排除凭据字段）
