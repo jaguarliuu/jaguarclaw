@@ -44,6 +44,17 @@ function run(cmd, cwd = ROOT) {
   execSync(cmd, { cwd, stdio: 'inherit' });
 }
 
+function runOptional(cmd, label, cwd = ROOT) {
+  console.log(`\n> ${cmd}`);
+  try {
+    execSync(cmd, { cwd, stdio: 'inherit' });
+    return true;
+  } catch (error) {
+    console.warn(`Optional step failed (${label}), continuing: ${error.message}`);
+    return false;
+  }
+}
+
 function copyDir(src, dest) {
   fs.mkdirSync(dest, { recursive: true });
   for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
@@ -121,11 +132,11 @@ try {
   console.log('\n=== Step 5.5: Copying bundled runtime (optional) ===');
   if (!fs.existsSync(path.join(RUNTIME_BUNDLE_DIR, 'runtime.zip')) && !fs.existsSync(RUNTIME_STAGING_DIR)) {
     console.log('No runtime/staging or runtime.zip found, preparing runtime automatically...');
-    run('node electron/scripts/prepare-runtime.js');
+    runOptional('node electron/scripts/prepare-runtime.js', 'prepare-runtime');
   }
   if (fs.existsSync(RUNTIME_STAGING_DIR)) {
     console.log('Found runtime/staging, packaging runtime bundle...');
-    run('node electron/scripts/package-runtime.js');
+    runOptional('node electron/scripts/package-runtime.js', 'package-runtime');
   }
   const runtimeZipSrc = path.join(RUNTIME_BUNDLE_DIR, 'runtime.zip');
   const runtimeVersionSrc = path.join(RUNTIME_BUNDLE_DIR, 'runtime.version');

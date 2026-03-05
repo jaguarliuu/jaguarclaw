@@ -5,7 +5,9 @@
  * 1. Resolve exact Node/Python versions from runtime/manifest.json
  * 2. Download official archives
  * 3. Extract to runtime/staging/node and runtime/staging/python
- * 4. Bootstrap pip and install runtime/requirements.txt
+ * 4. Install runtime/requirements.txt packages into embedded Python
+ *    - Windows host: run embedded python.exe + pip directly
+ *    - macOS/Linux host: download win_amd64 wheels and unpack into Lib/site-packages
  *
  * Usage:
  *   node electron/scripts/prepare-runtime.js
@@ -16,7 +18,7 @@
 const https = require('https');
 const fs = require('fs');
 const path = require('path');
-const { execSync } = require('child_process');
+const { execSync, spawnSync } = require('child_process');
 
 const ROOT = path.resolve(__dirname, '..', '..');
 const RUNTIME_DIR = path.join(ROOT, 'runtime');
@@ -291,6 +293,62 @@ function runCommand(cmd, cwd) {
   execSync(cmd, { cwd, stdio: 'inherit' });
 }
 
+function getPythonTag(pythonVersion) {
+  const parts = String(pythonVersion).split('.');
+  if (parts.length < 2) {
+    throw new Error(`Invalid python version: ${pythonVersion}`);
+  }
+  const major = parts[0];
+  const minor = parts[1];
+  return {
+    pyVersion: `${major}.${minor}`,
+    abiTag: `cp${major}${minor}`,
+  };
+}
+
+function findHostPython() {
+  const fromEnv = String(process.env.PYTHON || '').trim();
+  const candidates = [fromEnv, 'python3', 'python'].filter(Boolean);
+  for (const candidate of candidates) {
+    const check = spawnSync(candidate, ['--version'], { stdio: 'pipe' });
+    if (check.status === 0) {
+      return candidate;
+    }
+  }
+  throw new Error(
+    'No host Python found. Install python3 (with pip) on macOS/Linux, or set PYTHON=/path/to/python3'
+  );
+}
+
+function installPackagesByWheelExtraction(pythonVersion, pythonDir) {
+  const hostPython = findHostPython();
+  const { pyVersion, abiTag } = getPythonTag(pythonVersion);
+  const sitePackagesDir = path.join(pythonDir, 'Lib', 'site-packages');
+  const wheelsDir = path.join(TMP_DIR, 'wheels');
+  cleanDir(wheelsDir);
+  ensureDir(sitePackagesDir);
+
+  console.log(`Using host Python for wheel download: ${hostPython}`);
+  console.log('Downloading Windows wheels for requirements...');
+  runCommand(
+    `"${hostPython}" -m pip download --disable-pip-version-check --only-binary=:all: ` +
+    `--platform win_amd64 --implementation cp --python-version "${pyVersion}" --abi "${abiTag}" ` +
+    `--dest "${wheelsDir}" -r "${REQUIREMENTS_PATH}"`,
+    ROOT
+  );
+
+  const wheelFiles = fs.readdirSync(wheelsDir).filter((name) => name.toLowerCase().endsWith('.whl'));
+  if (wheelFiles.length === 0) {
+    throw new Error('No wheel files were downloaded for runtime requirements');
+  }
+
+  console.log(`Extracting ${wheelFiles.length} wheel(s) into embedded site-packages...`);
+  for (const wheelFile of wheelFiles) {
+    const wheelPath = path.join(wheelsDir, wheelFile);
+    unzipArchive(wheelPath, sitePackagesDir);
+  }
+}
+
 function readPreparedMarker() {
   if (!fs.existsSync(PREPARED_MARKER)) return null;
   try {
@@ -314,6 +372,7 @@ async function main() {
 
   const nodeVersion = await resolvePathSpec(nodeSpec, resolveNodeVersion);
   const pythonVersion = await resolvePathSpec(pythonSpec, resolvePythonVersion);
+  const hostIsWindows = process.platform === 'win32';
 
   const nodeUrl = `https://nodejs.org/dist/v${nodeVersion}/node-v${nodeVersion}-win-x64.zip`;
   const pythonUrl = `https://www.python.org/ftp/python/${pythonVersion}/python-${pythonVersion}-embed-amd64.zip`;
@@ -324,6 +383,8 @@ async function main() {
       mode: 'dry-run',
       nodeVersion,
       pythonVersion,
+      hostPlatform: process.platform,
+      packageInstallMode: hostIsWindows ? 'native-pip' : 'cross-wheel-extract',
       nodeUrl,
       pythonUrl,
       getPipUrl,
@@ -358,8 +419,10 @@ async function main() {
   console.log(`Downloading Python ${pythonVersion} embeddable...`);
   await downloadFile(pythonUrl, pyZip);
 
-  console.log('Downloading get-pip.py...');
-  await downloadFile(getPipUrl, getPipPy);
+  if (hostIsWindows) {
+    console.log('Downloading get-pip.py...');
+    await downloadFile(getPipUrl, getPipPy);
+  }
 
   console.log('Extracting Node...');
   const nodeExtractTmp = path.join(TMP_DIR, 'node');
@@ -385,24 +448,32 @@ async function main() {
   updatePythonPth(pythonDir);
   ensureDir(path.join(pythonDir, 'Lib', 'site-packages'));
 
-  console.log('Bootstrapping pip...');
-  runCommand(`"${pythonExe}" "${getPipPy}" --no-warn-script-location`, ROOT);
+  if (hostIsWindows) {
+    console.log('Bootstrapping pip...');
+    runCommand(`"${pythonExe}" "${getPipPy}" --no-warn-script-location`, ROOT);
 
-  console.log('Installing Python packages...');
-  runCommand(
-    `"${pythonExe}" -m pip install --disable-pip-version-check --no-warn-script-location -r "${REQUIREMENTS_PATH}"`,
-    ROOT
-  );
+    console.log('Installing Python packages...');
+    runCommand(
+      `"${pythonExe}" -m pip install --disable-pip-version-check --no-warn-script-location -r "${REQUIREMENTS_PATH}"`,
+      ROOT
+    );
 
-  console.log('Verifying runtime binaries...');
-  runCommand(`"${pythonExe}" -V`, ROOT);
-  runCommand(`"${nodeExe}" -v`, ROOT);
+    console.log('Verifying runtime binaries...');
+    runCommand(`"${pythonExe}" -V`, ROOT);
+    runCommand(`"${nodeExe}" -v`, ROOT);
+  } else {
+    console.log('Installing Python packages by wheel extraction (cross-platform mode)...');
+    installPackagesByWheelExtraction(pythonVersion, pythonDir);
+    console.log('Skipping direct execution checks for node.exe/python.exe on non-Windows host.');
+  }
 
   const requirementsData = fs.readFileSync(REQUIREMENTS_PATH);
   const requirementsSha256 = require('crypto').createHash('sha256').update(requirementsData).digest('hex');
   fs.writeFileSync(PREPARED_MARKER, JSON.stringify({
     nodeVersion,
     pythonVersion,
+    hostPlatform: process.platform,
+    packageInstallMode: hostIsWindows ? 'native-pip' : 'cross-wheel-extract',
     requirementsSha256,
     preparedAt: new Date().toISOString(),
   }, null, 2), 'utf8');
