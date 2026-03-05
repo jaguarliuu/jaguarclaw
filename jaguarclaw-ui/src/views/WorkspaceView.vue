@@ -8,6 +8,7 @@ import { useContext } from '@/composables/useContext'
 import { useMcpServers } from '@/composables/useMcpServers'
 import { useDataSource } from '@/composables/useDataSource'
 import { useModelSelector } from '@/composables/useModelSelector'
+import { useI18n } from '@/i18n'
 import type { ContextType } from '@/types'
 import SessionSidebar from '@/components/SessionSidebar.vue'
 import MessageList from '@/components/MessageList.vue'
@@ -35,6 +36,7 @@ const {
 const { servers: mcpServers, loadServers: loadMcpServers } = useMcpServers()
 const { dataSources, loadDataSources } = useDataSource()
 const { selectedModel, availableModels, activeModelLabel, selectModel } = useModelSelector()
+const { t } = useI18n()
 
 // Context input modal 状态
 const showContextModal = ref(false)
@@ -52,6 +54,7 @@ const {
   isStreaming,
   filteredSessions,
   agents,
+  selectedAgent,
   selectedAgentId,
   activeSubagentId,
   activeSubagent,
@@ -67,6 +70,11 @@ const {
   confirmToolCall,
   cancelRun,
 } = useChat()
+
+const assistantDisplayName = computed(() => {
+  const fromProfile = selectedAgent.value?.displayName || selectedAgent.value?.name
+  return fromProfile?.trim() || t('message.assistant')
+})
 
 // 只显示 enabled 且已连接（有 toolCount）的 MCP 服务器
 const connectedMcpServers = computed(() =>
@@ -249,6 +257,7 @@ async function handleInstallAction() {
         :messages="messages"
         :stream-blocks="streamBlocks"
         :is-streaming="isStreaming"
+        :assistant-name="assistantDisplayName"
         :active-subagent-id="activeSubagentId"
         :current-session-id="currentSessionId"
         @confirm="handleConfirmToolCall"

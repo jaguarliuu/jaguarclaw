@@ -13,6 +13,7 @@ const props = defineProps<{
   messages: Message[]
   streamBlocks: StreamBlock[]
   isStreaming: boolean
+  assistantName?: string
   activeSubagentId?: string | null
   currentSessionId?: string | null
 }>()
@@ -81,6 +82,7 @@ watch(
           v-for="message in messages"
           :key="message.id"
           :message="message"
+          :assistant-name="assistantName"
           :anchor-id="message.role === 'user' ? `msg-${message.id}` : undefined"
           :active-subagent-id="activeSubagentId"
           @confirm="(callId, decision) => emit('confirm', callId, decision)"
@@ -90,7 +92,7 @@ watch(
         <!-- Streaming message with interleaved blocks -->
         <article v-if="isStreaming" class="message assistant streaming">
           <div class="message-meta">
-            <span class="role">{{ t('message.assistantRole') }}</span>
+            <span class="role">{{ assistantName || t('message.assistant') }}</span>
             <span class="streaming-indicator">
               <span class="streaming-dot"></span>
               <span class="streaming-dot"></span>
@@ -218,8 +220,6 @@ watch(
   font-family: var(--font-mono);
   font-size: 11px;
   font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
   color: var(--color-gray-500);
 }
 
@@ -275,4 +275,3 @@ watch(
 <style>
 @import '@/styles/markdown.css';
 </style>
-

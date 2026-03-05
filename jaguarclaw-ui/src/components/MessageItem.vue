@@ -11,6 +11,7 @@ import ContextChip from './ContextChip.vue'
 
 const props = defineProps<{
   message: Message
+  assistantName?: string
   activeSubagentId?: string | null
   anchorId?: string
 }>()
@@ -30,6 +31,12 @@ const hasBlocks = computed(() =>
 
 // 简单内容渲染（用于 user 消息或没有 blocks 的 assistant 消息）
 const renderedContent = computed(() => render(props.message.content))
+
+const assistantAvatarInitial = computed(() => {
+  const label = props.assistantName?.trim()
+  if (!label) return 'M'
+  return label[0]?.toUpperCase() || 'M'
+})
 
 // 渲染文本块
 function renderTextBlock(content: string | undefined): string {
@@ -53,8 +60,8 @@ const displayContexts = computed(() => {
   <article class="message" :class="message.role" :id="anchorId">
     <div class="message-inner">
       <div class="message-meta">
-        <span class="msg-avatar" :class="message.role">{{ message.role === 'user' ? t('message.you')[0] : 'M' }}</span>
-        <span class="role">{{ message.role === 'user' ? t('message.you') : t('message.assistant') }}</span>
+        <span class="msg-avatar" :class="message.role">{{ message.role === 'user' ? t('message.you')[0] : assistantAvatarInitial }}</span>
+        <span class="role">{{ message.role === 'user' ? t('message.you') : (assistantName || t('message.assistant')) }}</span>
       </div>
 
       <!-- 有 blocks 的 assistant 消息：交错显示 -->
