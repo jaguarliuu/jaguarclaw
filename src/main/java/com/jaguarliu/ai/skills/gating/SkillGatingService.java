@@ -1,13 +1,12 @@
 package com.jaguarliu.ai.skills.gating;
 
 import com.jaguarliu.ai.skills.model.SkillRequires;
+import com.jaguarliu.ai.tools.runtime.BundledRuntimeService;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Service;
 
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -36,11 +35,18 @@ public class SkillGatingService {
 
     // Windows 判断
     private final boolean isWindows;
+    private final BundledRuntimeService bundledRuntimeService;
 
     public SkillGatingService(Environment springEnv) {
+        this(springEnv, null);
+    }
+
+    @Autowired
+    public SkillGatingService(Environment springEnv, BundledRuntimeService bundledRuntimeService) {
         this.springEnv = springEnv;
         this.currentOs = detectOs();
         this.isWindows = System.getProperty("os.name", "").toLowerCase().contains("win");
+        this.bundledRuntimeService = bundledRuntimeService;
     }
 
     /**
@@ -185,7 +191,14 @@ public class SkillGatingService {
      * 使用缓存避免重复执行命令
      */
     private boolean isBinaryExists(String binName) {
-        return binExistsCache.computeIfAbsent(binName, this::checkBinaryInPath);
+        return binExistsCache.computeIfAbsent(binName, this::checkBinaryExists);
+    }
+
+    private boolean checkBinaryExists(String binName) {
+        if (bundledRuntimeService != null && bundledRuntimeService.hasBundledBinary(binName)) {
+            return true;
+        }
+        return checkBinaryInPath(binName);
     }
 
     /**

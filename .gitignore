@@ -50,5 +50,12 @@ electron/resources/
 electron/release/
 electron/node_modules
 
+# Bundled runtime artifacts
+runtime/staging/
+runtime/_downloads/
+runtime/_tmp/
+runtime/runtime.zip
+runtime/runtime.version
+
 
 dist/

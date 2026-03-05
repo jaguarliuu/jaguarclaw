@@ -68,6 +68,12 @@ public class SystemPromptBuilder {
     @Value("${agent.custom-system-prompt:}")
     private String customSystemPrompt;
 
+    @Value("${tools.runtime.enabled:false}")
+    private boolean bundledRuntimeEnabled;
+
+    @Value("${tools.runtime.home:}")
+    private String bundledRuntimeHome;
+
     private final KernelPromptFacet kernelPromptFacet;
     private final SoulPromptFacet soulPromptFacet;
     private final RulePromptFacet rulePromptFacet;
@@ -415,6 +421,12 @@ public class SystemPromptBuilder {
         sb.append(String.format("- OS: %s\n", System.getProperty("os.name")));
         sb.append(String.format("- Java: %s\n", System.getProperty("java.version")));
         sb.append(String.format("- Mode: %s\n", mode.name().toLowerCase()));
+        if (bundledRuntimeEnabled) {
+            sb.append("- Bundled Runtime: enabled (prefer bundled Python/Node; do not ask user to install runtimes)\n");
+            if (bundledRuntimeHome != null && !bundledRuntimeHome.isBlank()) {
+                sb.append(String.format("- Bundled Runtime Home: %s\n", bundledRuntimeHome));
+            }
+        }
         sb.append("\n");
         return sb.toString();
     }

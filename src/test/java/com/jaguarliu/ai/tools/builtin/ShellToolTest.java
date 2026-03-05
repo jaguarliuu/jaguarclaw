@@ -3,11 +3,14 @@ package com.jaguarliu.ai.tools.builtin;
 import com.jaguarliu.ai.tools.ToolResult;
 import com.jaguarliu.ai.tools.ToolsProperties;
 import com.jaguarliu.ai.tools.builtin.shell.ShellTool;
+import com.jaguarliu.ai.tools.runtime.BundledRuntimeService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -23,7 +26,7 @@ class ShellToolTest {
     @Test
     @DisplayName("command and script_content are mutually exclusive")
     void commandAndScriptContentMutuallyExclusive() {
-        ShellTool tool = new ShellTool(propertiesWithWorkspace());
+        ShellTool tool = newTool(propertiesWithWorkspace());
 
         ToolResult result = tool.execute(Map.of(
                 "command", "echo hello",
@@ -38,7 +41,7 @@ class ShellToolTest {
     @Test
     @DisplayName("should execute script_content successfully")
     void executeScriptContentSuccessfully() {
-        ShellTool tool = new ShellTool(propertiesWithWorkspace());
+        ShellTool tool = newTool(propertiesWithWorkspace());
         String script = isWindows() ? "Write-Output 'hello-script'" : "echo hello-script";
 
         ToolResult result = tool.execute(Map.of("script_content", script)).block();
@@ -48,10 +51,37 @@ class ShellToolTest {
         assertTrue(result.getContent().toLowerCase().contains("hello-script"));
     }
 
+    @Test
+    @DisplayName("should inject bundled runtime bin path into PATH")
+    void shouldInjectBundledRuntimeBinPathIntoPath() throws Exception {
+        Path runtimeHome = tempDir.resolve("runtime");
+        String relativeBin = isWindows() ? "node" : "bin";
+        Path binPath = runtimeHome.resolve(relativeBin);
+        Files.createDirectories(binPath);
+
+        ToolsProperties properties = propertiesWithWorkspace();
+        properties.getRuntime().setEnabled(true);
+        properties.getRuntime().setHome(runtimeHome.toString());
+        properties.getRuntime().setBinPaths(List.of(relativeBin));
+
+        ShellTool tool = newTool(properties);
+        String script = isWindows() ? "Write-Output $env:Path" : "echo $PATH";
+
+        ToolResult result = tool.execute(Map.of("script_content", script)).block();
+
+        assertNotNull(result);
+        assertTrue(result.isSuccess(), () -> "Unexpected error: " + result.getContent());
+        assertTrue(result.getContent().contains(binPath.toAbsolutePath().normalize().toString()));
+    }
+
     private ToolsProperties propertiesWithWorkspace() {
         ToolsProperties properties = new ToolsProperties();
         properties.setWorkspace(tempDir.toString());
         return properties;
+    }
+
+    private ShellTool newTool(ToolsProperties properties) {
+        return new ShellTool(properties, new BundledRuntimeService(properties));
     }
 
     private static boolean isWindows() {

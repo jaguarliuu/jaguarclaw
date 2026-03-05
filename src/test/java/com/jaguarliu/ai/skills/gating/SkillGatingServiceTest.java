@@ -1,6 +1,7 @@
 package com.jaguarliu.ai.skills.gating;
 
 import com.jaguarliu.ai.skills.model.SkillRequires;
+import com.jaguarliu.ai.tools.runtime.BundledRuntimeService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -14,6 +15,7 @@ import org.springframework.core.env.Environment;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 /**
@@ -168,6 +170,23 @@ class SkillGatingServiceTest {
             GatingResult result = gatingService.evaluate(requires);
 
             assertTrue(result.isAvailable());
+        }
+
+        @Test
+        @DisplayName("bundled runtime 存在二进制时应通过")
+        void bundledRuntimeBinaryPasses() {
+            BundledRuntimeService runtimeService = mock(BundledRuntimeService.class);
+            when(runtimeService.hasBundledBinary("python")).thenReturn(true);
+
+            SkillGatingService service = new SkillGatingService(springEnv, runtimeService);
+
+            SkillRequires requires = SkillRequires.builder()
+                    .bins(List.of("python"))
+                    .build();
+
+            GatingResult result = service.evaluate(requires);
+            assertTrue(result.isAvailable());
+            assertTrue(result.getMissingBins().isEmpty());
         }
     }
 

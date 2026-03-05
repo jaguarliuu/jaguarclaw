@@ -32,6 +32,8 @@ const ELECTRON_DIR = path.resolve(__dirname, '..');
 const RESOURCES_DIR = path.join(ELECTRON_DIR, 'resources');
 const UI_DIR = path.join(ROOT, 'jaguarclaw-ui');
 const LOCAL_OUTPUT_DIR = path.join(ELECTRON_DIR, 'dist');
+const RUNTIME_BUNDLE_DIR = path.join(ROOT, 'runtime');
+const RUNTIME_STAGING_DIR = path.join(RUNTIME_BUNDLE_DIR, 'staging');
 const LOCAL_ICON = path.join(ELECTRON_DIR, 'assets','local-icon.ico');
 const DEFAULT_ICON = path.join(ELECTRON_DIR, 'assets', 'icon.ico');
 
@@ -113,6 +115,36 @@ try {
     console.log('Copied .jaguarclaw/skills/ → resources/skills/');
   } else {
     console.log('No .jaguarclaw/skills/ found, skipping');
+  }
+
+  // Step 5.5: Copy optional bundled runtime archive
+  console.log('\n=== Step 5.5: Copying bundled runtime (optional) ===');
+  if (!fs.existsSync(path.join(RUNTIME_BUNDLE_DIR, 'runtime.zip')) && !fs.existsSync(RUNTIME_STAGING_DIR)) {
+    console.log('No runtime/staging or runtime.zip found, preparing runtime automatically...');
+    run('node electron/scripts/prepare-runtime.js');
+  }
+  if (fs.existsSync(RUNTIME_STAGING_DIR)) {
+    console.log('Found runtime/staging, packaging runtime bundle...');
+    run('node electron/scripts/package-runtime.js');
+  }
+  const runtimeZipSrc = path.join(RUNTIME_BUNDLE_DIR, 'runtime.zip');
+  const runtimeVersionSrc = path.join(RUNTIME_BUNDLE_DIR, 'runtime.version');
+  const runtimeZipDest = path.join(RESOURCES_DIR, 'runtime.zip');
+  const runtimeVersionDest = path.join(RESOURCES_DIR, 'runtime.version');
+  if (fs.existsSync(runtimeZipSrc)) {
+    fs.copyFileSync(runtimeZipSrc, runtimeZipDest);
+    console.log('Copied runtime/runtime.zip → resources/runtime.zip');
+    if (fs.existsSync(runtimeVersionSrc)) {
+      fs.copyFileSync(runtimeVersionSrc, runtimeVersionDest);
+      console.log('Copied runtime/runtime.version → resources/runtime.version');
+    } else {
+      fs.rmSync(runtimeVersionDest, { force: true });
+      console.log('runtime/runtime.version not found, startup will use zip metadata as fallback version');
+    }
+  } else {
+    fs.rmSync(runtimeZipDest, { force: true });
+    fs.rmSync(runtimeVersionDest, { force: true });
+    console.log('No runtime/runtime.zip found, skipping bundled runtime');
   }
 
   // Step 6: Check JRE

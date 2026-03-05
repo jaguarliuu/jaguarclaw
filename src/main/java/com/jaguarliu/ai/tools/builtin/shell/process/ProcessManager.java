@@ -2,6 +2,7 @@ package com.jaguarliu.ai.tools.builtin.shell.process;
 
 import com.jaguarliu.ai.tools.ToolsProperties;
 import com.jaguarliu.ai.tools.WorkspaceResolver;
+import com.jaguarliu.ai.tools.runtime.BundledRuntimeService;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import lombok.RequiredArgsConstructor;
@@ -26,6 +27,7 @@ import java.util.concurrent.*;
 public class ProcessManager {
 
     private final ToolsProperties properties;
+    private final BundledRuntimeService bundledRuntimeService;
 
     /**
      * 存储所有被管理的进程
@@ -104,6 +106,7 @@ public class ProcessManager {
         // 工作目录设为 session workspace
         Path workspacePath = WorkspaceResolver.resolveSessionWorkspace(properties);
         pb.directory(workspacePath.toFile());
+        bundledRuntimeService.applyToEnvironment(pb.environment());
 
         // 合并 stdout 和 stderr
         pb.redirectErrorStream(true);

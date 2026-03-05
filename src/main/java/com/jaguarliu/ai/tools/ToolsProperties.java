@@ -4,6 +4,9 @@ import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Configuration;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
  * 工具配置
  */
@@ -26,4 +29,28 @@ public class ToolsProperties {
      * 文件上传存放目录（相对于工作空间）
      */
     private String uploadDir = "uploads";
+
+    /**
+     * 内置运行时配置（Node/Python）
+     */
+    private RuntimeProperties runtime = new RuntimeProperties();
+
+    @Data
+    public static class RuntimeProperties {
+
+        /**
+         * 是否启用内置 runtime 注入
+         */
+        private boolean enabled = false;
+
+        /**
+         * 内置 runtime 根目录（绝对/相对路径）
+         */
+        private String home = "";
+
+        /**
+         * runtime 可执行目录列表（相对于 home 或绝对路径）
+         */
+        private List<String> binPaths = new ArrayList<>();
+    }
 }

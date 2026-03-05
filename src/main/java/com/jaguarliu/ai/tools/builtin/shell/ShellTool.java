@@ -6,6 +6,7 @@ import com.jaguarliu.ai.tools.ToolExecutionContext;
 import com.jaguarliu.ai.tools.ToolResult;
 import com.jaguarliu.ai.tools.ToolsProperties;
 import com.jaguarliu.ai.tools.WorkspaceResolver;
+import com.jaguarliu.ai.tools.runtime.BundledRuntimeService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -35,6 +36,7 @@ import java.util.concurrent.*;
 public class ShellTool implements Tool {
 
     private final ToolsProperties properties;
+    private final BundledRuntimeService bundledRuntimeService;
 
     /**
      * 命令执行超时（秒）
@@ -138,6 +140,7 @@ public class ShellTool implements Tool {
 
                 // 将 workspace 路径注入环境变量，供脚本输出文件使用
                 pb.environment().put("WORKSPACE_DIR", workspacePath.toString());
+                bundledRuntimeService.applyToEnvironment(pb.environment());
 
                 // 合并 stdout 和 stderr
                 pb.redirectErrorStream(true);
