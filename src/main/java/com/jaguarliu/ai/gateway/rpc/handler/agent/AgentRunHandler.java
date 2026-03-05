@@ -202,6 +202,16 @@ public class AgentRunHandler implements RpcHandler {
         String prompt = run.getPrompt();
 
         try {
+            // 取消可能发生在队列等待阶段，执行前先读取最新状态
+            var latestRun = runService.get(runId, principalId);
+            if (latestRun.isPresent()) {
+                RunStatus latestStatus = RunStatus.fromValue(latestRun.get().getStatus());
+                if (latestStatus == RunStatus.CANCELED) {
+                    log.info("Skip execution for canceled queued run: id={}", runId);
+                    return;
+                }
+            }
+
             // 1. lifecycle.start
             runService.updateStatus(runId, RunStatus.RUNNING);
             eventBus.publish(AgentEvent.lifecycleStart(connectionId, runId));

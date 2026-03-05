@@ -350,8 +350,16 @@ public class AgentRuntime {
         ArtifactStreamExtractor artifactExtractor = new ArtifactStreamExtractor();
         LlmResponse.Usage[] usageHolder = {null};
 
+        if (context.isAborted()) {
+            throw new CancellationException("Run cancelled by user");
+        }
+
         llmClient.stream(request)
                 .doOnNext(chunk -> {
+                    if (context.isAborted()) {
+                        throw new CancellationException("Run cancelled by user");
+                    }
+
                     if (chunk.getDelta() != null) {
                         content.append(chunk.getDelta());
                         eventBus.publish(AgentEvent.assistantDelta(connectionId, runId, chunk.getDelta()));
@@ -383,6 +391,10 @@ public class AgentRuntime {
                     }
                 })
                 .blockLast();
+
+        if (context.isAborted()) {
+            throw new CancellationException("Run cancelled by user");
+        }
 
         if (usageHolder[0] != null) {
             context.addUsage(usageHolder[0]);

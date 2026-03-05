@@ -655,6 +655,10 @@ function findSubagentByRunId(runId: string): SubagentInfo | undefined {
   return subagentIndex.value[runId]
 }
 
+function isCurrentMainRun(runId: string): boolean {
+  return !!currentRun.value && runId === currentRun.value.id
+}
+
 // Setup event listeners
 function setupEventListeners() {
   // 防止重复注册
@@ -686,6 +690,10 @@ function setupEventListeners() {
               content,
             })
           }
+          return
+        }
+
+        if (!isCurrentMainRun(event.runId)) {
           return
         }
 
@@ -723,6 +731,10 @@ function setupEventListeners() {
           return
         }
 
+        if (!isCurrentMainRun(event.runId)) {
+          return
+        }
+
         createToolBlock(toolCall)
       }
     }),
@@ -754,6 +766,10 @@ function setupEventListeners() {
             })
             subagent.toolCallIndex![payload.callId] = toolCall
           }
+          return
+        }
+
+        if (!isCurrentMainRun(event.runId)) {
           return
         }
 
@@ -804,6 +820,10 @@ function setupEventListeners() {
           return
         }
 
+        if (!isCurrentMainRun(event.runId)) {
+          return
+        }
+
         // 路由到主流
         updateToolBlock(payload.callId, (toolCall) => {
           toolCall.status = payload.success ? 'success' : 'error'
@@ -817,7 +837,7 @@ function setupEventListeners() {
   eventCleanups.push(
     onEvent('skill.activated', (event: RpcEvent) => {
       const payload = event.payload as SkillActivatedPayload
-      if (payload) {
+      if (payload && isCurrentMainRun(event.runId)) {
         createSkillBlock({
           skillName: payload.skillName,
           source: payload.source,
@@ -867,7 +887,7 @@ function setupEventListeners() {
   eventCleanups.push(
     onEvent('file.created', (event: RpcEvent) => {
       const payload = event.payload as FileCreatedPayload
-      if (payload) {
+      if (payload && isCurrentMainRun(event.runId)) {
         const fileInfo: SessionFile = {
           id: payload.fileId || `tmp-${Date.now()}`,
           sessionId: currentSessionId.value || '',
@@ -891,7 +911,7 @@ function setupEventListeners() {
   eventCleanups.push(
     onEvent('subagent.spawned', (event: RpcEvent) => {
       const payload = event.payload as SubagentSpawnedPayload
-      if (payload) {
+      if (payload && isCurrentMainRun(event.runId)) {
         createSubagentBlock({
           subRunId: payload.subRunId,
           subSessionId: payload.subSessionId,
