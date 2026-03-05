@@ -84,6 +84,7 @@ watch(
           <ToolCallCard
             v-if="block.type === 'tool' && block.toolCall"
             :tool-call="block.toolCall"
+            :session-id="subagent.subSessionId"
             @confirm="(callId, decision) => emit('confirm', callId, decision)"
           />
           <div

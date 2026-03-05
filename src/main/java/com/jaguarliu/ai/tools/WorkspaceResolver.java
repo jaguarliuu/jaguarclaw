@@ -13,16 +13,19 @@ public final class WorkspaceResolver {
 
     /**
      * 解析当前 agent 的 workspace 路径。
-     * 有 agentId 时返回 workspace/workspace-{agentId}/，
-     * 无 agentId 时返回全局 workspace/。
+     * 优先读取 ToolExecutionContext 中预解析的 sessionWorkspacePath；
+     * 无上下文时返回全局 workspace/。
      */
     public static Path resolveSessionWorkspace(ToolsProperties properties) {
         Path base = resolveGlobalWorkspace(properties);
         ToolExecutionContext ctx = ToolExecutionContext.current();
-        if (ctx != null && ctx.getAgentId() != null) {
-            return base.resolve("workspace-" + ctx.getAgentId()).normalize();
+        if (ctx == null) {
+            return base;
         }
-        return base;
+        if (ctx.getSessionWorkspacePath() == null) {
+            throw new IllegalStateException("Missing sessionWorkspacePath in ToolExecutionContext");
+        }
+        return ctx.getSessionWorkspacePath();
     }
 
     /**

@@ -263,14 +263,6 @@ public class ShellTool implements Tool {
         ToolExecutionContext ctx = ToolExecutionContext.current();
         boolean isRelative = !Path.of(pathStr).isAbsolute();
 
-        if (isRelative && ctx != null && ctx.getAgentId() != null) {
-            Path agentWorkspace = globalWorkspace.resolve("workspace-" + ctx.getAgentId()).normalize();
-            Path candidate = agentWorkspace.resolve(pathStr).normalize();
-            if (candidate.startsWith(agentWorkspace)) {
-                return candidate;
-            }
-        }
-
         if (isRelative && ctx != null) {
             for (Path allowedPath : ctx.getAdditionalAllowedPaths()) {
                 Path candidate = allowedPath.resolve(pathStr).normalize();

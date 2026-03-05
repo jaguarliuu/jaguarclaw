@@ -123,7 +123,10 @@ function handleCancel() {
 }
 
 async function handleAttachFile(file: File) {
-  await uploadFile(file)
+  await uploadFile(file, {
+    sessionId: currentSessionId.value,
+    agentId: selectedAgentId.value,
+  })
 }
 
 function handleAddContext(type: ContextType) {

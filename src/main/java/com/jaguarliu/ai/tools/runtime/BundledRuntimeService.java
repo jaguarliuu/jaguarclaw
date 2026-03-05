@@ -2,10 +2,15 @@ package com.jaguarliu.ai.tools.runtime;
 
 import com.jaguarliu.ai.tools.ToolsProperties;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
+import java.nio.file.attribute.PosixFilePermission;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -16,6 +21,7 @@ import java.util.Set;
 /**
  * 内置 runtime 路径解析与环境注入服务。
  */
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class BundledRuntimeService {
@@ -83,11 +89,14 @@ public class BundledRuntimeService {
         if (bins.isEmpty()) {
             return;
         }
+        List<Path> effectiveBins = new ArrayList<>();
+        resolveCompatShimDir().ifPresent(effectiveBins::add);
+        effectiveBins.addAll(bins);
 
         String pathKey = resolvePathKey(env);
         String existing = env.getOrDefault(pathKey, "");
 
-        String prefix = bins.stream()
+        String prefix = effectiveBins.stream()
                 .map(Path::toString)
                 .filter(s -> !s.isBlank())
                 .distinct()
@@ -145,5 +154,62 @@ public class BundledRuntimeService {
             return List.of(binName);
         }
         return List.of(binName + ".exe", binName + ".cmd", binName + ".bat", binName);
+    }
+
+    private Optional<Path> resolveCompatShimDir() {
+        try {
+            Optional<Path> runtimeHomeOpt = resolveRuntimeHome();
+            if (runtimeHomeOpt.isEmpty()) {
+                return Optional.empty();
+            }
+
+            boolean needsPython3Shim = hasBundledBinary("python") && !hasBundledBinary("python3");
+            boolean needsPip3Shim = hasBundledBinary("pip") && !hasBundledBinary("pip3");
+            if (!needsPython3Shim && !needsPip3Shim) {
+                return Optional.empty();
+            }
+
+            Path shimDir = runtimeHomeOpt.get().resolve("shims").toAbsolutePath().normalize();
+            Files.createDirectories(shimDir);
+
+            if (needsPython3Shim) {
+                writeShim(shimDir, "python3", "python");
+            }
+            if (needsPip3Shim) {
+                writeShim(shimDir, "pip3", "pip");
+            }
+            return Optional.of(shimDir);
+        } catch (Exception e) {
+            log.warn("Failed to prepare runtime compatibility shims", e);
+            return Optional.empty();
+        }
+    }
+
+    private void writeShim(Path shimDir, String alias, String target) throws IOException {
+        if (IS_WINDOWS) {
+            Path script = shimDir.resolve(alias + ".cmd");
+            String content = "@echo off\r\n" + target + " %*\r\n";
+            Files.writeString(script, content, StandardCharsets.UTF_8,
+                    StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+            return;
+        }
+
+        Path script = shimDir.resolve(alias);
+        String content = "#!/usr/bin/env sh\nexec " + target + " \"$@\"\n";
+        Files.writeString(script, content, StandardCharsets.UTF_8,
+                StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+        try {
+            Files.setPosixFilePermissions(script, Set.of(
+                    PosixFilePermission.OWNER_READ,
+                    PosixFilePermission.OWNER_WRITE,
+                    PosixFilePermission.OWNER_EXECUTE,
+                    PosixFilePermission.GROUP_READ,
+                    PosixFilePermission.GROUP_EXECUTE,
+                    PosixFilePermission.OTHERS_READ,
+                    PosixFilePermission.OTHERS_EXECUTE
+            ));
+        } catch (UnsupportedOperationException ignore) {
+            // 非 POSIX 文件系统忽略
+        }
     }
 }

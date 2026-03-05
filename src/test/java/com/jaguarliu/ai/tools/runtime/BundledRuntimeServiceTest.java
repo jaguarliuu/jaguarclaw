@@ -74,6 +74,40 @@ class BundledRuntimeServiceTest {
     }
 
     @Test
+    @DisplayName("should prepend shim dir when python exists but python3 is missing")
+    void shouldPrependShimDirForPython3Alias() throws Exception {
+        Path runtimeHome = tempDir.resolve("runtime");
+        Path bin = runtimeHome.resolve("bin");
+        Files.createDirectories(bin);
+
+        if (isWindows()) {
+            Files.writeString(bin.resolve("python.cmd"), "@echo off\r\necho bundled-python\r\n");
+        } else {
+            Path python = bin.resolve("python");
+            Files.writeString(python, "#!/usr/bin/env sh\necho bundled-python\n");
+            python.toFile().setExecutable(true);
+        }
+
+        ToolsProperties properties = new ToolsProperties();
+        properties.getRuntime().setEnabled(true);
+        properties.getRuntime().setHome(runtimeHome.toString());
+        properties.getRuntime().setBinPaths(List.of("bin"));
+
+        BundledRuntimeService service = new BundledRuntimeService(properties);
+        Map<String, String> env = new java.util.HashMap<>();
+        env.put("PATH", "orig-path");
+
+        service.applyToEnvironment(env);
+
+        String[] entries = env.get("PATH").split(java.io.File.pathSeparator);
+        Path first = Path.of(entries[0]).toAbsolutePath().normalize();
+        assertEquals(runtimeHome.resolve("shims").toAbsolutePath().normalize(), first);
+
+        Path shimPath = isWindows() ? first.resolve("python3.cmd") : first.resolve("python3");
+        assertTrue(Files.exists(shimPath), () -> "Missing shim: " + shimPath);
+    }
+
+    @Test
     @DisplayName("should detect bundled binary")
     void detectBundledBinary() throws Exception {
         Path runtimeHome = tempDir.resolve("runtime");

@@ -52,6 +52,12 @@ public class ToolExecutionContext {
     private final String sessionId;
 
     /**
+     * 当前 run 解析得到的 agent workspace 绝对路径
+     * 优先于基于 agentId 的默认拼接规则。
+     */
+    private final Path sessionWorkspacePath;
+
+    /**
      * 派生深度
      */
     private final int depth;
@@ -63,6 +69,7 @@ public class ToolExecutionContext {
                                   String parentRunId,
                                   String runId,
                                   String sessionId,
+                                  Path sessionWorkspacePath,
                                   int depth) {
         this.additionalAllowedPaths = Collections.unmodifiableSet(additionalAllowedPaths);
         this.connectionId = connectionId;
@@ -71,6 +78,9 @@ public class ToolExecutionContext {
         this.parentRunId = parentRunId;
         this.runId = runId;
         this.sessionId = sessionId;
+        this.sessionWorkspacePath = sessionWorkspacePath == null
+                ? null
+                : sessionWorkspacePath.toAbsolutePath().normalize();
         this.depth = depth;
     }
 
@@ -158,6 +168,13 @@ public class ToolExecutionContext {
     }
 
     /**
+     * 获取当前 run 的解析后 workspace 路径（可能为空）
+     */
+    public Path getSessionWorkspacePath() {
+        return sessionWorkspacePath;
+    }
+
+    /**
      * 获取派生深度
      */
     public int getDepth() {
@@ -200,6 +217,7 @@ public class ToolExecutionContext {
         private String parentRunId;
         private String runId;
         private String sessionId;
+        private Path sessionWorkspacePath;
         private int depth = 0;
 
         public Builder addAllowedPath(Path path) {
@@ -239,13 +257,27 @@ public class ToolExecutionContext {
             return this;
         }
 
+        public Builder sessionWorkspacePath(Path sessionWorkspacePath) {
+            this.sessionWorkspacePath = sessionWorkspacePath;
+            return this;
+        }
+
         public Builder depth(int depth) {
             this.depth = depth;
             return this;
         }
 
         public ToolExecutionContext build() {
-            return new ToolExecutionContext(paths, connectionId, agentId, runKind, parentRunId, runId, sessionId, depth);
+            return new ToolExecutionContext(
+                    paths,
+                    connectionId,
+                    agentId,
+                    runKind,
+                    parentRunId,
+                    runId,
+                    sessionId,
+                    sessionWorkspacePath,
+                    depth);
         }
     }
 }

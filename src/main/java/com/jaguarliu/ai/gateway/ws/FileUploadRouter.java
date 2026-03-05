@@ -1,5 +1,7 @@
 package com.jaguarliu.ai.gateway.ws;
 
+import com.jaguarliu.ai.agents.context.AgentWorkspaceResolver;
+import com.jaguarliu.ai.session.SessionService;
 import com.jaguarliu.ai.tools.ToolsProperties;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -8,6 +10,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.buffer.DataBufferUtils;
 import org.springframework.http.MediaType;
 import org.springframework.http.codec.multipart.FilePart;
+import org.springframework.http.codec.multipart.FormFieldPart;
 import org.springframework.http.codec.multipart.Part;
 import org.springframework.web.reactive.function.server.RouterFunction;
 import org.springframework.web.reactive.function.server.RouterFunctions;
@@ -22,7 +25,7 @@ import java.util.UUID;
 /**
  * 简化版文件上传接口。
  * <p>
- * 仅负责将浏览器选取的文件保存到 workspace/uploads 目录并返回相对路径，
+ * 仅负责将浏览器选取的文件保存到当前 agent workspace 的 uploads 目录并返回相对路径，
  * 后续由 Agent 通过 read_file 工具按需读取（支持 Tika/POI 解析二进制文档）。
  */
 @Slf4j
@@ -31,6 +34,8 @@ import java.util.UUID;
 public class FileUploadRouter {
 
     private final ToolsProperties toolsProperties;
+    private final SessionService sessionService;
+    private final AgentWorkspaceResolver agentWorkspaceResolver;
 
     private static final Set<String> ALLOWED_EXTENSIONS = Set.of(
             ".pdf", ".docx", ".txt", ".md", ".xlsx", ".pptx",
@@ -46,6 +51,8 @@ public class FileUploadRouter {
                         if (!(filePart instanceof FilePart fp)) {
                             return ServerResponse.badRequest().bodyValue(Map.of("error", "Missing file"));
                         }
+                        String sessionId = readOptionalTextPart(parts.getFirst("sessionId"));
+                        String agentId = readOptionalTextPart(parts.getFirst("agentId"));
 
                         String filename = fp.filename();
 
@@ -69,9 +76,9 @@ public class FileUploadRouter {
                             }
 
                             try {
-                                // 保存到 workspace/uploads/
-                                Path workspacePath = Path.of(toolsProperties.getWorkspace()).toAbsolutePath().normalize();
-                                Path uploadsDir = workspacePath.resolve(toolsProperties.getUploadDir());
+                                // 优先保存到 session/agent 对应 workspace 下，缺省回退全局 workspace
+                                Path uploadRoot = resolveUploadRoot(sessionId, agentId);
+                                Path uploadsDir = uploadRoot.resolve(toolsProperties.getUploadDir());
                                 Files.createDirectories(uploadsDir);
 
                                 // 生成唯一文件名
@@ -82,7 +89,8 @@ public class FileUploadRouter {
                                 // 返回相对于 workspace 的路径（供 read_file 使用）
                                 String relativePath = toolsProperties.getUploadDir() + "/" + safeFilename;
 
-                                log.info("File saved: {} ({} bytes) -> {}", filename, fileBytes.length, relativePath);
+                                log.info("File saved: {} ({} bytes) -> {} [sessionId={}, agentId={}, uploadRoot={}]",
+                                        filename, fileBytes.length, relativePath, sessionId, agentId, uploadRoot);
 
                                 return ServerResponse.ok()
                                         .contentType(MediaType.APPLICATION_JSON)
@@ -91,6 +99,8 @@ public class FileUploadRouter {
                                                 "filename", filename,
                                                 "size", fileBytes.length
                                         ));
+                            } catch (IllegalArgumentException e) {
+                                return ServerResponse.badRequest().bodyValue(Map.of("error", e.getMessage()));
                             } catch (Exception e) {
                                 log.error("Failed to save file: {}", filename, e);
                                 return ServerResponse.status(500).bodyValue(Map.of("error", e.getMessage()));
@@ -102,6 +112,39 @@ public class FileUploadRouter {
                     }
                 }))
                 .build();
+    }
+
+    Path resolveUploadRoot(String sessionId, String agentId) {
+        String normalizedSessionId = trimToNull(sessionId);
+        if (normalizedSessionId != null) {
+            String resolvedAgentId = sessionService.get(normalizedSessionId)
+                    .map(session -> agentWorkspaceResolver.normalizeAgentId(session.getAgentId()))
+                    .orElseThrow(() -> new IllegalArgumentException("Session not found: " + normalizedSessionId));
+            return agentWorkspaceResolver.resolveAgentWorkspace(resolvedAgentId);
+        }
+
+        String normalizedAgentId = trimToNull(agentId);
+        if (normalizedAgentId != null) {
+            String resolvedAgentId = agentWorkspaceResolver.normalizeAgentId(normalizedAgentId);
+            return agentWorkspaceResolver.resolveAgentWorkspace(resolvedAgentId);
+        }
+
+        return Path.of(toolsProperties.getWorkspace()).toAbsolutePath().normalize();
+    }
+
+    private static String readOptionalTextPart(Part part) {
+        if (part instanceof FormFieldPart formFieldPart) {
+            return trimToNull(formFieldPart.value());
+        }
+        return null;
+    }
+
+    private static String trimToNull(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 
     private static String getExtension(String filename) {

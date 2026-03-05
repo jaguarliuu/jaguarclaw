@@ -1,6 +1,7 @@
 package com.jaguarliu.ai.runtime;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.jaguarliu.ai.agents.context.AgentWorkspaceResolver;
 import com.jaguarliu.ai.gateway.events.AgentEvent;
 import com.jaguarliu.ai.gateway.events.EventBus;
 import com.jaguarliu.ai.llm.model.ToolCall;
@@ -52,6 +53,7 @@ public class ToolExecutor {
     private final HitlManager hitlManager;
     private final EventBus eventBus;
     private final SessionFileService sessionFileService;
+    private final AgentWorkspaceResolver agentWorkspaceResolver;
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
@@ -224,6 +226,8 @@ public class ToolExecutor {
                 .runKind(context.getRunKind())
                 .parentRunId(context.getParentRunId())
                 .depth(context.getDepth());
+
+        builder.sessionWorkspacePath(agentWorkspaceResolver.resolveAgentWorkspace(context.getAgentId()));
 
         // 如果有激活的 skill，添加其资源目录到允许路径
         if (context.getSkillBasePath() != null) {

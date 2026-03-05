@@ -8,6 +8,11 @@ const MAX_SIZE_BYTES = MAX_SIZE_MB * 1024 * 1024
 const contexts = ref<AttachedContext[]>([])
 const error = ref<string | null>(null)
 
+type UploadScope = {
+  sessionId?: string | null
+  agentId?: string | null
+}
+
 export function useContext() {
 
   /**
@@ -31,7 +36,7 @@ export function useContext() {
    * 上传文件到 workspace 并添加到上下文列表。
    * 返回后文件已落盘，Agent 可通过 read_file 读取。
    */
-  async function uploadFile(file: File): Promise<AttachedContext | null> {
+  async function uploadFile(file: File, scope?: UploadScope): Promise<AttachedContext | null> {
     error.value = null
 
     // 客户端校验
@@ -61,6 +66,12 @@ export function useContext() {
     try {
       const formData = new FormData()
       formData.append('file', file)
+      if (scope?.sessionId) {
+        formData.append('sessionId', scope.sessionId)
+      }
+      if (scope?.agentId) {
+        formData.append('agentId', scope.agentId)
+      }
 
       const response = await fetch('/api/files', {
         method: 'POST',

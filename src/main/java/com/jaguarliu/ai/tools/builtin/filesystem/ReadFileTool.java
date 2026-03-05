@@ -231,15 +231,15 @@ public class ReadFileTool implements Tool {
      */
     private Path resolvePath(String pathStr) {
         Path globalWorkspace = WorkspaceResolver.resolveGlobalWorkspace(properties);
+        Path sessionWorkspace = WorkspaceResolver.resolveSessionWorkspace(properties);
         ToolExecutionContext ctx = ToolExecutionContext.current();
         boolean isRelative = !Path.of(pathStr).isAbsolute();
 
-        // 1. 尝试 agent workspace（相对路径且文件存在）
-        if (isRelative && ctx != null && ctx.getAgentId() != null) {
-            Path agentWorkspace = globalWorkspace.resolve("workspace-" + ctx.getAgentId()).normalize();
-            Path agentPath = agentWorkspace.resolve(pathStr).normalize();
-            if (agentPath.startsWith(agentWorkspace) && Files.exists(agentPath)) {
-                return agentPath;
+        // 1. 尝试当前 session workspace（相对路径且文件存在）
+        if (isRelative) {
+            Path sessionPath = sessionWorkspace.resolve(pathStr).normalize();
+            if (sessionPath.startsWith(sessionWorkspace) && Files.exists(sessionPath)) {
+                return sessionPath;
             }
         }
 
@@ -264,6 +264,9 @@ public class ReadFileTool implements Tool {
         // 4. 绝对路径：检查 workspace 或额外允许路径
         if (!isRelative) {
             Path absolutePath = Path.of(pathStr).toAbsolutePath().normalize();
+            if (absolutePath.startsWith(sessionWorkspace)) {
+                return absolutePath;
+            }
             if (absolutePath.startsWith(globalWorkspace)) {
                 return absolutePath;
             }

@@ -196,13 +196,13 @@ public class RemoteExecTool implements Tool {
 
     private Path resolveScriptPath(String pathStr) {
         Path globalWorkspace = WorkspaceResolver.resolveGlobalWorkspace(toolsProperties);
+        Path sessionWorkspace = WorkspaceResolver.resolveSessionWorkspace(toolsProperties);
         ToolExecutionContext ctx = ToolExecutionContext.current();
         boolean isRelative = !Path.of(pathStr).isAbsolute();
 
-        if (isRelative && ctx != null && ctx.getAgentId() != null) {
-            Path agentWorkspace = globalWorkspace.resolve("workspace-" + ctx.getAgentId()).normalize();
-            Path candidate = agentWorkspace.resolve(pathStr).normalize();
-            if (candidate.startsWith(agentWorkspace)) {
+        if (isRelative) {
+            Path candidate = sessionWorkspace.resolve(pathStr).normalize();
+            if (candidate.startsWith(sessionWorkspace)) {
                 return candidate;
             }
         }
@@ -223,6 +223,9 @@ public class RemoteExecTool implements Tool {
             }
         } else {
             Path absolute = Path.of(pathStr).toAbsolutePath().normalize();
+            if (absolute.startsWith(sessionWorkspace)) {
+                return absolute;
+            }
             if (absolute.startsWith(globalWorkspace)) {
                 return absolute;
             }
