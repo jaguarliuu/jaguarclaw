@@ -5,6 +5,11 @@ contextBridge.exposeInMainWorld('electron', {
   // 选择文件夹
   selectFolder: () => ipcRenderer.invoke('dialog:selectFolder'),
 
+  // 运行时来源配置
+  getRuntimeConfig: () => ipcRenderer.invoke('runtime:getConfig'),
+  setRuntimeMode: (mode) => ipcRenderer.invoke('runtime:setMode', { mode }),
+  restartApp: () => ipcRenderer.invoke('app:restart'),
+
   // 监听启动日志
   onStartupLog: (callback) => {
     const listener = (_event, payload) => callback(payload);

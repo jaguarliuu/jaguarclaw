@@ -3,13 +3,26 @@ import { ref, onMounted, computed } from 'vue'
 import { useSystemInfo, type EnvironmentCheck } from '@/composables/useSystemInfo'
 import { useI18n } from '@/i18n'
 import { useRouter } from 'vue-router'
-import ConfigCard from '@/components/common/ConfigCard.vue'
 
 const router = useRouter()
 const { systemInfo, environments, loading, refresh } = useSystemInfo()
 const { t } = useI18n()
 
 const isRefreshing = ref(false)
+type RuntimeMode = 'auto' | 'bundled' | 'local'
+type RuntimeEffectiveMode = 'bundled' | 'local'
+
+const isElectron = computed(() => typeof window !== 'undefined' && !!window.electron?.isElectron)
+const runtimeLoading = ref(false)
+const runtimeSaving = ref(false)
+const runtimeError = ref('')
+const runtimeMode = ref<RuntimeMode>('auto')
+const runtimeInitialMode = ref<RuntimeMode>('auto')
+const runtimeEffectiveMode = ref<RuntimeEffectiveMode>('local')
+const bundledAvailable = ref(false)
+const bundledHome = ref('')
+
+const runtimeModeDirty = computed(() => runtimeMode.value !== runtimeInitialMode.value)
 
 const memoryUsagePercent = computed(() => {
   if (!systemInfo.value) return 0
@@ -28,8 +41,64 @@ const getStatusVariant = (installed: boolean): 'success' | 'warning' => {
 
 async function handleRefresh() {
   isRefreshing.value = true
-  await refresh()
+  await Promise.all([refresh(), loadRuntimeConfig()])
   isRefreshing.value = false
+}
+
+function normalizeRuntimeMode(mode: unknown): RuntimeMode {
+  if (mode === 'bundled' || mode === 'local') return mode
+  return 'auto'
+}
+
+function normalizeEffectiveMode(mode: unknown): RuntimeEffectiveMode {
+  return mode === 'bundled' ? 'bundled' : 'local'
+}
+
+async function loadRuntimeConfig() {
+  runtimeError.value = ''
+  if (!isElectron.value || !window.electron?.getRuntimeConfig) {
+    return
+  }
+  runtimeLoading.value = true
+  try {
+    const info = await window.electron.getRuntimeConfig()
+    const mode = normalizeRuntimeMode(info.mode)
+    runtimeMode.value = mode
+    runtimeInitialMode.value = mode
+    runtimeEffectiveMode.value = normalizeEffectiveMode(info.effectiveMode)
+    bundledAvailable.value = !!info.bundledAvailable
+    bundledHome.value = info.bundledHome || ''
+  } catch (e) {
+    runtimeError.value = e instanceof Error ? e.message : t('sections.system.runtimeLoadFailed')
+  } finally {
+    runtimeLoading.value = false
+  }
+}
+
+async function handleApplyRuntimeMode() {
+  if (!isElectron.value || !window.electron?.setRuntimeMode || !window.electron?.restartApp) {
+    return
+  }
+  if (!runtimeModeDirty.value || runtimeSaving.value) {
+    return
+  }
+
+  const confirmed = window.confirm(t('sections.system.runtimeRestartConfirm'))
+  if (!confirmed) {
+    return
+  }
+
+  runtimeSaving.value = true
+  runtimeError.value = ''
+  try {
+    await window.electron.setRuntimeMode(runtimeMode.value)
+    runtimeInitialMode.value = runtimeMode.value
+    await window.electron.restartApp()
+  } catch (e) {
+    runtimeError.value = e instanceof Error ? e.message : t('sections.system.runtimeSaveFailed')
+  } finally {
+    runtimeSaving.value = false
+  }
 }
 
 async function handleInstall(env: EnvironmentCheck) {
@@ -290,6 +359,7 @@ Steps:
 
 onMounted(() => {
   refresh()
+  loadRuntimeConfig()
 })
 </script>
 
@@ -344,6 +414,86 @@ onMounted(() => {
             <span class="info-value">{{ systemInfo.userName }}</span>
           </div>
         </div>
+      </div>
+
+      <div v-if="isElectron" class="runtime-card">
+        <div class="runtime-header">
+          <h3 class="info-title">{{ t('sections.system.runtimeTitle') }}</h3>
+          <span class="env-badge badge-success">{{ t('sections.system.runtimeModeDefault') }}</span>
+        </div>
+        <p class="runtime-subtitle">{{ t('sections.system.runtimeSubtitle') }}</p>
+
+        <div class="runtime-meta">
+          <div>
+            <span class="path-label">{{ t('sections.system.runtimeConfiguredLabel') }}</span>
+            <span class="path-value">
+              {{
+                runtimeMode === 'auto'
+                  ? t('sections.system.runtimeModeAuto')
+                  : runtimeMode === 'bundled'
+                    ? t('sections.system.runtimeModeBundled')
+                    : t('sections.system.runtimeModeLocal')
+              }}
+            </span>
+          </div>
+          <div>
+            <span class="path-label">{{ t('sections.system.runtimeEffectiveLabel') }}</span>
+            <span class="path-value">
+              {{
+                runtimeEffectiveMode === 'bundled'
+                  ? t('sections.system.runtimeModeBundled')
+                  : t('sections.system.runtimeModeLocal')
+              }}
+            </span>
+          </div>
+          <div>
+            <span class="path-label">{{ t('sections.system.runtimeBundledLabel') }}</span>
+            <span class="path-value">
+              {{ bundledAvailable ? t('sections.system.runtimeBundledAvailable') : t('sections.system.runtimeBundledMissing') }}
+            </span>
+          </div>
+          <div v-if="bundledHome">
+            <span class="path-label">{{ t('sections.system.runtimeHomeLabel') }}</span>
+            <span class="path-value">{{ bundledHome }}</span>
+          </div>
+        </div>
+
+        <div class="runtime-options">
+          <label class="runtime-option">
+            <input v-model="runtimeMode" type="radio" value="auto" />
+            <div>
+              <div class="runtime-option-title">{{ t('sections.system.runtimeModeAuto') }}</div>
+              <div class="runtime-option-hint">{{ t('sections.system.runtimeHintAuto') }}</div>
+            </div>
+          </label>
+
+          <label class="runtime-option">
+            <input v-model="runtimeMode" type="radio" value="bundled" />
+            <div>
+              <div class="runtime-option-title">{{ t('sections.system.runtimeModeBundled') }}</div>
+              <div class="runtime-option-hint">{{ t('sections.system.runtimeHintBundled') }}</div>
+            </div>
+          </label>
+
+          <label class="runtime-option">
+            <input v-model="runtimeMode" type="radio" value="local" />
+            <div>
+              <div class="runtime-option-title">{{ t('sections.system.runtimeModeLocal') }}</div>
+              <div class="runtime-option-hint">{{ t('sections.system.runtimeHintLocal') }}</div>
+            </div>
+          </label>
+        </div>
+
+        <div class="runtime-actions">
+          <button
+            class="btn-runtime-apply"
+            :disabled="runtimeLoading || runtimeSaving || !runtimeModeDirty"
+            @click="handleApplyRuntimeMode"
+          >
+            {{ runtimeSaving ? t('sections.system.runtimeApplyingBtn') : t('sections.system.runtimeApplyBtn') }}
+          </button>
+        </div>
+        <p v-if="runtimeError" class="runtime-error">{{ runtimeError }}</p>
       </div>
 
       <!-- Environment Status -->
@@ -518,6 +668,97 @@ onMounted(() => {
 
 .section-divider {
   margin: 32px 0 20px 0;
+}
+
+.runtime-card {
+  background: var(--color-white);
+  border: var(--border);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+}
+
+.runtime-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.runtime-subtitle {
+  margin: 0 0 16px;
+  color: var(--color-gray-600);
+  font-size: 13px;
+}
+
+.runtime-meta {
+  margin-bottom: 14px;
+  padding: 10px;
+  border-radius: var(--radius-sm);
+  background: var(--color-gray-50);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.runtime-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+}
+
+.runtime-option {
+  border: var(--border);
+  border-radius: var(--radius-md);
+  padding: 10px;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  cursor: pointer;
+}
+
+.runtime-option input {
+  margin-top: 2px;
+}
+
+.runtime-option-title {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.runtime-option-hint {
+  font-size: 12px;
+  color: var(--color-gray-600);
+  line-height: 1.4;
+}
+
+.runtime-actions {
+  margin-top: 12px;
+}
+
+.btn-runtime-apply {
+  padding: 8px 14px;
+  border: var(--border);
+  border-radius: var(--radius-md);
+  background: var(--color-black);
+  color: var(--color-white);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.btn-runtime-apply:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.runtime-error {
+  margin-top: 10px;
+  color: var(--color-red-600);
+  font-size: 12px;
 }
 
 .divider-title {

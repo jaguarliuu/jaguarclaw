@@ -51,6 +51,16 @@ const builtinSkillsDir = path.join(resourcesPath, 'skills');
 const configPath = path.join(appDataPath, 'config.json');
 const startupLogPath = path.join(appDataPath, 'startup.log');
 const STARTUP_LOG_LIMIT = 300;
+const RUNTIME_MODES = Object.freeze(['auto', 'bundled', 'local']);
+let currentRuntimeInfo = {
+  mode: 'auto',
+  effectiveMode: 'local',
+  enabled: false,
+  home: null,
+  source: 'none',
+  bundledAvailable: false,
+  bundledSource: 'none',
+};
 
 function resolveResourceFile(fileName) {
   const candidates = [
@@ -129,6 +139,53 @@ function ensureDirectories() {
   for (const dir of [appDataPath, dataDir, workspacePath, skillsDir, runtimeStoreRoot]) {
     fs.mkdirSync(dir, { recursive: true });
   }
+}
+
+function readAppConfig() {
+  if (!fs.existsSync(configPath)) {
+    return {};
+  }
+  try {
+    const data = fs.readFileSync(configPath, 'utf8');
+    const parsed = JSON.parse(data);
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch (err) {
+    console.warn('Failed to read config, using defaults:', err.message);
+    return {};
+  }
+}
+
+function writeAppConfig(config) {
+  fs.writeFileSync(configPath, JSON.stringify(config || {}, null, 2), 'utf8');
+}
+
+function normalizeRuntimeMode(value) {
+  return RUNTIME_MODES.includes(value) ? value : 'auto';
+}
+
+function getConfiguredRuntimeMode() {
+  const config = readAppConfig();
+  return normalizeRuntimeMode(config.runtimeMode);
+}
+
+function setConfiguredRuntimeMode(mode) {
+  const normalized = normalizeRuntimeMode(mode);
+  const config = readAppConfig();
+  config.runtimeMode = normalized;
+  writeAppConfig(config);
+  return normalized;
+}
+
+function probeBundledRuntimeAvailability() {
+  const runtimeDirInResources = resolveResourceDirectory('runtime');
+  if (runtimeDirInResources) {
+    return { available: true, source: 'resource-dir', home: runtimeDirInResources };
+  }
+  const runtimeZipInResources = resolveResourceFile('runtime.zip');
+  if (runtimeZipInResources) {
+    return { available: true, source: 'runtime.zip', home: null };
+  }
+  return { available: false, source: 'none', home: null };
 }
 
 function resolveRuntimeVersion() {
@@ -250,22 +307,63 @@ function ensureBundledRuntime() {
   }
 }
 
+function resolveRuntimeInfo(runtimeMode) {
+  const mode = normalizeRuntimeMode(runtimeMode);
+  const probe = probeBundledRuntimeAvailability();
+
+  if (mode === 'local') {
+    return {
+      mode,
+      effectiveMode: 'local',
+      enabled: false,
+      home: null,
+      source: 'local',
+      bundledAvailable: probe.available,
+      bundledSource: probe.source,
+    };
+  }
+
+  const bundled = ensureBundledRuntime();
+  if (mode === 'bundled') {
+    if (!bundled.enabled) {
+      throw new Error('Runtime mode is "bundled", but bundled runtime package was not found.');
+    }
+    return {
+      ...bundled,
+      mode,
+      effectiveMode: 'bundled',
+      bundledAvailable: true,
+      bundledSource: bundled.source || probe.source,
+    };
+  }
+
+  if (bundled.enabled) {
+    return {
+      ...bundled,
+      mode,
+      effectiveMode: 'bundled',
+      bundledAvailable: true,
+      bundledSource: bundled.source || probe.source,
+    };
+  }
+
+  return {
+    mode,
+    effectiveMode: 'local',
+    enabled: false,
+    home: null,
+    source: 'none',
+    bundledAvailable: probe.available,
+    bundledSource: probe.source,
+  };
+}
+
 /**
  * 获取或生成加密密钥
  * 如果配置文件中没有密钥，自动生成一个 64 字符的 hex 密钥（32 字节）
  */
 function getOrCreateEncryptionKey() {
-  let config = {};
-
-  // 读取现有配置
-  if (fs.existsSync(configPath)) {
-    try {
-      const data = fs.readFileSync(configPath, 'utf8');
-      config = JSON.parse(data);
-    } catch (err) {
-      console.warn('Failed to read config, creating new:', err.message);
-    }
-  }
+  const config = readAppConfig();
 
   // 检查是否已有密钥
   if (config.encryptionKey && config.encryptionKey.length === 64) {
@@ -280,7 +378,7 @@ function getOrCreateEncryptionKey() {
   // 保存到配置文件
   config.encryptionKey = key;
   try {
-    fs.writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf8');
+    writeAppConfig(config);
     console.log('Encryption key saved to config');
   } catch (err) {
     console.error('Failed to save encryption key:', err.message);
@@ -486,6 +584,8 @@ function startJavaBackend(port, encryptionKey, runtimeInfo) {
   if (runtimeInfo && runtimeInfo.enabled && runtimeInfo.home) {
     args.push('--tools.runtime.enabled=true');
     args.push(`--tools.runtime.home=${runtimeInfo.home}`);
+  } else {
+    args.push('--tools.runtime.enabled=false');
   }
 
   // 设置环境变量
@@ -497,6 +597,10 @@ function startJavaBackend(port, encryptionKey, runtimeInfo) {
     env.TOOLS_RUNTIME_ENABLED = 'true';
     env.TOOLS_RUNTIME_HOME = runtimeInfo.home;
     env.JAGUAR_RUNTIME_HOME = runtimeInfo.home;
+  } else {
+    env.TOOLS_RUNTIME_ENABLED = 'false';
+    delete env.TOOLS_RUNTIME_HOME;
+    delete env.JAGUAR_RUNTIME_HOME;
   }
 
   appendStartupLog('info', `Starting backend process on port ${port}`);
@@ -773,6 +877,42 @@ ipcMain.handle('dialog:selectFolder', async () => {
   return result.filePaths[0];
 });
 
+ipcMain.handle('runtime:getConfig', async () => {
+  const mode = getConfiguredRuntimeMode();
+  const probe = probeBundledRuntimeAvailability();
+  const fromCurrentRun = currentRuntimeInfo && currentRuntimeInfo.mode === mode;
+  const effectiveMode = fromCurrentRun
+    ? currentRuntimeInfo.effectiveMode
+    : (mode === 'local' ? 'local' : (probe.available ? 'bundled' : 'local'));
+
+  return {
+    mode,
+    effectiveMode,
+    bundledAvailable: fromCurrentRun ? !!currentRuntimeInfo.bundledAvailable : probe.available,
+    bundledSource: fromCurrentRun ? currentRuntimeInfo.bundledSource : probe.source,
+    bundledHome: fromCurrentRun
+      ? (currentRuntimeInfo.enabled ? currentRuntimeInfo.home : null)
+      : (probe.home || null),
+  };
+});
+
+ipcMain.handle('runtime:setMode', async (_event, payload) => {
+  const requested = payload && typeof payload.mode === 'string' ? payload.mode : '';
+  if (!RUNTIME_MODES.includes(requested)) {
+    throw new Error(`Invalid runtime mode: ${requested || '<empty>'}`);
+  }
+  const mode = setConfiguredRuntimeMode(requested);
+  return { mode, restartRequired: true };
+});
+
+ipcMain.handle('app:restart', async () => {
+  setTimeout(() => {
+    app.relaunch();
+    app.exit(0);
+  }, 100);
+  return { accepted: true };
+});
+
 app.whenReady().then(async () => {
   try {
     // 确保目录存在
@@ -788,13 +928,15 @@ app.whenReady().then(async () => {
     appendStartupLog('info', '=== JaguarClaw startup ===');
     publishStartupStatus('Preparing startup environment...', 'prepare');
 
-    appendStartupLog('info', 'Checking bundled runtime...');
-    publishStartupStatus('Preparing bundled runtime...', 'runtime');
-    const runtimeInfo = ensureBundledRuntime();
+    const runtimeMode = getConfiguredRuntimeMode();
+    appendStartupLog('info', `Runtime mode preference: ${runtimeMode}`);
+    publishStartupStatus('Preparing runtime mode...', 'runtime');
+    const runtimeInfo = resolveRuntimeInfo(runtimeMode);
+    currentRuntimeInfo = runtimeInfo;
     if (runtimeInfo.enabled) {
-      appendStartupLog('info', `Bundled runtime ready: ${runtimeInfo.home} (${runtimeInfo.source})`);
+      appendStartupLog('info', `Bundled runtime enabled: ${runtimeInfo.home} (${runtimeInfo.source})`);
     } else {
-      appendStartupLog('info', 'Bundled runtime not found. System runtime will be used if required.');
+      appendStartupLog('info', `Using system runtime (effective mode: ${runtimeInfo.effectiveMode})`);
     }
 
     // 获取或生成加密密钥
