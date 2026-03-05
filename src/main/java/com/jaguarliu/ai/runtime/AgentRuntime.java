@@ -362,6 +362,7 @@ public class AgentRuntime {
 
                     if (chunk.getDelta() != null) {
                         content.append(chunk.getDelta());
+                        context.setLatestAssistantDraft(content.toString());
                         eventBus.publish(AgentEvent.assistantDelta(connectionId, runId, chunk.getDelta()));
                     }
 

@@ -39,6 +39,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.CancellationException;
 import java.util.function.Supplier;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -48,6 +49,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.Mockito.verify;
@@ -254,6 +256,52 @@ class AgentRunWithAgentIdTest {
             ArgumentCaptor<RunContext> contextCaptor = ArgumentCaptor.forClass(RunContext.class);
             verify(agentRuntime).executeLoopWithContext(contextCaptor.capture(), anyList(), eq("hello"));
             assertEquals("coder", contextCaptor.getValue().getAgentId());
+        }
+
+        @Test
+        void cancelledRunShouldPersistAssistantCancellationMessage() throws Exception {
+            AgentRunHandler handler = newAgentRunHandler();
+            mockCommonRunPrerequisites();
+
+            when(sessionService.get("session-cancel", PRINCIPAL_ID))
+                    .thenReturn(Optional.of(sessionEntity("session-cancel", "Cancel Chat", "coder")));
+            when(sessionLaneManager.nextSequence("session-cancel")).thenReturn(11L);
+            when(runService.create("session-cancel", "hello", "coder", PRINCIPAL_ID))
+                    .thenReturn(runEntity("run-cancel", "session-cancel", "coder", "hello"));
+
+            AgentStrategy strategy = org.mockito.Mockito.mock(AgentStrategy.class);
+            when(strategyResolver.resolve(any())).thenReturn(strategy);
+            when(strategy.prepare(any())).thenReturn(AgentExecutionPlan.builder()
+                    .systemPrompt("system prompt")
+                    .strategyName("default")
+                    .build());
+            when(messageService.getSessionHistory(eq("session-cancel"), anyInt(), eq(PRINCIPAL_ID)))
+                    .thenReturn(List.of());
+            when(agentRuntime.executeLoopWithContext(any(RunContext.class), anyList(), eq("hello")))
+                    .thenThrow(new CancellationException("Run cancelled by user"));
+            when(sessionLaneManager.submit(eq("session-cancel"), eq("run-cancel"), eq(11L), any(Supplier.class)))
+                    .thenAnswer(invocation -> {
+                        @SuppressWarnings("unchecked")
+                        Supplier<Object> task = (Supplier<Object>) invocation.getArgument(3);
+                        task.get();
+                        return Mono.empty();
+                    });
+
+            RpcRequest request = RpcRequest.builder()
+                    .id("6")
+                    .method("agent.run")
+                    .payload(Map.of("sessionId", "session-cancel", "prompt", "hello"))
+                    .build();
+            RpcResponse response = handler.handle(CONNECTION_ID, request).block();
+
+            assertNotNull(response);
+            assertNull(response.getError());
+            verify(messageService).saveAssistantMessage(
+                    eq("session-cancel"),
+                    eq("run-cancel"),
+                    contains("Cancelled by user"),
+                    eq(PRINCIPAL_ID)
+            );
         }
     }
 

@@ -40,6 +40,7 @@ const streamBlocks = ref<StreamBlock[]>([])
 
 // Token 监控：当前 run 最新一次 LLM 调用的 usage
 const currentRunUsage = ref<TokenUsagePayload | null>(null)
+const messageLoadVersion = ref(0)
 
 // 工具调用索引（用于快速查找和更新）- 使用普通对象避免 Map 的响应式问题
 const toolCallIndex = ref<Record<string, ToolCall>>({})
@@ -185,6 +186,7 @@ async function createSession(title?: string, agentId?: string) {
 
 async function selectSession(sessionId: string) {
   currentSessionId.value = sessionId
+  const loadVersion = ++messageLoadVersion.value
   syncSelectedAgentFromSession(sessionId)
   isStreaming.value = false
   currentRun.value = null
@@ -197,7 +199,7 @@ async function selectSession(sessionId: string) {
   closeArtifact()
 
   // Load session messages
-  await loadMessages(sessionId)
+  await loadMessages(sessionId, loadVersion)
 }
 
 // Delete session
@@ -208,6 +210,7 @@ async function deleteSession(sessionId: string) {
     sessions.value = sessions.value.filter((s) => s.id !== sessionId)
     // If deleted current session, clear selection
     if (currentSessionId.value === sessionId) {
+      messageLoadVersion.value++
       currentSessionId.value = null
       syncSelectedAgentFromSession(null)
       messages.value = []
@@ -226,11 +229,16 @@ async function deleteSession(sessionId: string) {
 }
 
 // Message API
-async function loadMessages(sessionId: string) {
+async function loadMessages(sessionId: string, version?: number) {
+  const requestVersion = version ?? ++messageLoadVersion.value
   try {
     const result = await request<{ messages: Message[]; files?: SessionFile[] }>('message.list', {
       sessionId,
     })
+
+    if (currentSessionId.value !== sessionId || requestVersion !== messageLoadVersion.value) {
+      return
+    }
 
     // 保存 session files
     sessionFiles.value = result.files || []
@@ -299,6 +307,9 @@ async function loadMessages(sessionId: string) {
       }
     })
   } catch (e) {
+    if (currentSessionId.value !== sessionId || requestVersion !== messageLoadVersion.value) {
+      return
+    }
     console.error('Failed to load messages:', e)
     messages.value = []
     sessionFiles.value = []

@@ -164,6 +164,12 @@ public class RunContext {
     private String modelSelection;
 
     /**
+     * 最近一次流式输出的 assistant 草稿（用于取消时持久化）
+     */
+    @Setter
+    private String latestAssistantDraft;
+
+    /**
      * Skill 激活计数器（skillName -> count）（线程安全）
      */
     @Builder.Default
