@@ -200,8 +200,19 @@ public class AgentRunHandler implements RpcHandler {
         String runId = run.getId();
         String sessionId = run.getSessionId();
         String prompt = run.getPrompt();
+        RunContext context = null;
 
         try {
+            // 取消可能发生在队列等待阶段，执行前先读取最新状态
+            var latestRun = runService.get(runId, principalId);
+            if (latestRun.isPresent()) {
+                RunStatus latestStatus = RunStatus.fromValue(latestRun.get().getStatus());
+                if (latestStatus == RunStatus.CANCELED) {
+                    log.info("Skip execution for canceled queued run: id={}", runId);
+                    return;
+                }
+            }
+
             // 1. lifecycle.start
             runService.updateStatus(runId, RunStatus.RUNNING);
             eventBus.publish(AgentEvent.lifecycleStart(connectionId, runId));
@@ -245,7 +256,7 @@ public class AgentRunHandler implements RpcHandler {
             LoopConfig effectiveConfig = plan.getMaxStepsOverride() != null
                     ? LoopConfig.withMaxSteps(plan.getMaxStepsOverride(), loopConfig)
                     : loopConfig;
-            RunContext context = RunContext.create(runId, connectionId, sessionId,
+            context = RunContext.create(runId, connectionId, sessionId,
                     run.getAgentId(), effectiveConfig, cancellationManager);
             context.setExcludedMcpServers(plan.getExcludedMcpServers());
             context.setStrategyAllowedTools(plan.getAllowedTools());
@@ -274,6 +285,13 @@ public class AgentRunHandler implements RpcHandler {
         } catch (java.util.concurrent.CancellationException e) {
             log.info("Run cancelled: id={}", runId);
             try {
+                String persisted = buildCancellationAssistantMessage(context);
+                messageService.saveAssistantMessage(sessionId, runId, persisted, principalId);
+            } catch (Exception ex) {
+                log.warn("Failed to persist cancellation assistant message: runId={}, error={}",
+                        runId, ex.getMessage());
+            }
+            try {
                 runService.updateStatus(runId, RunStatus.CANCELED);
             } catch (Exception ignored) {}
             eventBus.publish(AgentEvent.lifecycleError(connectionId, runId, "Cancelled by user"));
@@ -293,6 +311,14 @@ public class AgentRunHandler implements RpcHandler {
             // 清除搜索结果临时白名单
             toolConfigProperties.clearSearchDiscoveredDomains();
         }
+    }
+
+    private String buildCancellationAssistantMessage(RunContext context) {
+        String draft = context != null ? context.getLatestAssistantDraft() : null;
+        if (draft != null && !draft.isBlank()) {
+            return draft + "\n\n---\n_Cancelled by user_";
+        }
+        return "_Cancelled by user_";
     }
 
     /**

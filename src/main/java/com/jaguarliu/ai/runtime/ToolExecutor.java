@@ -19,6 +19,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CancellationException;
 
 /**
  * 工具执行器
@@ -67,6 +68,9 @@ public class ToolExecutor {
     ) {
         List<ToolExecutionResult> results = new ArrayList<>();
         for (ToolCall call : toolCalls) {
+            if (context.isAborted()) {
+                throw new CancellationException("Run cancelled by user");
+            }
             results.add(executeSingleTool(context, call));
         }
         return results;
@@ -79,6 +83,10 @@ public class ToolExecutor {
             RunContext context,
             ToolCall toolCall
     ) {
+        if (context.isAborted()) {
+            throw new CancellationException("Run cancelled by user");
+        }
+
         String toolName = toolCall.getName();
         String callId = toolCall.getId();
         String argumentsJson = toolCall.getArguments();
@@ -132,6 +140,10 @@ public class ToolExecutor {
                 arguments = decision.getModifiedArguments();
                 log.info("Using modified arguments for tool: name={}, callId={}", toolName, callId);
             }
+        }
+
+        if (context.isAborted()) {
+            throw new CancellationException("Run cancelled by user");
         }
 
         // 发布 tool.call 事件

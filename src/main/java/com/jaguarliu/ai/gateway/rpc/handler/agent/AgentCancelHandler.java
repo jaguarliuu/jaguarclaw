@@ -59,9 +59,15 @@ public class AgentCancelHandler implements RpcHandler {
                     "Cannot cancel run in status: " + currentStatus.getValue()));
         }
 
-        // 请求取消
-        cancellationManager.requestCancel(runId);
-        log.info("Cancel requested: runId={}, connectionId={}", runId, connectionId);
+        // queued 任务可直接落库为 canceled，避免后续被队列执行
+        if (currentStatus == RunStatus.QUEUED) {
+            runService.updateStatus(runId, RunStatus.CANCELED);
+            log.info("Queued run cancelled immediately: runId={}, connectionId={}", runId, connectionId);
+        } else {
+            // running 任务通过取消标记让执行循环尽快退出
+            cancellationManager.requestCancel(runId);
+            log.info("Cancel requested: runId={}, connectionId={}", runId, connectionId);
+        }
 
         return Mono.just(RpcResponse.success(request.getId(), Map.of(
                 "runId", runId,
