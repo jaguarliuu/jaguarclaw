@@ -40,7 +40,9 @@ node electron/scripts/package-runtime.js
 The script:
 
 1. `prepare-runtime` downloads Node/Python and builds `runtime/staging/`.
-2. `prepare-runtime` bootstraps pip and installs `runtime/requirements.txt`.
+2. `prepare-runtime` installs `runtime/requirements.txt`:
+   - on Windows host: bootstraps pip via embedded `python.exe`
+   - on macOS/Linux host: downloads `win_amd64` wheels and unpacks into `Lib/site-packages`
 3. `package-runtime` validates staging and creates `runtime/runtime.zip`.
 4. `package-runtime` writes `runtime/runtime.version` from `runtime/manifest.json`.
 
@@ -49,3 +51,4 @@ The script:
 - This repo does **not** commit binary runtime payloads.
 - `electron/scripts/build.js` and `build-local.js` auto-run `prepare-runtime` when runtime bundle is missing.
 - If `runtime/runtime.zip` is missing, Electron build still works (runtime bundle is optional).
+- Cross-platform prepare from macOS/Linux requires host `python3` with `pip`.
