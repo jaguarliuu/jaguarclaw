@@ -1,6 +1,7 @@
 package com.jaguarliu.ai.gateway.ws;
 
 import com.jaguarliu.ai.agents.context.AgentWorkspaceResolver;
+import com.jaguarliu.ai.session.SessionFileService;
 import com.jaguarliu.ai.session.SessionService;
 import com.jaguarliu.ai.tools.ToolsProperties;
 import lombok.RequiredArgsConstructor;
@@ -36,10 +37,12 @@ public class FileUploadRouter {
     private final ToolsProperties toolsProperties;
     private final SessionService sessionService;
     private final AgentWorkspaceResolver agentWorkspaceResolver;
+    private final SessionFileService sessionFileService;
 
     private static final Set<String> ALLOWED_EXTENSIONS = Set.of(
             ".pdf", ".docx", ".txt", ".md", ".xlsx", ".pptx",
-            ".csv", ".json", ".yaml", ".yml", ".xml", ".html"
+            ".csv", ".json", ".yaml", ".yml", ".xml", ".html",
+            ".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp"
     );
 
     @Bean
@@ -55,49 +58,48 @@ public class FileUploadRouter {
                         String agentId = readOptionalTextPart(parts.getFirst("agentId"));
 
                         String filename = fp.filename();
-
-                        // 验证扩展名
                         String ext = getExtension(filename);
-                        if (!ALLOWED_EXTENSIONS.contains(ext)) {
+                        if (!isAllowedExtension(ext)) {
                             return ServerResponse.badRequest().bodyValue(
                                     Map.of("error", "File type not allowed: " + ext));
                         }
 
-                        // 读取文件内容
                         return DataBufferUtils.join(fp.content()).flatMap(dataBuffer -> {
                             byte[] fileBytes = new byte[dataBuffer.readableByteCount()];
                             dataBuffer.read(fileBytes);
                             DataBufferUtils.release(dataBuffer);
 
-                            // 验证大小
                             if (fileBytes.length > toolsProperties.getMaxFileSize()) {
                                 return ServerResponse.badRequest().bodyValue(
                                         Map.of("error", "File too large: " + fileBytes.length + " bytes"));
                             }
 
                             try {
-                                // 优先保存到 session/agent 对应 workspace 下，缺省回退全局 workspace
                                 Path uploadRoot = resolveUploadRoot(sessionId, agentId);
                                 Path uploadsDir = uploadRoot.resolve(toolsProperties.getUploadDir());
                                 Files.createDirectories(uploadsDir);
 
-                                // 生成唯一文件名
                                 String safeFilename = UUID.randomUUID().toString().substring(0, 8) + "_" + sanitizeFilename(filename);
                                 Path targetPath = uploadsDir.resolve(safeFilename);
                                 Files.write(targetPath, fileBytes);
 
-                                // 返回相对于 workspace 的路径（供 read_file 使用）
                                 String relativePath = toolsProperties.getUploadDir() + "/" + safeFilename;
+                                String mimeType = detectMimeType(filename);
 
-                                log.info("File saved: {} ({} bytes) -> {} [sessionId={}, agentId={}, uploadRoot={}]",
-                                        filename, fileBytes.length, relativePath, sessionId, agentId, uploadRoot);
+                                if (sessionId != null) {
+                                    sessionFileService.record(sessionId, null, relativePath, filename, fileBytes.length, mimeType);
+                                }
+
+                                log.info("File saved: {} ({} bytes) -> {} [sessionId={}, agentId={}, uploadRoot={}, mimeType={}]",
+                                        filename, fileBytes.length, relativePath, sessionId, agentId, uploadRoot, mimeType);
 
                                 return ServerResponse.ok()
                                         .contentType(MediaType.APPLICATION_JSON)
                                         .bodyValue(Map.of(
                                                 "filePath", relativePath,
                                                 "filename", filename,
-                                                "size", fileBytes.length
+                                                "size", fileBytes.length,
+                                                "mimeType", mimeType
                                         ));
                             } catch (IllegalArgumentException e) {
                                 return ServerResponse.badRequest().bodyValue(Map.of("error", e.getMessage()));
@@ -132,6 +134,32 @@ public class FileUploadRouter {
         return Path.of(toolsProperties.getWorkspace()).toAbsolutePath().normalize();
     }
 
+    static boolean isAllowedExtension(String extension) {
+        return ALLOWED_EXTENSIONS.contains(extension);
+    }
+
+    static String detectMimeType(String filename) {
+        return switch (getExtension(filename)) {
+            case ".png" -> "image/png";
+            case ".jpg", ".jpeg" -> "image/jpeg";
+            case ".gif" -> "image/gif";
+            case ".webp" -> "image/webp";
+            case ".bmp" -> "image/bmp";
+            case ".pdf" -> "application/pdf";
+            case ".docx" -> "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+            case ".xlsx" -> "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+            case ".pptx" -> "application/vnd.openxmlformats-officedocument.presentationml.presentation";
+            case ".csv" -> "text/csv";
+            case ".json" -> "application/json";
+            case ".yaml", ".yml" -> "application/yaml";
+            case ".xml" -> "application/xml";
+            case ".html" -> "text/html";
+            case ".md" -> "text/markdown";
+            case ".txt" -> "text/plain";
+            default -> "application/octet-stream";
+        };
+    }
+
     private static String readOptionalTextPart(Part part) {
         if (part instanceof FormFieldPart formFieldPart) {
             return trimToNull(formFieldPart.value());
@@ -153,7 +181,6 @@ public class FileUploadRouter {
     }
 
     private static String sanitizeFilename(String filename) {
-        // 保留字母、数字、点、下划线、中文等，替换其它字符
-        return filename.replaceAll("[^a-zA-Z0-9._\\-\\u4e00-\\u9fa5]", "_");
+        return filename.replaceAll("[^a-zA-Z0-9._\u4e00-\u9fa5-]", "_");
     }
 }

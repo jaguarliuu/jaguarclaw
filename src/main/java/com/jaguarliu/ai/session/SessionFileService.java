@@ -26,6 +26,16 @@ public class SessionFileService {
     @Transactional
     public SessionFileEntity record(String sessionId, String runId,
                                      String filePath, String fileName, long fileSize) {
+        return record(sessionId, runId, filePath, fileName, fileSize, null);
+    }
+
+    /**
+     * 记录一个文件到 session（带 mimeType）
+     */
+    @Transactional
+    public SessionFileEntity record(String sessionId, String runId,
+                                    String filePath, String fileName, long fileSize,
+                                    String mimeType) {
         SessionFileEntity entity = SessionFileEntity.builder()
                 .id(UUID.randomUUID().toString())
                 .sessionId(sessionId)
@@ -33,11 +43,12 @@ public class SessionFileService {
                 .filePath(filePath)
                 .fileName(fileName)
                 .fileSize(fileSize)
+                .mimeType(mimeType)
                 .build();
 
         entity = sessionFileRepository.save(entity);
-        log.info("Recorded session file: sessionId={}, runId={}, path={}, size={}",
-                sessionId, runId, filePath, fileSize);
+        log.info("Recorded session file: sessionId={}, runId={}, path={}, size={}, mimeType={}",
+                sessionId, runId, filePath, fileSize, mimeType);
         return entity;
     }
 

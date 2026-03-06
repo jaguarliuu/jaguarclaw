@@ -105,6 +105,7 @@ public class MessageListHandler implements RpcHandler {
                 "filePath", file.getFilePath(),
                 "fileName", file.getFileName(),
                 "fileSize", file.getFileSize(),
+                "mimeType", file.getMimeType() != null ? file.getMimeType() : "",
                 "createdAt", file.getCreatedAt().toString()
         );
     }

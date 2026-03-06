@@ -89,6 +89,7 @@ export interface SessionFile {
   filePath: string // 相对路径 e.g. "report.pdf"
   fileName: string
   fileSize: number
+  mimeType?: string
   createdAt: string
 }
 
@@ -548,6 +549,7 @@ export interface AttachedContext {
   filePath?: string // workspace 相对路径（后端返回）
   filename?: string // 原始文件名
   size?: number // 文件大小（字节）
+  mimeType?: string // MIME 类型
 
   // Folder 类型字段
   folderPath?: string // 文件夹路径

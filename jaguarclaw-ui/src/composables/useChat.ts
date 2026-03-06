@@ -320,11 +320,17 @@ async function loadMessages(sessionId: string, version?: number) {
  * 构建上下文 Prompt
  * 将附加的上下文（File、Folder、Web 等）格式化为 prompt 前缀
  */
+function isImageContext(context: AttachedContext): boolean {
+  if (context.mimeType?.startsWith('image/')) return true
+  const candidate = context.filePath || context.filename || context.displayName || ''
+  return /\.(png|jpe?g|gif|webp|bmp)$/i.test(candidate)
+}
+
 function buildContextPrompt(contexts: AttachedContext[]): string {
   if (!contexts || contexts.length === 0) return ''
 
   // 按类型分组
-  const fileContexts = contexts.filter((c) => c.type === 'file' && c.filePath)
+  const fileContexts = contexts.filter((c) => c.type === 'file' && c.filePath && !isImageContext(c))
   const folderContexts = contexts.filter((c) => c.type === 'folder' && c.folderPath)
   const webContexts = contexts.filter((c) => c.type === 'web' && c.url)
 
@@ -380,6 +386,15 @@ async function sendMessage(
     updateSessionAgent(sessionId, effectiveAgentId)
   }
 
+  const imageAttachments = (attachedContexts || [])
+    .filter((context) => context.type === 'file' && context.filePath && isImageContext(context))
+    .map((context) => ({
+      type: 'image',
+      filePath: context.filePath!,
+      filename: context.filename,
+      mimeType: context.mimeType,
+    }))
+
   // 优先使用新的 attachedContexts，如果为空则向后兼容旧的 filePaths
   let fullPrompt = prompt
   if (attachedContexts && attachedContexts.length > 0) {
@@ -427,6 +442,10 @@ async function sendMessage(
     // 添加模型选择
     if (modelSelection) {
       payload.model = modelSelection
+    }
+
+    if (imageAttachments.length > 0) {
+      payload.attachments = imageAttachments
     }
 
     const result = await request<{

@@ -215,6 +215,67 @@ class AgentRunWithAgentIdTest {
         }
 
         @Test
+        void agentRunShouldBuildMultimodalUserMessageWhenImageAttachmentsPresent() throws Exception {
+            AgentRunHandler handler = newAgentRunHandler();
+            mockCommonRunPrerequisites();
+
+            when(sessionService.get("session-mm", PRINCIPAL_ID))
+                    .thenReturn(Optional.of(sessionEntity("session-mm", "Vision Chat", "coder")));
+            when(sessionLaneManager.nextSequence("session-mm")).thenReturn(9L);
+            when(runService.create("session-mm", "describe this image", "coder", PRINCIPAL_ID))
+                    .thenReturn(runEntity("run-mm", "session-mm", "coder", "describe this image"));
+
+            AgentStrategy strategy = org.mockito.Mockito.mock(AgentStrategy.class);
+            when(strategyResolver.resolve(any())).thenReturn(strategy);
+            when(strategy.prepare(any())).thenReturn(AgentExecutionPlan.builder()
+                    .systemPrompt("system prompt")
+                    .strategyName("default")
+                    .build());
+            when(messageService.getSessionHistory(eq("session-mm"), anyInt(), eq(PRINCIPAL_ID)))
+                    .thenReturn(List.of());
+            when(agentRuntime.executeLoopWithContext(any(RunContext.class), anyList(), eq("describe this image")))
+                    .thenReturn("answer");
+            when(sessionLaneManager.submit(eq("session-mm"), eq("run-mm"), eq(9L), any(Supplier.class)))
+                    .thenAnswer(invocation -> {
+                        @SuppressWarnings("unchecked")
+                        Supplier<Object> task = (Supplier<Object>) invocation.getArgument(3);
+                        task.get();
+                        return Mono.empty();
+                    });
+
+            RpcRequest request = RpcRequest.builder()
+                    .id("mm-1")
+                    .method("agent.run")
+                    .payload(Map.of(
+                            "sessionId", "session-mm",
+                            "prompt", "describe this image",
+                            "attachments", List.of(Map.of(
+                                    "type", "image",
+                                    "filePath", "uploads/demo.png",
+                                    "filename", "demo.png",
+                                    "mimeType", "image/png"
+                            ))
+                    ))
+                    .build();
+            RpcResponse response = handler.handle(CONNECTION_ID, request).block();
+
+            assertNotNull(response);
+            assertNull(response.getError());
+
+            @SuppressWarnings("unchecked")
+            ArgumentCaptor<List<com.jaguarliu.ai.llm.model.LlmRequest.Message>> messagesCaptor = ArgumentCaptor.forClass(List.class);
+            verify(agentRuntime).executeLoopWithContext(any(RunContext.class), messagesCaptor.capture(), eq("describe this image"));
+
+            List<com.jaguarliu.ai.llm.model.LlmRequest.Message> messages = messagesCaptor.getValue();
+            com.jaguarliu.ai.llm.model.LlmRequest.Message userMessage = messages.get(messages.size() - 1);
+            assertEquals("describe this image", userMessage.getContent());
+            assertNotNull(userMessage.getParts());
+            assertEquals(2, userMessage.getParts().size());
+            assertEquals("image", userMessage.getParts().get(1).getType());
+            assertEquals("uploads/demo.png", userMessage.getParts().get(1).getImage().getFilePath());
+        }
+
+        @Test
         void runContextShouldCarryResolvedAgentId() throws Exception {
             AgentRunHandler handler = newAgentRunHandler();
             mockCommonRunPrerequisites();

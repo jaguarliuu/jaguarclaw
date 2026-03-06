@@ -102,6 +102,7 @@ public class AgentRunHandler implements RpcHandler {
         String sessionId = extractSessionId(request.getPayload());
         String prompt = extractPrompt(request.getPayload());
         String requestedAgentId = extractAgentId(request.getPayload());
+        List<AttachmentPayload> attachments = extractAttachments(request.getPayload());
         Set<String> excludedMcpServers = extractExcludedMcpServers(request.getPayload());
         String modelSelection = extractModelSelection(request.getPayload());
 
@@ -141,7 +142,7 @@ public class AgentRunHandler implements RpcHandler {
                 result.run.getId(),
                 result.sequence,
                 () -> {
-                    executeRun(connectionId, result.run, excludedMcpServers, modelSelection, principalId);
+                    executeRun(connectionId, result.run, attachments, excludedMcpServers, modelSelection, principalId);
                     return null;
                 }
         ).subscribe();
@@ -195,7 +196,7 @@ public class AgentRunHandler implements RpcHandler {
     /**
      * 执行 run（使用 Agent Strategy 路由到不同策略）
      */
-    private void executeRun(String connectionId, RunEntity run, Set<String> excludedMcpServers, String modelSelection, String principalId) {
+    private void executeRun(String connectionId, RunEntity run, List<AttachmentPayload> attachments, Set<String> excludedMcpServers, String modelSelection, String principalId) {
         String runId = run.getId();
         String sessionId = run.getSessionId();
         String prompt = run.getPrompt();
@@ -222,10 +223,10 @@ public class AgentRunHandler implements RpcHandler {
             // 3. 获取历史消息
             List<MessageEntity> history = messageService.getSessionHistory(sessionId, maxHistoryMessages, principalId);
             // 排除刚保存的这条用户消息
-            List<LlmRequest.Message> historyMessages = history.stream()
-                    .filter(m -> !m.getRunId().equals(runId))
-                    .map(m -> LlmRequest.Message.builder().role(m.getRole()).content(m.getContent()).build())
-                    .toList();
+            List<LlmRequest.Message> historyMessages = messageService.toRequestMessages(history.stream()
+                    .filter(m -> !runId.equals(m.getRunId()))
+                    .toList());
+            LlmRequest.Message currentUserMessage = buildUserMessage(prompt, attachments);
 
             // 4. 构建策略上下文
             AgentContext agentCtx = AgentContext.builder()
@@ -245,7 +246,7 @@ public class AgentRunHandler implements RpcHandler {
             List<LlmRequest.Message> messages = new ArrayList<>();
             messages.add(LlmRequest.Message.system(plan.getSystemPrompt()));
             messages.addAll(historyMessages);
-            messages.add(LlmRequest.Message.user(prompt));
+            messages.add(currentUserMessage);
 
             log.debug("Context built: strategy={}, history={} messages",
                     plan.getStrategyName(), historyMessages.size());
@@ -407,6 +408,37 @@ public class AgentRunHandler implements RpcHandler {
     }
 
     @SuppressWarnings("unchecked")
+    private List<AttachmentPayload> extractAttachments(Object payload) {
+        if (!(payload instanceof Map<?, ?> map)) {
+            return List.of();
+        }
+
+        Object attachments = map.get("attachments");
+        if (!(attachments instanceof List<?> list) || list.isEmpty()) {
+            return List.of();
+        }
+
+        List<AttachmentPayload> result = new ArrayList<>();
+        for (Object item : list) {
+            if (!(item instanceof Map<?, ?> attachmentMap)) {
+                continue;
+            }
+            String type = readString(attachmentMap.get("type"));
+            String filePath = readString(attachmentMap.get("filePath"));
+            if (type == null || filePath == null) {
+                continue;
+            }
+            result.add(new AttachmentPayload(
+                    type,
+                    filePath,
+                    readString(attachmentMap.get("filename")),
+                    readString(attachmentMap.get("mimeType"))
+            ));
+        }
+        return result;
+    }
+
+    @SuppressWarnings("unchecked")
     private Set<String> extractExcludedMcpServers(Object payload) {
         if (payload instanceof Map) {
             Object excluded = ((Map<?, ?>) payload).get("excludedMcpServers");
@@ -431,10 +463,52 @@ public class AgentRunHandler implements RpcHandler {
         return null;
     }
 
+    private LlmRequest.Message buildUserMessage(String prompt, List<AttachmentPayload> attachments) {
+        if (attachments == null || attachments.isEmpty()) {
+            return LlmRequest.Message.user(prompt);
+        }
+
+        List<LlmRequest.ContentPart> parts = new ArrayList<>();
+        if (prompt != null && !prompt.isBlank()) {
+            parts.add(LlmRequest.ContentPart.text(prompt));
+        }
+
+        attachments.stream()
+                .filter(AttachmentPayload::isImage)
+                .map(attachment -> LlmRequest.ContentPart.image(LlmRequest.ImagePart.builder()
+                        .filePath(attachment.filePath())
+                        .mimeType(attachment.mimeType())
+                        .fileName(attachment.fileName())
+                        .build()))
+                .forEach(parts::add);
+
+        if (parts.isEmpty()) {
+            return LlmRequest.Message.user(prompt);
+        }
+        return LlmRequest.Message.userWithParts(prompt, parts);
+    }
+
+    private String readString(Object value) {
+        if (value == null) {
+            return null;
+        }
+        String text = value.toString().trim();
+        return text.isEmpty() ? null : text;
+    }
+
     private String resolvePrincipalId(String connectionId) {
         var principal = connectionManager.getPrincipal(connectionId);
         return principal != null ? principal.getPrincipalId() : null;
     }
 
     private record PrepareResult(String sessionId, RunEntity run, long sequence, RpcResponse error) {}
+
+    private record AttachmentPayload(String type, String filePath, String fileName, String mimeType) {
+        private boolean isImage() {
+            if (type == null) {
+                return false;
+            }
+            return "image".equalsIgnoreCase(type);
+        }
+    }
 }
