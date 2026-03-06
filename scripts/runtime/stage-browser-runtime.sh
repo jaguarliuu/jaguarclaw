@@ -186,7 +186,7 @@ ensure_dir "${TMP_DIR}"
 
 # Stage agent-browser
 AGENT_DEST="${STAGING_DIR}/${AGENT_BIN_REL}"
-AGENT_DL_PATH="${DOWNLOAD_DIR}/agent-browser$(basename "${AGENT_DEST}" | sed 's/.*\(\.[^.]*\)$/\1/;t;d')"
+AGENT_DL_PATH="${DOWNLOAD_DIR}/agent-browser$(basename "${AGENT_DEST}" | sed -e 's/.*\(\.[^.]*\)$/\1/' -e t -e d)"
 if [[ -z "${AGENT_DL_PATH}" || "${AGENT_DL_PATH}" == "${DOWNLOAD_DIR}/agent-browser" ]]; then
   AGENT_DL_PATH="${DOWNLOAD_DIR}/agent-browser.bin"
 fi
