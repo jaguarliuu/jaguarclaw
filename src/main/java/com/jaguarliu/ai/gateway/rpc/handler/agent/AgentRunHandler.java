@@ -1,5 +1,6 @@
 package com.jaguarliu.ai.gateway.rpc.handler.agent;
 
+import com.jaguarliu.ai.agents.context.AgentWorkspaceResolver;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.jaguarliu.ai.gateway.events.AgentEvent;
@@ -10,6 +11,7 @@ import com.jaguarliu.ai.gateway.rpc.model.RpcResponse;
 import com.jaguarliu.ai.gateway.ws.ConnectionManager;
 import com.jaguarliu.ai.gateway.security.rate.TokenBudgetService;
 import com.jaguarliu.ai.nodeconsole.AuditLogService;
+import com.jaguarliu.ai.llm.LlmCapabilityService;
 import com.jaguarliu.ai.llm.LlmClient;
 import com.jaguarliu.ai.llm.model.LlmRequest;
 import com.jaguarliu.ai.llm.model.LlmResponse;
@@ -57,6 +59,7 @@ import java.time.Duration;
 public class AgentRunHandler implements RpcHandler {
 
     private final SessionService sessionService;
+    private final AgentWorkspaceResolver agentWorkspaceResolver;
     private final RunService runService;
     private final MessageService messageService;
     private final SessionLaneManager sessionLaneManager;
@@ -64,6 +67,7 @@ public class AgentRunHandler implements RpcHandler {
     private final ContextBuilder contextBuilder;
     private final AgentRuntime agentRuntime;
     private final LlmClient llmClient;
+    private final LlmCapabilityService llmCapabilityService;
     private final ToolConfigProperties toolConfigProperties;
     private final AgentStrategyResolver strategyResolver;
     private final LoopConfig loopConfig;
@@ -105,6 +109,10 @@ public class AgentRunHandler implements RpcHandler {
         List<AttachmentPayload> attachments = extractAttachments(request.getPayload());
         Set<String> excludedMcpServers = extractExcludedMcpServers(request.getPayload());
         String modelSelection = extractModelSelection(request.getPayload());
+
+        if (hasImageAttachments(attachments) && !llmCapabilityService.supportsVision(modelSelection)) {
+            return Mono.just(RpcResponse.error(request.getId(), "MODEL_NOT_SUPPORTED", "Selected model does not support image input"));
+        }
 
         if (prompt == null || prompt.isBlank()) {
             return Mono.just(RpcResponse.error(request.getId(), "INVALID_PARAMS", "Missing prompt"));
@@ -218,7 +226,8 @@ public class AgentRunHandler implements RpcHandler {
             eventBus.publish(AgentEvent.lifecycleStart(connectionId, runId));
 
             // 2. 保存用户消息
-            messageService.saveUserMessage(sessionId, runId, prompt, principalId);
+            LlmRequest.Message currentUserMessage = buildUserMessage(prompt, attachments, run.getAgentId());
+            messageService.saveUserMessage(sessionId, runId, currentUserMessage, principalId);
 
             // 3. 获取历史消息
             List<MessageEntity> history = messageService.getSessionHistory(sessionId, maxHistoryMessages, principalId);
@@ -226,7 +235,6 @@ public class AgentRunHandler implements RpcHandler {
             List<LlmRequest.Message> historyMessages = messageService.toRequestMessages(history.stream()
                     .filter(m -> !runId.equals(m.getRunId()))
                     .toList());
-            LlmRequest.Message currentUserMessage = buildUserMessage(prompt, attachments);
 
             // 4. 构建策略上下文
             AgentContext agentCtx = AgentContext.builder()
@@ -463,7 +471,11 @@ public class AgentRunHandler implements RpcHandler {
         return null;
     }
 
-    private LlmRequest.Message buildUserMessage(String prompt, List<AttachmentPayload> attachments) {
+    private boolean hasImageAttachments(List<AttachmentPayload> attachments) {
+        return attachments != null && attachments.stream().anyMatch(AttachmentPayload::isImage);
+    }
+
+    private LlmRequest.Message buildUserMessage(String prompt, List<AttachmentPayload> attachments, String agentId) {
         if (attachments == null || attachments.isEmpty()) {
             return LlmRequest.Message.user(prompt);
         }
@@ -477,6 +489,7 @@ public class AgentRunHandler implements RpcHandler {
                 .filter(AttachmentPayload::isImage)
                 .map(attachment -> LlmRequest.ContentPart.image(LlmRequest.ImagePart.builder()
                         .filePath(attachment.filePath())
+                        .storagePath(resolveAttachmentStoragePath(agentId, attachment.filePath()))
                         .mimeType(attachment.mimeType())
                         .fileName(attachment.fileName())
                         .build()))
@@ -486,6 +499,17 @@ public class AgentRunHandler implements RpcHandler {
             return LlmRequest.Message.user(prompt);
         }
         return LlmRequest.Message.userWithParts(prompt, parts);
+    }
+
+    private String resolveAttachmentStoragePath(String agentId, String filePath) {
+        if (filePath == null || filePath.isBlank()) {
+            return null;
+        }
+        return agentWorkspaceResolver.resolveAgentWorkspace(agentId)
+                .resolve(filePath)
+                .toAbsolutePath()
+                .normalize()
+                .toString();
     }
 
     private String readString(Object value) {

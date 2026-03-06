@@ -8,6 +8,7 @@ import { useContext } from '@/composables/useContext'
 import { useMcpServers } from '@/composables/useMcpServers'
 import { useModelSelector } from '@/composables/useModelSelector'
 import { useI18n } from '@/i18n'
+import { useToast } from '@/composables/useToast'
 import type { ContextType } from '@/types'
 import SessionSidebar from '@/components/SessionSidebar.vue'
 import MessageList from '@/components/MessageList.vue'
@@ -33,8 +34,9 @@ const {
   clearContexts,
 } = useContext()
 const { servers: mcpServers, loadServers: loadMcpServers } = useMcpServers()
-const { selectedModel, availableModels, activeModelLabel, selectModel } = useModelSelector()
+const { selectedModel, availableModels, activeModelLabel, selectModel, supportsSelectedModelVision } = useModelSelector()
 const { t } = useI18n()
+const { showToast } = useToast()
 
 // Context input modal 状态
 const showContextModal = ref(false)
@@ -90,6 +92,23 @@ function handleDeleteSession(id: string) {
 }
 
 function handleSend(prompt: string, contexts: typeof attachedContexts.value) {
+  const hasImageContext = contexts.some((context) => {
+    if (context.type !== 'file') return false
+    if (context.mimeType?.startsWith('image/')) return true
+    const candidate = context.filePath || context.filename || context.displayName || ''
+    return /\.(png|jpe?g|gif|webp|bmp)$/i.test(candidate)
+  })
+
+  if (hasImageContext && !supportsSelectedModelVision()) {
+    showToast({
+      type: 'warning',
+      title: '模型不支持识图',
+      message: '当前选择的模型不支持图片输入，请切换到带 Vision 标记的模型。',
+      dedupeKey: 'vision-model-required'
+    })
+    return
+  }
+
   // 传递上下文信息和模型选择给 sendMessage
   sendMessage(
     prompt,

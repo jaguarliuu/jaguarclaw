@@ -39,6 +39,7 @@ export interface Message {
   role: 'user' | 'assistant'
   content: string // 纯文本内容（用于用户消息或简单显示）
   createdAt: string
+  payloadJson?: string
   blocks?: StreamBlock[] // 交错的内容块（用于 assistant 消息的详细显示）
   attachedFiles?: AttachedFile[] // 用户消息附带的文件（仅前端展示用）- 向后兼容
   attachedContexts?: AttachedContext[] // 用户消息附带的上下文（新字段）
@@ -466,6 +467,7 @@ export interface LlmProviderConfig {
   endpoint: string
   apiKey: string // 脱敏值
   models: string[]
+  visionModels?: string[]
 }
 
 export interface LlmMultiConfig {
@@ -479,6 +481,7 @@ export interface ModelOption {
   providerId: string
   providerName: string
   modelName: string
+  supportsVision?: boolean
 }
 
 export interface LlmProviderInput {

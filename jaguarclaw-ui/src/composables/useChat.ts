@@ -121,6 +121,31 @@ const filteredSessions = computed(() =>
   sessions.value.filter((s) => !subagentSessionIds.value.has(s.id)),
 )
 
+function attachedContextsFromPayloadJson(payloadJson?: string): AttachedContext[] | undefined {
+  if (!payloadJson) return undefined
+  try {
+    const payload = JSON.parse(payloadJson) as {
+      parts?: Array<{
+        type?: string
+        image?: { filePath?: string; fileName?: string; mimeType?: string }
+      }>
+    }
+    const contexts = (payload.parts || [])
+      .filter((part) => part.type === 'image' && part.image?.filePath)
+      .map((part, index) => ({
+        id: `payload-image-${index}-${part.image?.filePath}`,
+        type: 'file' as const,
+        displayName: part.image?.fileName || part.image?.filePath || 'image',
+        filePath: part.image?.filePath,
+        filename: part.image?.fileName,
+        mimeType: part.image?.mimeType,
+      }))
+    return contexts.length > 0 ? contexts : undefined
+  } catch {
+    return undefined
+  }
+}
+
 function normalizeSession(session: Session, fallbackAgentId?: string): Session {
   return {
     ...session,
@@ -284,6 +309,14 @@ async function loadMessages(sessionId: string, version?: number) {
           return msg
         }
       }
+
+      if (msg.role === 'user') {
+        const attachedContexts = attachedContextsFromPayloadJson(msg.payloadJson)
+        if (attachedContexts) {
+          return { ...msg, attachedContexts }
+        }
+      }
+
       return msg
     })
 

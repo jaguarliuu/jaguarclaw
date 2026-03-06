@@ -93,6 +93,7 @@ public class MessageListHandler implements RpcHandler {
                 "runId", message.getRunId(),
                 "role", message.getRole(),
                 "content", message.getContent(),
+                "payloadJson", message.getPayloadJson() != null ? message.getPayloadJson() : "",
                 "createdAt", message.getCreatedAt().toString()
         );
     }

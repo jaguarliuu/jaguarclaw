@@ -208,6 +208,7 @@ public class LlmRequest {
     @Builder
     public static class ImagePart {
         private String filePath;
+        private String storagePath;
         private String mimeType;
         private String fileName;
     }

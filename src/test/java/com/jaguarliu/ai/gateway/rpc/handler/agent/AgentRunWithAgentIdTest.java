@@ -1,5 +1,6 @@
 package com.jaguarliu.ai.gateway.rpc.handler.agent;
 
+import com.jaguarliu.ai.agents.context.AgentWorkspaceResolver;
 import com.jaguarliu.ai.gateway.events.EventBus;
 import com.jaguarliu.ai.gateway.rpc.handler.session.SessionCreateHandler;
 import com.jaguarliu.ai.gateway.rpc.model.RpcRequest;
@@ -7,6 +8,7 @@ import com.jaguarliu.ai.gateway.rpc.model.RpcResponse;
 import com.jaguarliu.ai.gateway.security.ConnectionPrincipal;
 import com.jaguarliu.ai.gateway.security.rate.TokenBudgetService;
 import com.jaguarliu.ai.gateway.ws.ConnectionManager;
+import com.jaguarliu.ai.llm.LlmCapabilityService;
 import com.jaguarliu.ai.llm.LlmClient;
 import com.jaguarliu.ai.nodeconsole.AuditLogService;
 import com.jaguarliu.ai.runtime.AgentRuntime;
@@ -52,6 +54,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.nullable;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -64,6 +67,8 @@ class AgentRunWithAgentIdTest {
 
     @Mock
     private SessionService sessionService;
+    @Mock
+    private AgentWorkspaceResolver agentWorkspaceResolver;
     @Mock
     private RunService runService;
     @Mock
@@ -78,6 +83,8 @@ class AgentRunWithAgentIdTest {
     private AgentRuntime agentRuntime;
     @Mock
     private LlmClient llmClient;
+    @Mock
+    private LlmCapabilityService llmCapabilityService;
     @Mock
     private ToolConfigProperties toolConfigProperties;
     @Mock
@@ -212,6 +219,35 @@ class AgentRunWithAgentIdTest {
             assertNull(response.getError());
             verify(sessionService).create("New Session", "main", PRINCIPAL_ID);
             verify(runService).create("session-new", "hello", "main", PRINCIPAL_ID);
+        }
+
+        @Test
+        void agentRunShouldRejectImageAttachmentsForNonVisionModel() {
+            AgentRunHandler handler = newAgentRunHandler();
+            mockCommonRunPrerequisites();
+            when(llmCapabilityService.supportsVision(eq("openai:gpt-3.5-turbo"))).thenReturn(false);
+
+            RpcRequest request = RpcRequest.builder()
+                    .id("mm-0")
+                    .method("agent.run")
+                    .payload(Map.of(
+                            "sessionId", "session-mm",
+                            "prompt", "describe this image",
+                            "model", "openai:gpt-3.5-turbo",
+                            "attachments", List.of(Map.of(
+                                    "type", "image",
+                                    "filePath", "uploads/demo.png",
+                                    "filename", "demo.png",
+                                    "mimeType", "image/png"
+                            ))
+                    ))
+                    .build();
+
+            RpcResponse response = handler.handle(CONNECTION_ID, request).block();
+
+            assertNotNull(response);
+            assertNotNull(response.getError());
+            assertEquals("MODEL_NOT_SUPPORTED", response.getError().getCode());
         }
 
         @Test
@@ -369,6 +405,7 @@ class AgentRunWithAgentIdTest {
     private AgentRunHandler newAgentRunHandler() {
         return new AgentRunHandler(
                 sessionService,
+                agentWorkspaceResolver,
                 runService,
                 messageService,
                 sessionLaneManager,
@@ -376,6 +413,7 @@ class AgentRunWithAgentIdTest {
                 contextBuilder,
                 agentRuntime,
                 llmClient,
+                llmCapabilityService,
                 toolConfigProperties,
                 strategyResolver,
                 loopConfig,
@@ -389,9 +427,12 @@ class AgentRunWithAgentIdTest {
 
     private void mockCommonRunPrerequisites() {
         when(connectionManager.getPrincipal(CONNECTION_ID)).thenReturn(principal);
-        when(tokenBudgetService.estimateTokens(anyString())).thenReturn(10);
-        when(tokenBudgetService.tryConsume(eq(PRINCIPAL_ID), anyInt())).thenReturn(true);
-        when(chatRouter.route(anyString(), nullable(String.class), nullable(String.class)))
+        lenient().when(agentWorkspaceResolver.resolveAgentWorkspace(anyString()))
+                .thenAnswer(invocation -> java.nio.file.Path.of("/tmp", "workspace-" + invocation.getArgument(0).toString()));
+        lenient().when(tokenBudgetService.estimateTokens(anyString())).thenReturn(10);
+        lenient().when(llmCapabilityService.supportsVision(any())).thenReturn(true);
+        lenient().when(tokenBudgetService.tryConsume(eq(PRINCIPAL_ID), anyInt())).thenReturn(true);
+        lenient().when(chatRouter.route(anyString(), nullable(String.class), nullable(String.class)))
                 .thenAnswer(invocation -> {
                     String prompt = invocation.getArgument(0);
                     String requestedAgentId = invocation.getArgument(1);
