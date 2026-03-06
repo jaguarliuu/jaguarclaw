@@ -549,7 +549,7 @@ onMounted(() => {
         <input
           ref="fileInputRef"
           type="file"
-          accept=".pdf,.docx,.txt,.md,.xlsx,.pptx,.csv,.json,.yaml,.yml,.xml,.html"
+          accept=".pdf,.docx,.txt,.md,.xlsx,.pptx,.csv,.json,.yaml,.yml,.xml,.html,.png,.jpg,.jpeg,.gif,.webp,.bmp,image/*"
           style="display: none"
           @change="handleFileChange"
         />
