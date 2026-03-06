@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -72,9 +73,10 @@ public class LlmConfigService {
             pm.put("name", p.getName());
             pm.put("endpoint", p.getEndpoint());
             pm.put("apiKey", maskApiKey(p.getApiKey()));
-            List<String> models = p.getModels() != null ? p.getModels() : List.of();
+            List<String> models = resolveModels(p);
+            List<String> visionModels = resolveVisionModels(p);
             pm.put("models", models);
-            pm.put("visionModels", models.stream().filter(model -> llmCapabilityService.supportsVision(p.getId() + ":" + model)).toList());
+            pm.put("visionModels", visionModels);
             providerList.add(pm);
         }
         result.put("providers", providerList);
@@ -93,13 +95,14 @@ public class LlmConfigService {
 
         // 如果 providers 为空，创建默认 provider
         if (properties.getProviders().isEmpty()) {
-            LlmProviderConfig defaultProvider = LlmProviderConfig.builder()
+            LlmProviderConfig defaultProvider = normalizeProviderConfig(LlmProviderConfig.builder()
                     .id("default")
                     .name("Default")
                     .endpoint(endpoint)
                     .apiKey(apiKey)
                     .models(List.of(model))
-                    .build();
+                    .visionModels(List.of())
+                    .build());
             properties.setProviders(new ArrayList<>(List.of(defaultProvider)));
             properties.setDefaultModel("default:" + model);
         } else {
@@ -140,6 +143,7 @@ public class LlmConfigService {
             throw new IllegalArgumentException("Provider ID already exists: " + providerConfig.getId());
         }
 
+        providerConfig = normalizeProviderConfig(providerConfig);
         properties.getProviders().add(providerConfig);
 
         // 如果是第一个 provider，设为默认
@@ -163,7 +167,7 @@ public class LlmConfigService {
     /**
      * 更新 Provider
      */
-    public void updateProvider(String providerId, String name, String endpoint, String apiKey, List<String> models) {
+    public void updateProvider(String providerId, String name, String endpoint, String apiKey, List<String> models, List<String> visionModels) {
         LlmProviderConfig provider = properties.getProvider(providerId);
         if (provider == null) {
             throw new IllegalArgumentException("Provider not found: " + providerId);
@@ -173,6 +177,9 @@ public class LlmConfigService {
         if (endpoint != null) provider.setEndpoint(endpoint);
         if (apiKey != null && !apiKey.isBlank()) provider.setApiKey(apiKey);
         if (models != null) provider.setModels(models);
+        if (visionModels != null) provider.setVisionModels(visionModels);
+
+        normalizeProviderConfigInPlace(provider);
 
         // 刷新 WebClient
         llmClient.reconfigure(providerId, provider.getEndpoint(), provider.getApiKey());
@@ -251,6 +258,85 @@ public class LlmConfigService {
             log.error("Failed to write multi-config file", e);
             throw new RuntimeException("Failed to save LLM config: " + e.getMessage());
         }
+    }
+
+    private LlmProviderConfig normalizeProviderConfig(LlmProviderConfig provider) {
+        if (provider == null) {
+            return null;
+        }
+        normalizeProviderConfigInPlace(provider);
+        return provider;
+    }
+
+    private void normalizeProviderConfigInPlace(LlmProviderConfig provider) {
+        List<String> rawModels = provider.getModels() != null ? provider.getModels() : List.of();
+        List<String> rawVisionModels = provider.getVisionModels() != null ? provider.getVisionModels() : List.of();
+
+        LinkedHashSet<String> normalizedModels = new LinkedHashSet<>();
+        for (String model : rawModels) {
+            String normalized = normalizeModelName(model);
+            if (normalized != null) {
+                normalizedModels.add(normalized);
+            }
+        }
+
+        LinkedHashSet<String> normalizedVisionModels = new LinkedHashSet<>();
+        for (String model : rawVisionModels) {
+            String normalized = normalizeModelName(model);
+            if (normalized != null) {
+                normalizedVisionModels.add(normalized);
+                normalizedModels.add(normalized);
+            }
+        }
+
+        provider.setModels(new ArrayList<>(normalizedModels));
+        provider.setVisionModels(new ArrayList<>(normalizedVisionModels));
+    }
+
+    private List<String> resolveModels(LlmProviderConfig provider) {
+        LinkedHashSet<String> models = new LinkedHashSet<>();
+        if (provider.getModels() != null) {
+            for (String model : provider.getModels()) {
+                String normalized = normalizeModelName(model);
+                if (normalized != null) {
+                    models.add(normalized);
+                }
+            }
+        }
+        if (provider.getVisionModels() != null) {
+            for (String model : provider.getVisionModels()) {
+                String normalized = normalizeModelName(model);
+                if (normalized != null) {
+                    models.add(normalized);
+                }
+            }
+        }
+        return new ArrayList<>(models);
+    }
+
+    private List<String> resolveVisionModels(LlmProviderConfig provider) {
+        LinkedHashSet<String> models = new LinkedHashSet<>();
+        if (provider.getVisionModels() != null) {
+            for (String model : provider.getVisionModels()) {
+                String normalized = normalizeModelName(model);
+                if (normalized != null) {
+                    models.add(normalized);
+                }
+            }
+        }
+        for (String model : resolveModels(provider)) {
+            if (llmCapabilityService.supportsVision(provider.getId() + ":" + model)) {
+                models.add(model);
+            }
+        }
+        return new ArrayList<>(models);
+    }
+
+    private String normalizeModelName(String model) {
+        if (isBlank(model)) {
+            return null;
+        }
+        return model.trim();
     }
 
     private String generateProviderId(String name) {

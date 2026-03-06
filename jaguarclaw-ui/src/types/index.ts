@@ -490,6 +490,7 @@ export interface LlmProviderInput {
   endpoint: string
   apiKey: string
   models: string[]
+  visionModels?: string[]
 }
 
 export interface AppStatus {

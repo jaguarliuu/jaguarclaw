@@ -234,12 +234,18 @@ class LlmProviderAddHandler implements RpcHandler {
                     ? (List<String>) params.get("models")
                     : new ArrayList<>();
 
+            @SuppressWarnings("unchecked")
+            List<String> visionModels = params.get("visionModels") instanceof List
+                    ? (List<String>) params.get("visionModels")
+                    : new ArrayList<>();
+
             LlmProviderConfig config = LlmProviderConfig.builder()
                     .id(id)
                     .name(name != null ? name : "Provider")
                     .endpoint(endpoint)
                     .apiKey(apiKey)
                     .models(models)
+                    .visionModels(visionModels)
                     .build();
 
             String providerId = llmConfigService.addProvider(config);
@@ -291,7 +297,12 @@ class LlmProviderUpdateHandler implements RpcHandler {
                     ? (List<String>) params.get("models")
                     : null;
 
-            llmConfigService.updateProvider(providerId, name, endpoint, apiKey, models);
+            @SuppressWarnings("unchecked")
+            List<String> visionModels = params.get("visionModels") instanceof List
+                    ? (List<String>) params.get("visionModels")
+                    : null;
+
+            llmConfigService.updateProvider(providerId, name, endpoint, apiKey, models, visionModels);
             return RpcResponse.success(request.getId(), Map.of("success", true));
         }).onErrorResume(e -> {
             log.error("Failed to update provider", e);

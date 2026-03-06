@@ -27,9 +27,11 @@ const addForm = ref<LlmProviderInput>({
   name: '',
   endpoint: '',
   apiKey: '',
-  models: []
+  models: [],
+  visionModels: []
 })
 const newModelInput = ref('')
+const newVisionModelInput = ref('')
 const adding = ref(false)
 const addError = ref<string | null>(null)
 
@@ -39,9 +41,11 @@ const editForm = ref<LlmProviderInput>({
   name: '',
   endpoint: '',
   apiKey: '',
-  models: []
+  models: [],
+  visionModels: []
 })
 const editModelInput = ref('')
+const editVisionModelInput = ref('')
 const editing = ref(false)
 const editError = ref<string | null>(null)
 
@@ -80,7 +84,8 @@ function applyPreset(presetId: string) {
       name: preset.name,
       endpoint: preset.endpoint,
       apiKey: '',
-      models: [...preset.models]
+      models: [...preset.models],
+      visionModels: []
     }
     showAddForm.value = true
     testResult.value = null
@@ -129,10 +134,11 @@ async function handleAdd() {
       name: form.name.trim() || t('sections.llm.errors.defaultProviderName'),
       endpoint: form.endpoint.trim(),
       apiKey: form.apiKey.trim(),
-      models: form.models
+      models: form.models,
+      visionModels: form.visionModels ?? []
     })
     showAddForm.value = false
-    addForm.value = { id: '', name: '', endpoint: '', apiKey: '', models: [] }
+    addForm.value = { id: '', name: '', endpoint: '', apiKey: '', models: [], visionModels: [] }
   } catch (e) {
     addError.value = e instanceof Error ? e.message : t('sections.llm.errors.failedToAdd')
   } finally {
@@ -140,13 +146,14 @@ async function handleAdd() {
   }
 }
 
-function startEdit(provider: { id: string; name: string; endpoint: string; apiKey: string; models?: readonly string[] }) {
+function startEdit(provider: { id: string; name: string; endpoint: string; apiKey: string; models?: readonly string[]; visionModels?: readonly string[] }) {
   editingProviderId.value = provider.id
   editForm.value = {
     name: provider.name,
     endpoint: provider.endpoint,
     apiKey: '', // Leave empty, placeholder shows masked key
-    models: [...(provider.models ?? [])]
+    models: [...(provider.models ?? [])],
+    visionModels: [...(provider.visionModels ?? [])]
   }
   editError.value = null
   testResult.value = null
@@ -166,7 +173,8 @@ async function handleUpdate() {
     const updates: Partial<LlmProviderInput> = {
       name: editForm.value.name.trim(),
       endpoint: editForm.value.endpoint.trim(),
-      models: editForm.value.models
+      models: editForm.value.models,
+      visionModels: editForm.value.visionModels
     }
     if (editForm.value.apiKey.trim()) {
       updates.apiKey = editForm.value.apiKey.trim()
@@ -252,6 +260,7 @@ onMounted(async () => {
             </div>
             <div class="provider-meta">
               <span class="model-count">{{ t('sections.llm.modelCount', { n: String(provider.models?.length ?? 0) }) }}</span>
+              <span v-if="(provider.visionModels?.length ?? 0) > 0" class="vision-count">{{ t('sections.llm.visionModelCount', { n: String(provider.visionModels?.length ?? 0) }) }}</span>
               <button class="icon-btn" :title="t('sections.llm.editTooltip')" @click="startEdit(provider)">
                 <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M10 2L12 4L5 11H3V9L10 2Z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg>
               </button>
@@ -296,6 +305,21 @@ onMounted(async () => {
                   class="tag-input"
                   :placeholder="t('sections.llm.form.modelsEditPlaceholder')"
                   @keydown.enter.prevent="addModelTag(editForm.models, { value: editModelInput }); editModelInput = ''"
+                />
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">{{ t('sections.llm.form.visionModelsLabel') }}</label>
+              <div class="model-tags-input">
+                <span v-for="(m, i) in editForm.visionModels || []" :key="`edit-vision-${i}`" class="model-tag editable vision-tag">
+                  {{ m }}
+                  <button class="tag-remove" @click="removeModelTag(editForm.visionModels || [], i)">&times;</button>
+                </span>
+                <input
+                  v-model="editVisionModelInput"
+                  class="tag-input"
+                  :placeholder="t('sections.llm.form.visionModelsEditPlaceholder')"
+                  @keydown.enter.prevent="addModelTag(editForm.visionModels || (editForm.visionModels = []), { value: editVisionModelInput }); editVisionModelInput = ''"
                 />
               </div>
             </div>
@@ -369,6 +393,21 @@ onMounted(async () => {
               class="tag-input"
               :placeholder="t('sections.llm.form.modelsAddPlaceholder')"
               @keydown.enter.prevent="addModelTag(addForm.models, { value: newModelInput }); newModelInput = ''"
+            />
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">{{ t('sections.llm.form.visionModelsLabel') }}</label>
+          <div class="model-tags-input">
+            <span v-for="(m, i) in addForm.visionModels || []" :key="`vision-${i}`" class="model-tag editable vision-tag">
+              {{ m }}
+              <button class="tag-remove" @click="removeModelTag(addForm.visionModels || [], i)">&times;</button>
+            </span>
+            <input
+              v-model="newVisionModelInput"
+              class="tag-input"
+              :placeholder="t('sections.llm.form.visionModelsAddPlaceholder')"
+              @keydown.enter.prevent="addModelTag(addForm.visionModels || (addForm.visionModels = []), { value: newVisionModelInput }); newVisionModelInput = ''"
             />
           </div>
         </div>
@@ -521,6 +560,16 @@ onMounted(async () => {
   font-family: var(--font-mono);
   font-size: 11px;
   color: var(--color-gray-dark);
+}
+
+.vision-count {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--color-primary);
+}
+
+.vision-tag {
+  border-color: color-mix(in srgb, var(--color-primary) 25%, var(--color-gray-200));
 }
 
 .icon-btn {

@@ -132,7 +132,8 @@ export function useLlmConfig() {
     if (!multiConfig.value?.providers) return []
     const options: ModelOption[] = []
     for (const provider of multiConfig.value.providers) {
-      for (const model of provider.models ?? []) {
+      const names = Array.from(new Set([...(provider.models ?? []), ...(provider.visionModels ?? [])]))
+      for (const model of names) {
         options.push({
           providerId: provider.id,
           providerName: provider.name,
