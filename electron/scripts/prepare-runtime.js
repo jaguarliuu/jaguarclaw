@@ -339,7 +339,7 @@ function ensureWindowsCmdShimForExe(stagedBinaryPath) {
   if (fs.existsSync(cmdPath)) {
     return cmdPath;
   }
-  const content = `@echo off\r\n\"%~dp0${base}.exe\" %*\r\n`;
+  const content = `@echo off\r\nif not defined AGENT_BROWSER_HOME for %%I in ("%~dp0..") do set "AGENT_BROWSER_HOME=%%~fI"\r\n"%~dp0${base}.exe" %*\r\n`;
   fs.writeFileSync(cmdPath, content, 'utf8');
   return cmdPath;
 }
@@ -680,7 +680,13 @@ async function main() {
   console.log(`- chrome:  ${stagedChromium.bin}`);
 }
 
-main().catch((err) => {
-  console.error(`Failed: ${err.message}`);
-  process.exit(1);
-});
+if (require.main === module) {
+  main().catch((err) => {
+    console.error(`Failed: ${err.message}`);
+    process.exit(1);
+  });
+}
+
+module.exports = {
+  ensureWindowsCmdShimForExe,
+};

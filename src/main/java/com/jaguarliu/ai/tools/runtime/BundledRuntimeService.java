@@ -35,6 +35,7 @@ public class BundledRuntimeService {
     private static final String AGENT_BROWSER_BIN_ENV = "AGENT_BROWSER_EXECUTABLE_PATH";
     private static final String AGENT_BROWSER_CHROMIUM_ENV = "AGENT_BROWSER_CHROMIUM_PATH";
     private static final String AGENT_BROWSER_KERNEL_HOME_ENV = "AGENT_BROWSER_KERNEL_HOME";
+    private static final String AGENT_BROWSER_HOME_ENV = "AGENT_BROWSER_HOME";
 
     public boolean isEnabled() {
         return toolsProperties.getRuntime() != null && toolsProperties.getRuntime().isEnabled();
@@ -121,6 +122,7 @@ public class BundledRuntimeService {
             env.put("Path", merged);
         }
         resolveRuntimeHome().ifPresent(path -> env.put("JAGUAR_RUNTIME_HOME", path.toString()));
+        resolveAgentBrowserHome().ifPresent(path -> env.put(AGENT_BROWSER_HOME_ENV, path.toString()));
         resolveBundledBinary("agent-browser").ifPresent(path ->
                 env.put(AGENT_BROWSER_BIN_ENV, path.toString()));
         resolveBundledChromium().ifPresent(path ->
@@ -195,6 +197,27 @@ public class BundledRuntimeService {
                 return parent != null ? parent.toAbsolutePath().normalize() : runtimeHome;
             });
         });
+    }
+
+    public Optional<Path> resolveAgentBrowserHome() {
+        if (!isEnabled()) {
+            return Optional.empty();
+        }
+
+        Optional<Path> runtimeHome = resolveRuntimeHome();
+        Optional<Path> binary = resolveBundledBinary("agent-browser");
+        if (binary.isEmpty()) {
+            return runtimeHome;
+        }
+
+        Path parent = binary.get().getParent();
+        if (parent == null) {
+            return runtimeHome;
+        }
+        if (parent.getFileName() != null && "bin".equalsIgnoreCase(parent.getFileName().toString()) && parent.getParent() != null) {
+            return Optional.of(parent.getParent().toAbsolutePath().normalize());
+        }
+        return Optional.of(parent.toAbsolutePath().normalize());
     }
 
     private List<String> defaultBinEntries() {

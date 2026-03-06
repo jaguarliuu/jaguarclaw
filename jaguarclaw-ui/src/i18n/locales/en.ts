@@ -413,7 +413,8 @@ export default {
       loading: 'Loading about information...',
       hero: {
         eyebrow: 'Desktop Diagnostics',
-        description: 'Review this desktop instance in one place: system environment, release notes, log entry points, and user data directories for faster support and troubleshooting.',
+        description: 'Review this desktop instance in one place: release notes, log entry points, and user data directories. For runtime and environment diagnostics, use the System section.',
+        localBuild: 'Local Build',
         version: 'App Version',
         environments: 'Environments',
         releases: 'Releases',

@@ -700,6 +700,7 @@ function startJavaBackend(port, encryptionKey, runtimeInfo) {
     if (runtimeInfo.browser && runtimeInfo.browser.chromiumHome) {
       env.AGENT_BROWSER_KERNEL_HOME = runtimeInfo.browser.chromiumHome;
     }
+    env.AGENT_BROWSER_HOME = runtimeInfo.home;
   } else {
     env.TOOLS_RUNTIME_ENABLED = 'false';
     delete env.TOOLS_RUNTIME_HOME;
@@ -707,6 +708,7 @@ function startJavaBackend(port, encryptionKey, runtimeInfo) {
     delete env.AGENT_BROWSER_EXECUTABLE_PATH;
     delete env.AGENT_BROWSER_CHROMIUM_PATH;
     delete env.AGENT_BROWSER_KERNEL_HOME;
+    delete env.AGENT_BROWSER_HOME;
     delete env.AGENT_BROWSER_PROVIDER;
     delete env.AGENT_BROWSER_SKIP_INSTALL;
   }

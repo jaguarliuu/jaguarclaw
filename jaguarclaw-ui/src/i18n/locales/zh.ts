@@ -411,7 +411,8 @@ export default {
       loading: '加载关于信息中...',
       hero: {
         eyebrow: 'Desktop Diagnostics',
-        description: '集中查看当前桌面实例的系统环境、版本说明、日志入口和用户数据目录，便于诊断、支持与自助排障。',
+        description: '集中查看当前桌面实例的版本说明、日志入口和用户数据目录；系统环境与运行时诊断请前往系统页面。',
+        localBuild: '本地构建',
         version: '应用版本',
         environments: '环境项',
         releases: '版本记录',

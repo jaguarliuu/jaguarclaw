@@ -178,6 +178,7 @@ class BundledRuntimeServiceTest {
 
         Map<String, String> env = new java.util.HashMap<>();
         service.applyToEnvironment(env);
+        assertEquals(runtimeHome.toAbsolutePath().normalize().toString(), env.get("AGENT_BROWSER_HOME"));
         assertEquals(chromium.toAbsolutePath().normalize().toString(), env.get("AGENT_BROWSER_CHROMIUM_PATH"));
         assertEquals(chromiumHome.toAbsolutePath().normalize().toString(), env.get("AGENT_BROWSER_KERNEL_HOME"));
         assertEquals("kernel", env.get("AGENT_BROWSER_PROVIDER"));
