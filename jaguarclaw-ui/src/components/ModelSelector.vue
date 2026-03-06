@@ -64,6 +64,7 @@ function handleSelect(model: ModelOption) {
           @click="handleSelect(model)"
         >
           <span class="model-name">{{ model.modelName }}</span>
+          <span v-if="model.supportsVision" class="vision-badge">Vision</span>
           <span v-if="isSelected(model)" class="checkmark">&#10003;</span>
         </button>
       </template>
@@ -183,6 +184,18 @@ function handleSelect(model: ModelOption) {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  flex: 1;
+}
+
+.vision-badge {
+  margin-left: 8px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-primary) 10%, transparent);
+  color: var(--color-primary);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 1;
 }
 
 .checkmark {

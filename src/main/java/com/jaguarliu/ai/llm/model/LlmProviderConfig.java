@@ -40,4 +40,9 @@ public class LlmProviderConfig {
      * 该 Provider 可用的模型列表
      */
     private List<String> models;
+
+    /**
+     * 显式声明支持视觉输入的模型列表（可选）
+     */
+    private List<String> visionModels;
 }

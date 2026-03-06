@@ -136,7 +136,8 @@ export function useLlmConfig() {
         options.push({
           providerId: provider.id,
           providerName: provider.name,
-          modelName: model
+          modelName: model,
+          supportsVision: provider.visionModels?.includes(model) ?? false
         })
       }
     }

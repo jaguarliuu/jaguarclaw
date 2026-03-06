@@ -33,12 +33,17 @@ export function useModelSelector() {
     selectedModel.value = null
   }
 
+  function supportsSelectedModelVision(): boolean {
+    return activeModel.value?.supportsVision ?? false
+  }
+
   return {
     selectedModel,
     availableModels,
     activeModel,
     activeModelLabel,
     selectModel,
-    resetToDefault
+    resetToDefault,
+    supportsSelectedModelVision
   }
 }

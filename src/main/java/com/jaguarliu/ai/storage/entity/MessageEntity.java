@@ -34,6 +34,9 @@ public class MessageEntity {
     @Column(name = "owner_principal_id")
     private String ownerPrincipalId;
 
+    @Column(name = "payload_json", columnDefinition = "TEXT")
+    private String payloadJson;
+
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 

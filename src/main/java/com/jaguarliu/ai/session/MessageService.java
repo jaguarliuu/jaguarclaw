@@ -1,5 +1,7 @@
 package com.jaguarliu.ai.session;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jaguarliu.ai.llm.model.LlmRequest;
 import com.jaguarliu.ai.storage.entity.MessageEntity;
 import com.jaguarliu.ai.storage.repository.MessageRepository;
@@ -22,6 +24,7 @@ public class MessageService {
     public static final String DEFAULT_PRINCIPAL_ID = "local-default";
 
     private final MessageRepository messageRepository;
+    private final ObjectMapper objectMapper;
 
     /**
      * 保存用户消息
@@ -36,7 +39,15 @@ public class MessageService {
      */
     @Transactional
     public MessageEntity saveUserMessage(String sessionId, String runId, String content, String ownerPrincipalId) {
-        return saveMessage(sessionId, runId, "user", content, ownerPrincipalId);
+        return saveUserMessage(sessionId, runId, LlmRequest.Message.user(content), ownerPrincipalId);
+    }
+
+    /**
+     * 保存结构化用户消息（指定 ownerPrincipalId）
+     */
+    @Transactional
+    public MessageEntity saveUserMessage(String sessionId, String runId, LlmRequest.Message message, String ownerPrincipalId) {
+        return saveStructuredMessage(sessionId, runId, "user", message, ownerPrincipalId);
     }
 
     /**
@@ -52,18 +63,11 @@ public class MessageService {
      */
     @Transactional
     public MessageEntity saveAssistantMessage(String sessionId, String runId, String content, String ownerPrincipalId) {
-        return saveMessage(sessionId, runId, "assistant", content, ownerPrincipalId);
+        return saveMessage(sessionId, runId, "assistant", content, ownerPrincipalId, null);
     }
 
     /**
      * 保存子代理 announce 消息到父会话
-     *
-     * @param parentSessionId 父会话 ID
-     * @param parentRunId     父运行 ID（可选，announce 可能在父 run 结束后到达）
-     * @param subRunId        子运行 ID
-     * @param subSessionId    子会话 ID
-     * @param content         announce 内容（JSON 格式）
-     * @return 保存的消息实体
      */
     @Transactional
     public MessageEntity saveSubagentAnnounce(String parentSessionId,
@@ -84,13 +88,11 @@ public class MessageService {
                                                String subSessionId,
                                                String content,
                                                String ownerPrincipalId) {
-        // 使用特殊的 role 标记这是 subagent 的 announce 消息
-        // 前端可以根据 role 或 content 中的 type 来识别并特殊显示
         MessageEntity message = MessageEntity.builder()
                 .id(UUID.randomUUID().toString())
                 .sessionId(parentSessionId)
-                .runId(parentRunId)  // 可能为 null
-                .role("assistant")   // 作为 assistant 消息，前端可正常显示
+                .runId(parentRunId)
+                .role("assistant")
                 .content(content)
                 .ownerPrincipalId(ownerPrincipalId)
                 .build();
@@ -101,10 +103,17 @@ public class MessageService {
         return message;
     }
 
-    /**
-     * 保存消息
-     */
-    private MessageEntity saveMessage(String sessionId, String runId, String role, String content, String ownerPrincipalId) {
+    private MessageEntity saveStructuredMessage(String sessionId, String runId, String role,
+                                                LlmRequest.Message message, String ownerPrincipalId) {
+        String content = message != null ? message.resolvedTextContent() : null;
+        if (content == null) {
+            content = "";
+        }
+        return saveMessage(sessionId, runId, role, content, ownerPrincipalId, serializePayload(message));
+    }
+
+    private MessageEntity saveMessage(String sessionId, String runId, String role, String content,
+                                      String ownerPrincipalId, String payloadJson) {
         MessageEntity message = MessageEntity.builder()
                 .id(UUID.randomUUID().toString())
                 .sessionId(sessionId)
@@ -112,57 +121,71 @@ public class MessageService {
                 .role(role)
                 .content(content)
                 .ownerPrincipalId(ownerPrincipalId)
+                .payloadJson(payloadJson)
                 .build();
 
         message = messageRepository.save(message);
-        log.debug("Saved message: sessionId={}, role={}, length={}", sessionId, role, content.length());
+        log.debug("Saved message: sessionId={}, role={}, length={}, structured={}",
+                sessionId, role, content.length(), payloadJson != null);
         return message;
     }
 
-    /**
-     * 获取 session 的历史消息
-     */
+    private String serializePayload(LlmRequest.Message message) {
+        if (message == null) {
+            return null;
+        }
+        try {
+            return objectMapper.writeValueAsString(message);
+        } catch (JsonProcessingException e) {
+            throw new IllegalStateException("Failed to serialize message payload", e);
+        }
+    }
+
     public List<MessageEntity> getSessionHistory(String sessionId) {
         return messageRepository.findBySessionIdOrderByCreatedAtAsc(sessionId);
     }
 
-    /**
-     * 获取主体下 session 的历史消息
-     */
     public List<MessageEntity> getSessionHistory(String sessionId, String ownerPrincipalId) {
         return messageRepository.findBySessionIdAndOwnerPrincipalIdOrderByCreatedAtAsc(sessionId, ownerPrincipalId);
     }
 
-    /**
-     * 获取 session 的历史消息（限制数量，取最近的 N 条）
-     */
     public List<MessageEntity> getSessionHistory(String sessionId, int limit) {
         List<MessageEntity> all = messageRepository.findBySessionIdOrderByCreatedAtAsc(sessionId);
         if (all.size() <= limit) {
             return all;
         }
-        // 取最近的 limit 条
         return all.subList(all.size() - limit, all.size());
     }
 
-    /**
-     * 获取主体下 session 的历史消息（限制数量，取最近的 N 条）
-     */
     public List<MessageEntity> getSessionHistory(String sessionId, int limit, String ownerPrincipalId) {
         List<MessageEntity> all = messageRepository.findBySessionIdAndOwnerPrincipalIdOrderByCreatedAtAsc(sessionId, ownerPrincipalId);
         if (all.size() <= limit) {
             return all;
         }
-        // 取最近的 limit 条
         return all.subList(all.size() - limit, all.size());
     }
 
-    /**
-     * 将历史消息转换为 LlmRequest.Message 列表
-     */
     public List<LlmRequest.Message> toRequestMessages(List<MessageEntity> messages) {
         return messages.stream()
-                .map(m -> LlmRequest.Message.builder().role(m.getRole()).content(m.getContent()).build())
+                .map(this::toRequestMessage)
                 .toList();
+    }
+
+    private LlmRequest.Message toRequestMessage(MessageEntity entity) {
+        if (entity.getPayloadJson() != null && !entity.getPayloadJson().isBlank()) {
+            try {
+                LlmRequest.Message message = objectMapper.readValue(entity.getPayloadJson(), LlmRequest.Message.class);
+                if (message.getRole() == null || message.getRole().isBlank()) {
+                    message.setRole(entity.getRole());
+                }
+                if (message.getContent() == null) {
+                    message.setContent(entity.getContent());
+                }
+                return message;
+            } catch (Exception e) {
+                log.warn("Failed to deserialize message payload: id={}, error={}", entity.getId(), e.getMessage());
+            }
+        }
+        return LlmRequest.Message.builder().role(entity.getRole()).content(entity.getContent()).build();
     }
 }

@@ -1,0 +1,1 @@
+ALTER TABLE session_files ADD COLUMN IF NOT EXISTS mime_type VARCHAR(128);

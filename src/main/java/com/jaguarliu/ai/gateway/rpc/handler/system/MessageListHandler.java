@@ -93,6 +93,7 @@ public class MessageListHandler implements RpcHandler {
                 "runId", message.getRunId(),
                 "role", message.getRole(),
                 "content", message.getContent(),
+                "payloadJson", message.getPayloadJson() != null ? message.getPayloadJson() : "",
                 "createdAt", message.getCreatedAt().toString()
         );
     }
@@ -105,6 +106,7 @@ public class MessageListHandler implements RpcHandler {
                 "filePath", file.getFilePath(),
                 "fileName", file.getFileName(),
                 "fileSize", file.getFileSize(),
+                "mimeType", file.getMimeType() != null ? file.getMimeType() : "",
                 "createdAt", file.getCreatedAt().toString()
         );
     }

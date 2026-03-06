@@ -1,10 +1,14 @@
 package com.jaguarliu.ai.storage.entity;
 
-import jakarta.persistence.*;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.Id;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
 
@@ -33,6 +37,9 @@ public class SessionFileEntity {
 
     @Column(name = "file_size", nullable = false)
     private long fileSize;
+
+    @Column(name = "mime_type")
+    private String mimeType;
 
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;

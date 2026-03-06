@@ -1,6 +1,7 @@
 package com.jaguarliu.ai.gateway.ws;
 
 import com.jaguarliu.ai.agents.context.AgentWorkspaceResolver;
+import com.jaguarliu.ai.session.SessionFileService;
 import com.jaguarliu.ai.session.SessionService;
 import com.jaguarliu.ai.storage.entity.SessionEntity;
 import com.jaguarliu.ai.tools.ToolsProperties;
@@ -29,13 +30,16 @@ class FileUploadRouterTest {
     @Mock
     private AgentWorkspaceResolver agentWorkspaceResolver;
 
+    @Mock
+    private SessionFileService sessionFileService;
+
     @Test
     @DisplayName("优先按 session 的 agent workspace 保存")
     void shouldResolveUploadRootFromSessionAgent() {
         ToolsProperties props = new ToolsProperties();
         props.setWorkspace("./workspace-root");
 
-        FileUploadRouter router = new FileUploadRouter(props, sessionService, agentWorkspaceResolver);
+        FileUploadRouter router = new FileUploadRouter(props, sessionService, agentWorkspaceResolver, sessionFileService);
 
         SessionEntity session = SessionEntity.builder().id("s-1").agentId("agent-a").build();
         when(sessionService.get("s-1")).thenReturn(Optional.of(session));
@@ -57,7 +61,7 @@ class FileUploadRouterTest {
         ToolsProperties props = new ToolsProperties();
         props.setWorkspace("./workspace-root");
 
-        FileUploadRouter router = new FileUploadRouter(props, sessionService, agentWorkspaceResolver);
+        FileUploadRouter router = new FileUploadRouter(props, sessionService, agentWorkspaceResolver, sessionFileService);
 
         when(agentWorkspaceResolver.normalizeAgentId("agent-b")).thenReturn("agent-b");
         Path agentWorkspace = Path.of("/tmp/workspace-agent-b");
@@ -76,12 +80,22 @@ class FileUploadRouterTest {
         ToolsProperties props = new ToolsProperties();
         props.setWorkspace("./workspace-root");
 
-        FileUploadRouter router = new FileUploadRouter(props, sessionService, agentWorkspaceResolver);
+        FileUploadRouter router = new FileUploadRouter(props, sessionService, agentWorkspaceResolver, sessionFileService);
 
         Path resolved = router.resolveUploadRoot(" ", " ");
 
         assertEquals(Path.of("./workspace-root").toAbsolutePath().normalize(), resolved);
         verifyNoInteractions(sessionService, agentWorkspaceResolver);
+    }
+
+
+    @Test
+    @DisplayName("支持图片扩展名和 MIME 类型")
+    void shouldAcceptImageExtensionsAndMimeType() {
+        assertEquals(true, FileUploadRouter.isAllowedExtension(".png"));
+        assertEquals(true, FileUploadRouter.isAllowedExtension(".jpg"));
+        assertEquals("image/png", FileUploadRouter.detectMimeType("demo.png"));
+        assertEquals("image/jpeg", FileUploadRouter.detectMimeType("demo.jpg"));
     }
 
     @Test
@@ -90,7 +104,7 @@ class FileUploadRouterTest {
         ToolsProperties props = new ToolsProperties();
         props.setWorkspace("./workspace-root");
 
-        FileUploadRouter router = new FileUploadRouter(props, sessionService, agentWorkspaceResolver);
+        FileUploadRouter router = new FileUploadRouter(props, sessionService, agentWorkspaceResolver, sessionFileService);
 
         when(sessionService.get("missing-session")).thenReturn(Optional.empty());
 

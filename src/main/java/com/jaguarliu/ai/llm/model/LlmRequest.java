@@ -1,12 +1,14 @@
 package com.jaguarliu.ai.llm.model;
 
-import lombok.Data;
-import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * LLM 请求模型
@@ -68,9 +70,14 @@ public class LlmRequest {
         private String role;
 
         /**
-         * 消息内容（assistant 有 tool_calls 时可能为 null）
+         * 纯文本内容（向后兼容字段）
          */
         private String content;
+
+        /**
+         * 结构化内容块（多模态输入）
+         */
+        private List<ContentPart> parts;
 
         /**
          * 工具调用列表（仅 assistant 角色有）
@@ -94,6 +101,28 @@ public class LlmRequest {
             return Message.builder().role("assistant").content(content).build();
         }
 
+        public static Message userWithParts(String content, List<ContentPart> parts) {
+            return Message.builder()
+                    .role("user")
+                    .content(content)
+                    .parts(parts)
+                    .build();
+        }
+
+        public static Message userWithTextAndImages(String text, List<ImagePart> images) {
+            List<ContentPart> parts = new ArrayList<>();
+            if (text != null && !text.isBlank()) {
+                parts.add(ContentPart.text(text));
+            }
+            if (images != null) {
+                images.stream()
+                        .filter(Objects::nonNull)
+                        .map(ContentPart::image)
+                        .forEach(parts::add);
+            }
+            return userWithParts(text, parts);
+        }
+
         /**
          * 创建带工具调用的 assistant 消息
          */
@@ -114,5 +143,73 @@ public class LlmRequest {
                     .content(content)
                     .build();
         }
+
+        public List<ContentPart> resolvedParts() {
+            if (parts != null && !parts.isEmpty()) {
+                return parts;
+            }
+            if (content != null && !content.isBlank()) {
+                return List.of(ContentPart.text(content));
+            }
+            return List.of();
+        }
+
+        public String resolvedTextContent() {
+            if (content != null) {
+                return content;
+            }
+            String text = resolvedParts().stream()
+                    .filter(ContentPart::isText)
+                    .map(ContentPart::getText)
+                    .filter(Objects::nonNull)
+                    .map(String::trim)
+                    .filter(part -> !part.isEmpty())
+                    .reduce((left, right) -> left + "\n" + right)
+                    .orElse(null);
+            return text != null && !text.isBlank() ? text : null;
+        }
+    }
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    public static class ContentPart {
+        private String type;
+        private String text;
+        private ImagePart image;
+
+        public static ContentPart text(String text) {
+            return ContentPart.builder()
+                    .type("text")
+                    .text(text)
+                    .build();
+        }
+
+        public static ContentPart image(ImagePart image) {
+            return ContentPart.builder()
+                    .type("image")
+                    .image(image)
+                    .build();
+        }
+
+        public boolean isText() {
+            return "text".equals(type);
+        }
+
+        public boolean isImage() {
+            return "image".equals(type);
+        }
+    }
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    public static class ImagePart {
+        private String filePath;
+        private String storagePath;
+        private String mimeType;
+        private String fileName;
     }
 }

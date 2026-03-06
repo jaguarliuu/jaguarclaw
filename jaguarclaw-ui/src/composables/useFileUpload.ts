@@ -1,7 +1,7 @@
 import { ref } from 'vue'
 import type { AttachedFile } from '@/types'
 
-const ALLOWED_EXTENSIONS = ['.pdf', '.docx', '.txt', '.md', '.xlsx', '.pptx', '.csv', '.json', '.yaml', '.yml', '.xml', '.html']
+const ALLOWED_EXTENSIONS = ['.pdf', '.docx', '.txt', '.md', '.xlsx', '.pptx', '.csv', '.json', '.yaml', '.yml', '.xml', '.html', '.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp']
 const MAX_SIZE_MB = 20
 const MAX_SIZE_BYTES = MAX_SIZE_MB * 1024 * 1024
 
@@ -42,6 +42,7 @@ export function useFileUpload() {
       filePath: '',
       filename: file.name,
       size: file.size,
+      mimeType: file.type || undefined,
       uploading: true
     }
     files.value.push(placeholder)
@@ -66,7 +67,7 @@ export function useFileUpload() {
         throw new Error(body.error || `Upload failed: ${response.status}`)
       }
 
-      const result: { filePath: string; filename: string; size: number } = await response.json()
+      const result: { filePath: string; filename: string; size: number; mimeType?: string } = await response.json()
 
       // 更新占位条目
       const entry = files.value.find(f => f.id === tempId)
@@ -74,6 +75,7 @@ export function useFileUpload() {
         entry.filePath = result.filePath
         entry.filename = result.filename
         entry.size = result.size
+        entry.mimeType = result.mimeType
         entry.uploading = false
       }
 

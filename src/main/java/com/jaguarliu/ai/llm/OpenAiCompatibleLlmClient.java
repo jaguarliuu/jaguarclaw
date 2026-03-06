@@ -17,6 +17,8 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Flux;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -429,7 +431,7 @@ public class OpenAiCompatibleLlmClient implements LlmClient {
     private ChatMessage convertMessage(LlmRequest.Message m) {
         ChatMessage msg = new ChatMessage();
         msg.setRole(m.getRole());
-        msg.setContent(m.getContent());
+        msg.setContent(convertContent(m));
 
         // assistant 消息可能有 tool_calls
         if (m.getToolCalls() != null && !m.getToolCalls().isEmpty()) {
@@ -451,6 +453,56 @@ public class OpenAiCompatibleLlmClient implements LlmClient {
         }
 
         return msg;
+    }
+
+    private Object convertContent(LlmRequest.Message message) {
+        List<LlmRequest.ContentPart> parts = message.resolvedParts();
+        boolean hasImage = parts.stream().anyMatch(LlmRequest.ContentPart::isImage);
+        if (!hasImage) {
+            return message.resolvedTextContent();
+        }
+
+        List<ChatContentPart> contentParts = new ArrayList<>();
+        for (LlmRequest.ContentPart part : parts) {
+            if (part.isText()) {
+                contentParts.add(ChatContentPart.text(part.getText()));
+                continue;
+            }
+            if (part.isImage() && part.getImage() != null) {
+                contentParts.add(ChatContentPart.image(toDataUrl(part.getImage())));
+            }
+        }
+        return contentParts;
+    }
+
+    private String toDataUrl(LlmRequest.ImagePart image) {
+        String storagePath = image.getStoragePath();
+        if (storagePath == null || storagePath.isBlank()) {
+            throw new IllegalArgumentException("Image attachment storagePath is required for vision requests: " + image.getFilePath());
+        }
+        try {
+            byte[] bytes = Files.readAllBytes(Path.of(storagePath));
+            String mimeType = image.getMimeType();
+            if (mimeType == null || mimeType.isBlank()) {
+                mimeType = detectMimeType(image.getFileName() != null ? image.getFileName() : image.getFilePath());
+            }
+            return "data:" + mimeType + ";base64," + java.util.Base64.getEncoder().encodeToString(bytes);
+        } catch (Exception e) {
+            throw new IllegalStateException("Failed to read image attachment: " + storagePath, e);
+        }
+    }
+
+    private String detectMimeType(String fileName) {
+        if (fileName == null) {
+            return "application/octet-stream";
+        }
+        String lower = fileName.toLowerCase();
+        if (lower.endsWith(".png")) return "image/png";
+        if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return "image/jpeg";
+        if (lower.endsWith(".gif")) return "image/gif";
+        if (lower.endsWith(".webp")) return "image/webp";
+        if (lower.endsWith(".bmp")) return "image/bmp";
+        return "application/octet-stream";
     }
 
     /**
@@ -558,11 +610,41 @@ public class OpenAiCompatibleLlmClient implements LlmClient {
     @JsonInclude(JsonInclude.Include.NON_NULL)
     static class ChatMessage {
         private String role;
-        private String content;
+        private Object content;
         @JsonProperty("tool_calls")
         private List<ChatToolCall> toolCalls;
         @JsonProperty("tool_call_id")
         private String toolCallId;
+    }
+
+    @Data
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    static class ChatContentPart {
+        private String type;
+        private String text;
+        @JsonProperty("image_url")
+        private ImageUrl imageUrl;
+
+        static ChatContentPart text(String text) {
+            ChatContentPart part = new ChatContentPart();
+            part.setType("text");
+            part.setText(text);
+            return part;
+        }
+
+        static ChatContentPart image(String url) {
+            ChatContentPart part = new ChatContentPart();
+            part.setType("image_url");
+            part.setImageUrl(new ImageUrl(url));
+            return part;
+        }
+
+        @Data
+        @lombok.AllArgsConstructor
+        @lombok.NoArgsConstructor
+        static class ImageUrl {
+            private String url;
+        }
     }
 
     @Data

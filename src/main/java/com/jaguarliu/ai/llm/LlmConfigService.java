@@ -25,6 +25,7 @@ public class LlmConfigService {
 
     private final LlmProperties properties;
     private final OpenAiCompatibleLlmClient llmClient;
+    private final LlmCapabilityService llmCapabilityService;
 
     @Value("${jaguarclaw.config-dir:./data}")
     private String configDir;
@@ -71,7 +72,9 @@ public class LlmConfigService {
             pm.put("name", p.getName());
             pm.put("endpoint", p.getEndpoint());
             pm.put("apiKey", maskApiKey(p.getApiKey()));
-            pm.put("models", p.getModels() != null ? p.getModels() : List.of());
+            List<String> models = p.getModels() != null ? p.getModels() : List.of();
+            pm.put("models", models);
+            pm.put("visionModels", models.stream().filter(model -> llmCapabilityService.supportsVision(p.getId() + ":" + model)).toList());
             providerList.add(pm);
         }
         result.put("providers", providerList);
