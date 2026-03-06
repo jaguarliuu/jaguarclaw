@@ -66,10 +66,10 @@ class ContextBuilderTest {
                 eq(SystemPromptBuilder.PromptMode.FULL), isNull(), isNull(), isNull()
         )).thenReturn(DEFAULT_SYSTEM_PROMPT);
         lenient().when(systemPromptBuilder.build(
-                eq(SystemPromptBuilder.PromptMode.FULL), isNull(), isNull(), isNull(), anyString()
+                eq(SystemPromptBuilder.PromptMode.FULL), isNull(), isNull(), anyString()
         )).thenReturn(DEFAULT_SYSTEM_PROMPT);
         lenient().when(systemPromptBuilder.build(
-                eq(SystemPromptBuilder.PromptMode.SKILL), anySet(), isNull(), isNull(), anyString()
+                eq(SystemPromptBuilder.PromptMode.SKILL), anySet(), isNull(), anyString()
         )).thenReturn(DEFAULT_SYSTEM_PROMPT);
         lenient().when(systemPromptBuilder.build(eq(SystemPromptBuilder.PromptMode.MINIMAL), any())).thenReturn(DEFAULT_SYSTEM_PROMPT);
         lenient().when(compactionService.shouldCompact(anyList(), anyInt())).thenReturn(false);
@@ -186,7 +186,7 @@ class ContextBuilderTest {
             String fullPromptWithSkills = DEFAULT_SYSTEM_PROMPT
                     + "\n\n## Available Skills\n<skills>\n  <skill name=\"code-review\">代码审查</skill>\n</skills>";
             when(systemPromptBuilder.build(
-                    eq(SystemPromptBuilder.PromptMode.FULL), isNull(), isNull(), isNull(), eq("main")
+                    eq(SystemPromptBuilder.PromptMode.FULL), isNull(), isNull(), eq("main")
             )).thenReturn(fullPromptWithSkills);
 
             LlmRequest request = contextBuilder.buildWithSkillIndex(null, "审查代码", false);
@@ -352,7 +352,7 @@ class ContextBuilderTest {
             assertFalse(result.hasActiveSkill());
             // buildWithSkillIndex 通过 systemPromptBuilder.build(FULL) 构建包含 skills 索引的提示
             verify(systemPromptBuilder).build(
-                    eq(SystemPromptBuilder.PromptMode.FULL), isNull(), isNull(), isNull(), eq("main")
+                    eq(SystemPromptBuilder.PromptMode.FULL), isNull(), isNull(), eq("main")
             );
         }
 

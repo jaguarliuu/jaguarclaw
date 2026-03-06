@@ -6,7 +6,6 @@ import { useChat } from '@/composables/useChat'
 import { useLlmConfig } from '@/composables/useLlmConfig'
 import { useContext } from '@/composables/useContext'
 import { useMcpServers } from '@/composables/useMcpServers'
-import { useDataSource } from '@/composables/useDataSource'
 import { useModelSelector } from '@/composables/useModelSelector'
 import { useI18n } from '@/i18n'
 import type { ContextType } from '@/types'
@@ -34,16 +33,12 @@ const {
   clearContexts,
 } = useContext()
 const { servers: mcpServers, loadServers: loadMcpServers } = useMcpServers()
-const { dataSources, loadDataSources } = useDataSource()
 const { selectedModel, availableModels, activeModelLabel, selectModel } = useModelSelector()
 const { t } = useI18n()
 
 // Context input modal 状态
 const showContextModal = ref(false)
 const currentContextType = ref<ContextType>('folder')
-
-// 选中的数据源 ID
-const selectedDataSourceId = ref<string | undefined>(undefined)
 
 const {
   currentSession,
@@ -95,19 +90,12 @@ function handleDeleteSession(id: string) {
 }
 
 function handleSend(prompt: string, contexts: typeof attachedContexts.value) {
-  // 获取选中数据源的名称
-  const dataSourceName = selectedDataSourceId.value
-    ? dataSources.value.find((ds) => ds.id === selectedDataSourceId.value)?.name
-    : undefined
-
-  // 传递上下文信息、数据源 ID 和模型选择给 sendMessage
+  // 传递上下文信息和模型选择给 sendMessage
   sendMessage(
     prompt,
     contexts.length > 0 ? contexts : undefined,
     undefined, // filePaths (legacy)
     undefined, // attachedFiles (legacy)
-    selectedDataSourceId.value,
-    dataSourceName,
     selectedModel.value ?? undefined,
     selectedAgentId.value,
   )
@@ -171,10 +159,6 @@ function handleSelectSubagent(subRunId: string) {
   }
 }
 
-function handleSelectDataSource(dataSourceId: string | undefined) {
-  selectedDataSourceId.value = dataSourceId
-}
-
 function handleSelectModel(providerId: string, modelName: string) {
   selectModel(providerId, modelName)
 }
@@ -202,7 +186,6 @@ onMounted(() => {
 
       loadSessions()
       loadMcpServers()
-      loadDataSources()
       loadLlmConfig()
 
       // Handle install/uninstall action from system settings
@@ -273,8 +256,6 @@ async function handleInstallAction() {
         :attached-contexts="attachedContexts"
         :mcp-servers="connectedMcpServers"
         :excluded-mcp-servers="excludedMcpServers"
-        :data-sources="dataSources"
-        :selected-data-source-id="selectedDataSourceId"
         :available-models="availableModels"
         :selected-model="selectedModel"
         :default-model="multiConfig?.defaultModel ?? ''"
@@ -288,7 +269,6 @@ async function handleInstallAction() {
         @add-context="handleAddContext"
         @remove-context="handleRemoveContext"
         @toggle-mcp-server="toggleMcpServer"
-        @select-datasource="handleSelectDataSource"
         @select-model="handleSelectModel"
         @select-agent="handleSelectAgent"
         @open-model-settings="handleOpenModelSettings"

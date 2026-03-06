@@ -13,18 +13,15 @@ public class PromptAssemblyContext {
     private final SystemPromptBuilder.PromptMode mode;
     private final Set<String> allowedTools;
     private final Set<String> excludedMcpServers;
-    private final String dataSourceId;
     private final String agentId;
 
     public PromptAssemblyContext(SystemPromptBuilder.PromptMode mode,
                                  Set<String> allowedTools,
                                  Set<String> excludedMcpServers,
-                                 String dataSourceId,
                                  String agentId) {
         this.mode = mode;
         this.allowedTools = allowedTools;
         this.excludedMcpServers = excludedMcpServers;
-        this.dataSourceId = dataSourceId;
         this.agentId = (agentId == null || agentId.isBlank()) ? "main" : agentId;
     }
 
@@ -38,10 +35,6 @@ public class PromptAssemblyContext {
 
     public Set<String> getExcludedMcpServers() {
         return excludedMcpServers;
-    }
-
-    public String getDataSourceId() {
-        return dataSourceId;
     }
 
     public String getAgentId() {

@@ -361,8 +361,6 @@ async function sendMessage(
   attachedContexts?: AttachedContext[],
   filePaths?: string[],
   attachedFiles?: AttachedFile[],
-  dataSourceId?: string,
-  dataSourceName?: string,
   modelSelection?: string,
   agentId?: string,
 ) {
@@ -393,7 +391,7 @@ async function sendMessage(
     fullPrompt = `[Attached Files]\n${fileList}\n\n${prompt}`
   }
 
-  // Add user message to UI immediately（保存 attachedContexts 和 dataSourceId 用于展示）
+  // Add user message to UI immediately（保存 attachedContexts 用于展示）
   const userMessage: Message = {
     id: `temp-${Date.now()}`,
     sessionId,
@@ -404,8 +402,6 @@ async function sendMessage(
     attachedContexts:
       attachedContexts && attachedContexts.length > 0 ? [...attachedContexts] : undefined,
     attachedFiles: attachedFiles && attachedFiles.length > 0 ? [...attachedFiles] : undefined, // 向后兼容
-    dataSourceId,
-    dataSourceName,
   }
   messages.value.push(userMessage)
 
@@ -426,11 +422,6 @@ async function sendMessage(
     // 添加排除的 MCP 服务器
     if (excludedMcpServers.value.size > 0) {
       payload.excludedMcpServers = Array.from(excludedMcpServers.value)
-    }
-
-    // 添加数据源 ID
-    if (dataSourceId) {
-      payload.dataSourceId = dataSourceId
     }
 
     // 添加模型选择

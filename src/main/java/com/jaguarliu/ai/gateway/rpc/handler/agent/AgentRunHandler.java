@@ -103,7 +103,6 @@ public class AgentRunHandler implements RpcHandler {
         String prompt = extractPrompt(request.getPayload());
         String requestedAgentId = extractAgentId(request.getPayload());
         Set<String> excludedMcpServers = extractExcludedMcpServers(request.getPayload());
-        String dataSourceId = extractDataSourceId(request.getPayload());
         String modelSelection = extractModelSelection(request.getPayload());
 
         if (prompt == null || prompt.isBlank()) {
@@ -142,7 +141,7 @@ public class AgentRunHandler implements RpcHandler {
                 result.run.getId(),
                 result.sequence,
                 () -> {
-                    executeRun(connectionId, result.run, excludedMcpServers, dataSourceId, modelSelection, principalId);
+                    executeRun(connectionId, result.run, excludedMcpServers, modelSelection, principalId);
                     return null;
                 }
         ).subscribe();
@@ -196,7 +195,7 @@ public class AgentRunHandler implements RpcHandler {
     /**
      * 执行 run（使用 Agent Strategy 路由到不同策略）
      */
-    private void executeRun(String connectionId, RunEntity run, Set<String> excludedMcpServers, String dataSourceId, String modelSelection, String principalId) {
+    private void executeRun(String connectionId, RunEntity run, Set<String> excludedMcpServers, String modelSelection, String principalId) {
         String runId = run.getId();
         String sessionId = run.getSessionId();
         String prompt = run.getPrompt();
@@ -235,7 +234,6 @@ public class AgentRunHandler implements RpcHandler {
                     .connectionId(connectionId)
                     .agentId(run.getAgentId())
                     .prompt(prompt)
-                    .dataSourceId(dataSourceId)
                     .excludedMcpServers(excludedMcpServers)
                     .build();
 
@@ -249,8 +247,8 @@ public class AgentRunHandler implements RpcHandler {
             messages.addAll(historyMessages);
             messages.add(LlmRequest.Message.user(prompt));
 
-            log.debug("Context built: strategy={}, history={} messages, dataSourceId={}",
-                    plan.getStrategyName(), historyMessages.size(), dataSourceId);
+            log.debug("Context built: strategy={}, history={} messages",
+                    plan.getStrategyName(), historyMessages.size());
 
             // 7. 构建 RunContext 并设置工具白名单
             LoopConfig effectiveConfig = plan.getMaxStepsOverride() != null
@@ -421,14 +419,6 @@ public class AgentRunHandler implements RpcHandler {
                 }
                 return result.isEmpty() ? null : result;
             }
-        }
-        return null;
-    }
-
-    private String extractDataSourceId(Object payload) {
-        if (payload instanceof Map) {
-            Object id = ((Map<?, ?>) payload).get("dataSourceId");
-            return id != null ? id.toString() : null;
         }
         return null;
     }

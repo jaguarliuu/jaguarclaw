@@ -21,7 +21,7 @@ class ToolRegistryCatalogTest {
         ApplicationContext applicationContext = mock(ApplicationContext.class);
         registry = new ToolRegistry(applicationContext);
 
-        registry.register(new FakeTool("datasource_query", "Query datasource", false, null));
+        registry.register(new FakeTool("web_search", "Search web", false, null));
         registry.register(new FakeTool("shell", "Execute shell", true, null));
         registry.register(new FakeTool("read_file", "Read file", false, null));
         registry.register(new FakeTool("mcp_fs_read", "Read via MCP", false, "filesystem"));
@@ -39,8 +39,8 @@ class ToolRegistryCatalogTest {
         assertEquals("shell", catalog.get(1).name());
         assertEquals("command_local", catalog.get(1).category());
 
-        assertEquals("datasource_query", catalog.get(2).name());
-        assertEquals("datasource", catalog.get(2).category());
+        assertEquals("web_search", catalog.get(2).name());
+        assertEquals("network", catalog.get(2).category());
 
         assertEquals("mcp_fs_read", catalog.get(3).name());
         assertEquals("mcp", catalog.get(3).category());
@@ -80,4 +80,3 @@ class ToolRegistryCatalogTest {
         }
     }
 }
-

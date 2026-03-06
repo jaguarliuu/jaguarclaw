@@ -22,10 +22,6 @@ public record ToolCatalogEntry(
         List<String> tags
 ) {
 
-    private static final Set<String> DATA_TOOLS = Set.of(
-            "datasource_query", "list_tables", "get_table_schema", "sample_data"
-    );
-
     private static final Set<String> REMOTE_TOOLS = Set.of(
             "remote_exec", "kubectl_exec", "node_list", "node_status_check"
     );
@@ -78,7 +74,6 @@ public record ToolCatalogEntry(
             case "command_local" -> "Local Command";
             case "command_remote" -> "Remote Command";
             case "memory" -> "Memory";
-            case "datasource" -> "Data Source";
             case "network" -> "Network";
             case "workflow" -> "Workflow";
             case "delivery" -> "Delivery";
@@ -132,20 +127,17 @@ public record ToolCatalogEntry(
         if (name.startsWith("memory_")) {
             return new CategoryInfo("memory", 40);
         }
-        if (DATA_TOOLS.contains(name)) {
-            return new CategoryInfo("datasource", 50);
-        }
         if (NETWORK_TOOLS.contains(name)) {
-            return new CategoryInfo("network", 60);
+            return new CategoryInfo("network", 50);
         }
         if (WORKFLOW_TOOLS.contains(name)) {
-            return new CategoryInfo("workflow", 70);
+            return new CategoryInfo("workflow", 60);
         }
         if (DELIVERY_TOOLS.contains(name)) {
-            return new CategoryInfo("delivery", 80);
+            return new CategoryInfo("delivery", 70);
         }
         if (name.startsWith("update_")) {
-            return new CategoryInfo("profile", 90);
+            return new CategoryInfo("profile", 80);
         }
         return new CategoryInfo("other", 999);
     }
@@ -171,4 +163,3 @@ public record ToolCatalogEntry(
     private record CategoryInfo(String key, int order) {
     }
 }
-

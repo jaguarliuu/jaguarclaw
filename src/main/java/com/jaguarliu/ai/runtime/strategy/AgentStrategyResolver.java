@@ -34,8 +34,8 @@ public class AgentStrategyResolver {
     public AgentStrategy resolve(AgentContext context) {
         for (AgentStrategy strategy : strategies) {
             if (strategy.supports(context)) {
-                log.debug("Resolved strategy: {} for context: dataSourceId={}",
-                        strategy.getClass().getSimpleName(), context.getDataSourceId());
+                log.debug("Resolved strategy: {} for agentId={}",
+                        strategy.getClass().getSimpleName(), context.getAgentId());
                 return strategy;
             }
         }

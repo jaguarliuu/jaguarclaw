@@ -53,7 +53,6 @@ class SystemPromptFacetTest {
                 Optional.of(mcpPromptProvider),
                 soulConfigService,
                 Optional.empty(),
-                Optional.empty(),
                 Optional.empty()
         );
         ReflectionTestUtils.setField(builder, "workspace", "./workspace");
@@ -74,8 +73,8 @@ class SystemPromptFacetTest {
         when(toolRegistry.listDefinitions(any(ToolVisibilityResolver.VisibilityRequest.class))).thenReturn(List.of(readFile, bash));
         when(toolRegistry.listDefinitions()).thenReturn(List.of(readFile, bash));
 
-        builder.build(SystemPromptBuilder.PromptMode.FULL, Set.of("read_file"), null, null, "agent-a");
-        builder.build(SystemPromptBuilder.PromptMode.FULL, Set.of("bash"), null, null, "agent-b");
+        builder.build(SystemPromptBuilder.PromptMode.FULL, Set.of("read_file"), null, "agent-a");
+        builder.build(SystemPromptBuilder.PromptMode.FULL, Set.of("bash"), null, "agent-b");
 
         assertEquals(1, builder.kernelTemplateBuildCount(SystemPromptBuilder.PromptMode.FULL));
     }
@@ -104,9 +103,9 @@ class SystemPromptFacetTest {
         lenient().when(soulConfigService.readProfileMd(anyString())).thenReturn("");
 
         String agentAPrompt = builder.build(
-                SystemPromptBuilder.PromptMode.FULL, Set.of("read_file"), null, null, "agent-a");
+                SystemPromptBuilder.PromptMode.FULL, Set.of("read_file"), null, "agent-a");
         String agentBPrompt = builder.build(
-                SystemPromptBuilder.PromptMode.FULL, Set.of("bash"), null, null, "agent-b");
+                SystemPromptBuilder.PromptMode.FULL, Set.of("bash"), null, "agent-b");
 
         assertTrue(agentAPrompt.contains("## Safety Guidelines"));
         assertTrue(agentBPrompt.contains("## Safety Guidelines"));

@@ -20,11 +20,6 @@ public class AgentContext {
     private final String prompt;
 
     /**
-     * 数据源 ID，为 null 时走默认策略
-     */
-    private final String dataSourceId;
-
-    /**
      * 排除的 MCP 服务器名称集合
      */
     private final Set<String> excludedMcpServers;

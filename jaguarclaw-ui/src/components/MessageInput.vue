@@ -4,7 +4,6 @@ import type {
   SlashCommandItem,
   AttachedContext,
   ContextType,
-  DataSourceInfo,
   ModelOption,
   AgentProfile,
 } from '@/types'
@@ -14,7 +13,6 @@ import { useI18n } from '@/i18n'
 import ContextChip from '@/components/ContextChip.vue'
 import ContextTypeMenu from '@/components/ContextTypeMenu.vue'
 import McpServerFilter from '@/components/McpServerFilter.vue'
-import DataSourceSelector from '@/components/DataSourceSelector.vue'
 import ModelSelector from '@/components/ModelSelector.vue'
 
 interface TokenUsageState {
@@ -33,8 +31,6 @@ const props = defineProps<{
   attachedContexts?: AttachedContext[]
   mcpServers?: McpServer[]
   excludedMcpServers?: Set<string>
-  dataSources?: readonly DataSourceInfo[]
-  selectedDataSourceId?: string
   availableModels?: ModelOption[]
   selectedModel?: string | null
   defaultModel?: string
@@ -50,7 +46,6 @@ const emit = defineEmits<{
   'attach-file': [file: File]
   'remove-context': [contextId: string]
   'toggle-mcp-server': [serverName: string]
-  'select-datasource': [dataSourceId: string | undefined]
   'select-model': [providerId: string, modelName: string]
   'select-agent': [agentId: string]
   'open-model-settings': []
@@ -76,9 +71,6 @@ const contextMenuRef = ref<InstanceType<typeof ContextTypeMenu> | null>(null)
 
 // MCP server filter
 const showMcpFilter = ref(false)
-
-// Data source selector
-const showDataSourceSelector = ref(false)
 
 // Model selector
 const showModelSelector = ref(false)
@@ -119,35 +111,10 @@ const mcpStatusLabel = computed(() => {
   return `MCP: ${active}/${servers.length}`
 })
 
-// 数据源状态标签
-const dataSourceLabel = computed(() => {
-  const sources = props.dataSources ?? []
-  const activeSources = sources.filter((s) => s.status === 'ACTIVE')
-  if (activeSources.length === 0) return null
-
-  const selectedSource = activeSources.find((s) => s.id === props.selectedDataSourceId)
-  if (selectedSource) {
-    return selectedSource.name
-  }
-  return '数据源'
-})
-
-// 获取选中的数据源对象
-const selectedDataSource = computed(() => {
-  if (!props.selectedDataSourceId) return null
-  return props.dataSources?.find((ds) => ds.id === props.selectedDataSourceId)
-})
-
 // 是否显示 MCP 按钮
 const showMcpButton = computed(() => {
   const servers = props.mcpServers ?? []
   return servers.length > 0
-})
-
-// 是否显示数据源按钮
-const showDataSourceButton = computed(() => {
-  const sources = props.dataSources ?? []
-  return sources.filter((s) => s.status === 'ACTIVE').length > 0
 })
 
 // 是否有上下文正在上传
@@ -349,15 +316,6 @@ function handleClickOutside(e: MouseEvent) {
     }
   }
 
-  // 关闭数据源选择器
-  if (showDataSourceSelector.value) {
-    const selectorEl = document.querySelector('.datasource-selector')
-    const toolbarBtn = target.closest('.toolbar-btn')
-    if (selectorEl && !selectorEl.contains(target) && !toolbarBtn) {
-      showDataSourceSelector.value = false
-    }
-  }
-
   // 关闭模型选择器
   if (showModelSelector.value) {
     const selectorEl = document.querySelector('.model-selector')
@@ -375,10 +333,6 @@ function handleClickOutside(e: MouseEvent) {
       showAgentSelector.value = false
     }
   }
-}
-
-function handleRemoveDataSource() {
-  emit('select-datasource', undefined)
 }
 
 function toggleModelSelector() {
@@ -422,8 +376,7 @@ function handleMouseLeave() {
       !isHovered.value &&
       !isFocused.value &&
       !input.value &&
-      !props.attachedContexts?.length &&
-      !props.selectedDataSourceId
+      !props.attachedContexts?.length
     ) {
       isExpanded.value = false
     }
@@ -437,8 +390,7 @@ function handleBlur() {
     if (
       !isHovered.value &&
       !input.value &&
-      !props.attachedContexts?.length &&
-      !props.selectedDataSourceId
+      !props.attachedContexts?.length
     ) {
       isExpanded.value = false
     }
@@ -516,14 +468,6 @@ onMounted(() => {
         @toggle="emit('toggle-mcp-server', $event)"
       />
 
-      <!-- Data source selector -->
-      <DataSourceSelector
-        v-if="showDataSourceSelector"
-        :data-sources="dataSources ?? []"
-        :selected-data-source-id="selectedDataSourceId"
-        @select="emit('select-datasource', $event)"
-      />
-
       <!-- Model selector -->
       <ModelSelector
         v-if="showModelSelector"
@@ -573,8 +517,7 @@ onMounted(() => {
           expanded:
             isExpanded ||
             input.length > 0 ||
-            (attachedContexts && attachedContexts.length > 0) ||
-            selectedDataSource,
+            (attachedContexts && attachedContexts.length > 0),
           dragging: isDragging,
         }"
         @mouseenter="handleMouseEnter"
@@ -614,39 +557,7 @@ onMounted(() => {
         <!-- Main content area -->
         <div class="input-main">
           <!-- Chips container -->
-          <div
-            v-if="selectedDataSource || (attachedContexts && attachedContexts.length > 0)"
-            class="chips-container"
-          >
-            <!-- Selected datasource chip -->
-            <div v-if="selectedDataSource" class="chip datasource-chip">
-              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" class="chip-icon">
-                <path
-                  d="M2 3C2 2.44772 2.44772 2 3 2H9C9.55228 2 10 2.44772 10 3V4C10 4.55228 9.55228 5 9 5H3C2.44772 5 2 4.55228 2 4V3Z"
-                  fill="currentColor"
-                />
-                <path
-                  d="M2 8C2 7.44772 2.44772 7 3 7H9C9.55228 7 10 7.44772 10 8V9C10 9.55228 9.55228 10 9 10H3C2.44772 10 2 9.55228 2 9V8Z"
-                  fill="currentColor"
-                />
-              </svg>
-              <span class="chip-label">{{ selectedDataSource.name }}</span>
-              <button
-                class="chip-remove"
-                @click="handleRemoveDataSource"
-                :title="t('common.remove')"
-              >
-                <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                  <path
-                    d="M3 3L9 9M9 3L3 9"
-                    stroke="currentColor"
-                    stroke-width="1.5"
-                    stroke-linecap="round"
-                  />
-                </svg>
-              </button>
-            </div>
-
+          <div v-if="attachedContexts && attachedContexts.length > 0" class="chips-container">
             <!-- Context chips -->
             <ContextChip
               v-for="context in attachedContexts"
@@ -661,11 +572,7 @@ onMounted(() => {
             ref="inputRef"
             v-model="input"
             :disabled="disabled"
-            :placeholder="
-              selectedDataSource
-                ? t('input.placeholderDs', { name: selectedDataSource.name })
-                : t('input.placeholder')
-            "
+            :placeholder="t('input.placeholder')"
             @keydown="handleKeydown"
             @input="handleInput"
             @focus="handleFocus"
@@ -723,33 +630,6 @@ onMounted(() => {
                 </svg>
               </button>
 
-              <button
-                v-if="showDataSourceButton"
-                class="toolbar-btn"
-                :class="{ active: showDataSourceSelector, highlight: selectedDataSourceId }"
-                :disabled="disabled"
-                @click="showDataSourceSelector = !showDataSourceSelector"
-                :title="t('input.tooltipDataSource')"
-              >
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 16 16"
-                  fill="none"
-                  xmlns="http://www.w3.org/2000/svg"
-                >
-                  <path
-                    d="M2 4C2 3.44772 3.34315 3 5 3H11C12.6569 3 14 3.44772 14 4V5.5C14 6.05228 12.6569 6.5 11 6.5H5C3.34315 6.5 2 6.05228 2 5.5V4Z"
-                    stroke="currentColor"
-                    stroke-width="1.2"
-                  />
-                  <path
-                    d="M2 10.5C2 9.94772 3.34315 9.5 5 9.5H11C12.6569 9.5 14 9.94772 14 10.5V12C14 12.5523 12.6569 13 11 13H5C3.34315 13 2 12.5523 2 12V10.5Z"
-                    stroke="currentColor"
-                    stroke-width="1.2"
-                  />
-                </svg>
-              </button>
             </div>
 
             <div class="toolbar-right">

@@ -29,7 +29,6 @@ public class DefaultAgentStrategy implements AgentStrategy {
                 SystemPromptBuilder.PromptMode.FULL,
                 null,
                 context.getExcludedMcpServers(),
-                null,
                 context.getAgentId()
         );
 

@@ -155,7 +155,7 @@ public class ContextBuilder {
         // 使用 SystemPromptBuilder 构建带 skill 索引的完整 system prompt
         // Skills 段落已经包含在 FULL 模式中
         String systemWithSkills = systemPromptBuilder.build(
-                SystemPromptBuilder.PromptMode.FULL, null, null, null, agentId
+                SystemPromptBuilder.PromptMode.FULL, null, null, agentId
         );
 
         LlmRequest request = build(systemWithSkills, history, userPrompt);
@@ -219,7 +219,7 @@ public class ContextBuilder {
         // 获取基础 system prompt（SKILL 模式：仅 Identity + Workspace + Runtime，不含工具列表）
         Set<String> allowedTools = skill.getAllowedTools();
         String basePrompt = systemPromptBuilder.build(
-                SystemPromptBuilder.PromptMode.SKILL, allowedTools, null, null, agentId
+                SystemPromptBuilder.PromptMode.SKILL, allowedTools, null, agentId
         );
 
         // 构建 system prompt
@@ -421,7 +421,7 @@ public class ContextBuilder {
      * @return 消息列表（可变）
      */
     public List<LlmRequest.Message> buildMessages(List<LlmRequest.Message> history, String userPrompt) {
-        return buildMessages(history, userPrompt, null, null, "main");
+        return buildMessages(history, userPrompt, null, "main");
     }
 
     /**
@@ -433,32 +433,24 @@ public class ContextBuilder {
      */
     public List<LlmRequest.Message> buildMessages(List<LlmRequest.Message> history, String userPrompt,
                                                     Set<String> excludedMcpServers) {
-        return buildMessages(history, userPrompt, excludedMcpServers, null, "main");
+        return buildMessages(history, userPrompt, excludedMcpServers, "main");
     }
 
     /**
-     * 构建消息列表（支持排除 MCP 服务器和数据源）
+     * 构建消息列表（支持排除 MCP 服务器和 agentId）
      * @param history 历史消息
      * @param userPrompt 用户当前输入
      * @param excludedMcpServers 要排除的 MCP 服务器名称集合
-     * @param dataSourceId 要使用的数据源 ID
+     * @param agentId agent 作用域标识
      * @return 消息列表（可变）
      */
     public List<LlmRequest.Message> buildMessages(List<LlmRequest.Message> history, String userPrompt,
-                                                    Set<String> excludedMcpServers, String dataSourceId) {
-        return buildMessages(history, userPrompt, excludedMcpServers, dataSourceId, "main");
-    }
-
-    /**
-     * 构建消息列表（支持排除 MCP 服务器、数据源和 agentId）
-     */
-    public List<LlmRequest.Message> buildMessages(List<LlmRequest.Message> history, String userPrompt,
-                                                  Set<String> excludedMcpServers, String dataSourceId, String agentId) {
+                                                  Set<String> excludedMcpServers, String agentId) {
         List<LlmRequest.Message> messages = new ArrayList<>();
 
         // 1. System prompt - 使用结构化的完整提示
         String systemPrompt = systemPromptBuilder.build(
-                SystemPromptBuilder.PromptMode.FULL, null, excludedMcpServers, dataSourceId, agentId
+                SystemPromptBuilder.PromptMode.FULL, null, excludedMcpServers, agentId
         );
         messages.add(LlmRequest.Message.system(systemPrompt));
 

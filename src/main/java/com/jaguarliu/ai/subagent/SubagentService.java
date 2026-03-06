@@ -175,7 +175,7 @@ public class SubagentService {
 
             // 3. 构建上下文（子代理从空历史开始）
             List<LlmRequest.Message> messages = contextBuilder.buildMessages(
-                    List.of(), task, null, null, subRun.getAgentId()
+                    List.of(), task, null, subRun.getAgentId()
             );
 
             // 4. 创建 worker RunContext（兼容 subagent 运行类型）

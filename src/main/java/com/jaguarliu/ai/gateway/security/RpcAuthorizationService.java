@@ -117,7 +117,6 @@ public class RpcAuthorizationService {
         return method.startsWith("llm.config.")
                 || method.startsWith("mcp.servers.")
                 || method.startsWith("tools.config.")
-                || method.startsWith("datasources.")
                 || method.startsWith("nodes.")
                 || method.equals("memory.rebuild");
     }
