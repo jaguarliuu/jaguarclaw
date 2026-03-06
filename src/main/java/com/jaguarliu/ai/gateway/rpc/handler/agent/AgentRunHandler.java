@@ -13,6 +13,7 @@ import com.jaguarliu.ai.gateway.security.rate.TokenBudgetService;
 import com.jaguarliu.ai.nodeconsole.AuditLogService;
 import com.jaguarliu.ai.llm.LlmCapabilityService;
 import com.jaguarliu.ai.llm.LlmClient;
+import com.jaguarliu.ai.llm.LlmProperties;
 import com.jaguarliu.ai.llm.model.LlmRequest;
 import com.jaguarliu.ai.llm.model.LlmResponse;
 import com.jaguarliu.ai.runtime.AgentRuntime;
@@ -67,6 +68,7 @@ public class AgentRunHandler implements RpcHandler {
     private final ContextBuilder contextBuilder;
     private final AgentRuntime agentRuntime;
     private final LlmClient llmClient;
+    private final LlmProperties llmProperties;
     private final LlmCapabilityService llmCapabilityService;
     private final ToolConfigProperties toolConfigProperties;
     private final AgentStrategyResolver strategyResolver;
@@ -376,12 +378,7 @@ public class AgentRunHandler implements RpcHandler {
                 .maxTokens(30)
                 .temperature(0.5);
 
-        // 使用用户选择的模型（如果有）
-        if (modelSelection != null && modelSelection.contains(":")) {
-            String[] parts = modelSelection.split(":", 2);
-            requestBuilder.providerId(parts[0]);
-            requestBuilder.model(parts[1]);
-        }
+        applyTitleModelSelection(requestBuilder, modelSelection);
 
         LlmResponse llmResponse = llmClient.chat(requestBuilder.build());
         String title = llmResponse.getContent();
@@ -389,6 +386,35 @@ public class AgentRunHandler implements RpcHandler {
         title = title.trim();
         if (title.length() > 80) title = title.substring(0, 77) + "...";
         return title;
+    }
+
+    private void applyTitleModelSelection(LlmRequest.LlmRequestBuilder requestBuilder, String modelSelection) {
+        if (modelSelection != null && modelSelection.contains(":")) {
+            String[] parts = modelSelection.split(":", 2);
+            String providerId = parts[0];
+            String selectedModel = parts[1];
+            var provider = llmProperties.getProvider(providerId);
+            if (provider != null && provider.getModels() != null && !provider.getModels().isEmpty()) {
+                requestBuilder.providerId(providerId);
+                if (provider.getModels().contains(selectedModel)) {
+                    requestBuilder.model(selectedModel);
+                } else {
+                    String fallbackModel = provider.getModels().get(0);
+                    requestBuilder.model(fallbackModel);
+                    log.debug("Title generation fallback model applied: provider={}, requested={}, actual={}", providerId, selectedModel, fallbackModel);
+                }
+                return;
+            }
+        }
+
+        String defaultProviderId = llmProperties.getDefaultProviderId();
+        String defaultModelName = llmProperties.getDefaultModelName();
+        if (defaultProviderId != null && !defaultProviderId.isBlank()) {
+            requestBuilder.providerId(defaultProviderId);
+        }
+        if (defaultModelName != null && !defaultModelName.isBlank()) {
+            requestBuilder.model(defaultModelName);
+        }
     }
 
     private String extractSessionId(Object payload) {
@@ -481,10 +507,6 @@ public class AgentRunHandler implements RpcHandler {
         }
 
         List<LlmRequest.ContentPart> parts = new ArrayList<>();
-        if (prompt != null && !prompt.isBlank()) {
-            parts.add(LlmRequest.ContentPart.text(prompt));
-        }
-
         attachments.stream()
                 .filter(AttachmentPayload::isImage)
                 .map(attachment -> LlmRequest.ContentPart.image(LlmRequest.ImagePart.builder()
@@ -495,9 +517,16 @@ public class AgentRunHandler implements RpcHandler {
                         .build()))
                 .forEach(parts::add);
 
+        if (prompt != null && !prompt.isBlank()) {
+            parts.add(LlmRequest.ContentPart.text(prompt));
+        }
+
         if (parts.isEmpty()) {
             return LlmRequest.Message.user(prompt);
         }
+
+        long imageCount = parts.stream().filter(LlmRequest.ContentPart::isImage).count();
+        log.debug("Built multimodal user message: images={}, hasText={}, agentId={}", imageCount, prompt != null && !prompt.isBlank(), agentId);
         return LlmRequest.Message.userWithParts(prompt, parts);
     }
 

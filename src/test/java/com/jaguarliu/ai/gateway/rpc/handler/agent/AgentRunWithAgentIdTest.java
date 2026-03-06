@@ -10,6 +10,7 @@ import com.jaguarliu.ai.gateway.security.rate.TokenBudgetService;
 import com.jaguarliu.ai.gateway.ws.ConnectionManager;
 import com.jaguarliu.ai.llm.LlmCapabilityService;
 import com.jaguarliu.ai.llm.LlmClient;
+import com.jaguarliu.ai.llm.LlmProperties;
 import com.jaguarliu.ai.nodeconsole.AuditLogService;
 import com.jaguarliu.ai.runtime.AgentRuntime;
 import com.jaguarliu.ai.runtime.CancellationManager;
@@ -37,6 +38,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import reactor.core.publisher.Mono;
 
+import java.lang.reflect.Method;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
@@ -83,6 +85,8 @@ class AgentRunWithAgentIdTest {
     private AgentRuntime agentRuntime;
     @Mock
     private LlmClient llmClient;
+
+    private LlmProperties llmProperties;
     @Mock
     private LlmCapabilityService llmCapabilityService;
     @Mock
@@ -110,6 +114,21 @@ class AgentRunWithAgentIdTest {
                 .roles(List.of("local_admin"))
                 .build();
         loopConfig = new LoopConfig();
+        llmProperties = new LlmProperties();
+        llmProperties.setDefaultModel("default:default-chat");
+        llmProperties.setProviders(List.of(
+                com.jaguarliu.ai.llm.model.LlmProviderConfig.builder()
+                        .id("default")
+                        .name("Default")
+                        .models(List.of("default-chat"))
+                        .build(),
+                com.jaguarliu.ai.llm.model.LlmProviderConfig.builder()
+                        .id("dashscope")
+                        .name("DashScope")
+                        .models(List.of("qwen-plus"))
+                        .visionModels(List.of("qwen-image-2.0-pro", "qwen3.5-plus"))
+                        .build()
+        ));
     }
 
     @Nested
@@ -307,8 +326,26 @@ class AgentRunWithAgentIdTest {
             assertEquals("describe this image", userMessage.getContent());
             assertNotNull(userMessage.getParts());
             assertEquals(2, userMessage.getParts().size());
-            assertEquals("image", userMessage.getParts().get(1).getType());
-            assertEquals("uploads/demo.png", userMessage.getParts().get(1).getImage().getFilePath());
+            assertEquals("image", userMessage.getParts().get(0).getType());
+            assertEquals("uploads/demo.png", userMessage.getParts().get(0).getImage().getFilePath());
+            assertEquals("text", userMessage.getParts().get(1).getType());
+            assertEquals("describe this image", userMessage.getParts().get(1).getText());
+        }
+
+        @Test
+        void generateTitleShouldFallbackToChatModelWhenVisionModelSelected() throws Exception {
+            AgentRunHandler handler = newAgentRunHandler();
+            when(llmClient.chat(any())).thenReturn(com.jaguarliu.ai.llm.model.LlmResponse.builder().content("猫咪识图").build());
+
+            Method method = AgentRunHandler.class.getDeclaredMethod("generateTitle", String.class, String.class, String.class);
+            method.setAccessible(true);
+            String title = (String) method.invoke(handler, "帮我看图", "这是一只猫", "dashscope:qwen-image-2.0-pro");
+
+            assertEquals("猫咪识图", title);
+            ArgumentCaptor<com.jaguarliu.ai.llm.model.LlmRequest> requestCaptor = ArgumentCaptor.forClass(com.jaguarliu.ai.llm.model.LlmRequest.class);
+            verify(llmClient).chat(requestCaptor.capture());
+            assertEquals("dashscope", requestCaptor.getValue().getProviderId());
+            assertEquals("qwen-plus", requestCaptor.getValue().getModel());
         }
 
         @Test
@@ -413,6 +450,7 @@ class AgentRunWithAgentIdTest {
                 contextBuilder,
                 agentRuntime,
                 llmClient,
+                llmProperties,
                 llmCapabilityService,
                 toolConfigProperties,
                 strategyResolver,

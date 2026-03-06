@@ -268,7 +268,7 @@ public class OpenAiCompatibleLlmClient implements LlmClient {
 
             String content = null;
             if (delta != null && delta.has("content") && !delta.get("content").isNull()) {
-                content = delta.get("content").asText();
+                content = extractTextContent(delta.get("content"));
             }
 
             String finishReason = null;
@@ -462,6 +462,10 @@ public class OpenAiCompatibleLlmClient implements LlmClient {
             return message.resolvedTextContent();
         }
 
+        long imageCount = parts.stream().filter(LlmRequest.ContentPart::isImage).count();
+        long textCount = parts.stream().filter(LlmRequest.ContentPart::isText).count();
+        log.debug("Encoding multimodal message: role={}, parts={}, images={}, texts={}", message.getRole(), parts.size(), imageCount, textCount);
+
         List<ChatContentPart> contentParts = new ArrayList<>();
         for (LlmRequest.ContentPart part : parts) {
             if (part.isText()) {
@@ -505,6 +509,37 @@ public class OpenAiCompatibleLlmClient implements LlmClient {
         return "application/octet-stream";
     }
 
+    private String extractTextContent(JsonNode contentNode) {
+        if (contentNode == null || contentNode.isNull()) {
+            return null;
+        }
+        if (contentNode.isTextual()) {
+            return contentNode.asText();
+        }
+        if (contentNode.isArray()) {
+            StringBuilder text = new StringBuilder();
+            for (JsonNode item : contentNode) {
+                String piece = extractTextContent(item);
+                if (piece != null && !piece.isBlank()) {
+                    if (text.length() > 0) {
+                        text.append('\n');
+                    }
+                    text.append(piece);
+                }
+            }
+            return text.isEmpty() ? null : text.toString();
+        }
+        if (contentNode.isObject()) {
+            if (contentNode.has("text") && !contentNode.get("text").isNull()) {
+                return contentNode.get("text").asText();
+            }
+            if (contentNode.has("content") && !contentNode.get("content").isNull()) {
+                return extractTextContent(contentNode.get("content"));
+            }
+        }
+        return null;
+    }
+
     /**
      * 解析同步响应
      */
@@ -522,7 +557,7 @@ public class OpenAiCompatibleLlmClient implements LlmClient {
 
             String content = null;
             if (message.has("content") && !message.get("content").isNull()) {
-                content = message.get("content").asText();
+                content = extractTextContent(message.get("content"));
             }
 
             String finishReason = firstChoice.has("finish_reason") ?

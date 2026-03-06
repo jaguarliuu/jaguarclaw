@@ -111,14 +111,14 @@ public class LlmRequest {
 
         public static Message userWithTextAndImages(String text, List<ImagePart> images) {
             List<ContentPart> parts = new ArrayList<>();
-            if (text != null && !text.isBlank()) {
-                parts.add(ContentPart.text(text));
-            }
             if (images != null) {
                 images.stream()
                         .filter(Objects::nonNull)
                         .map(ContentPart::image)
                         .forEach(parts::add);
+            }
+            if (text != null && !text.isBlank()) {
+                parts.add(ContentPart.text(text));
             }
             return userWithParts(text, parts);
         }
