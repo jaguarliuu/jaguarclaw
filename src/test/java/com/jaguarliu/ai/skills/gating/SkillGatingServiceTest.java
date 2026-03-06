@@ -12,6 +12,8 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.springframework.core.env.Environment;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
 
@@ -192,6 +194,33 @@ class SkillGatingServiceTest {
         }
 
         @Test
+        @DisplayName("agent-browser 在 explicit env path 存在时应通过 anyBins 检查")
+        void agentBrowserShouldPassWhenExplicitEnvBinaryExists() throws Exception {
+            Path binary = Files.createTempFile("agent-browser", ".exe");
+            BundledRuntimeService runtimeService = mock(BundledRuntimeService.class);
+            when(runtimeService.resolveBundledBinary("agent-browser")).thenReturn(Optional.empty());
+            when(runtimeService.resolveBundledBinary("agent-browser.cmd")).thenReturn(Optional.empty());
+
+            SkillGatingService service = new SkillGatingService(springEnv, runtimeService) {
+                @Override
+                protected String readEnv(String name) {
+                    if ("AGENT_BROWSER_EXECUTABLE_PATH".equals(name)) {
+                        return binary.toString();
+                    }
+                    return null;
+                }
+            };
+
+            SkillRequires requires = SkillRequires.builder()
+                    .anyBins(List.of("agent-browser", "agent-browser.cmd"))
+                    .build();
+
+            GatingResult result = service.evaluate(requires);
+            assertTrue(result.isAvailable());
+            assertTrue(result.getUnsatisfiedAnyBins().isEmpty());
+        }
+
+        @Test
         @DisplayName("agent-browser 在 bundled 模式下缺 chromium kernel 时失败")
         void agentBrowserShouldFailWhenKernelMissingInBundledMode() {
             BundledRuntimeService runtimeService = mock(BundledRuntimeService.class);
@@ -229,6 +258,38 @@ class SkillGatingServiceTest {
             GatingResult result = service.evaluate(requires);
             assertTrue(result.isAvailable());
             assertTrue(result.getMissingRuntimeDeps().isEmpty());
+        }
+
+        @Test
+        @DisplayName("agent-browser 在 bundled 模式下应接受显式 env binary 和 chromium path")
+        void agentBrowserShouldPassWhenExplicitEnvBinaryAndKernelExist() throws Exception {
+            Path binary = Files.createTempFile("agent-browser", ".exe");
+            Path chromium = Files.createTempFile("chrome", ".exe");
+            BundledRuntimeService runtimeService = mock(BundledRuntimeService.class);
+            when(runtimeService.isEnabled()).thenReturn(true);
+            when(runtimeService.resolveBundledBinary("agent-browser")).thenReturn(Optional.empty());
+            when(runtimeService.resolveBundledBinary("agent-browser.cmd")).thenReturn(Optional.empty());
+            when(runtimeService.resolveBundledChromium()).thenReturn(Optional.empty());
+
+            SkillGatingService service = new SkillGatingService(springEnv, runtimeService) {
+                @Override
+                protected String readEnv(String name) {
+                    return switch (name) {
+                        case "AGENT_BROWSER_EXECUTABLE_PATH" -> binary.toString();
+                        case "AGENT_BROWSER_CHROMIUM_PATH" -> chromium.toString();
+                        default -> null;
+                    };
+                }
+            };
+
+            SkillRequires requires = SkillRequires.builder()
+                    .anyBins(List.of("agent-browser", "agent-browser.cmd"))
+                    .build();
+
+            GatingResult result = service.evaluate(requires);
+            assertTrue(result.isAvailable());
+            assertTrue(result.getMissingRuntimeDeps().isEmpty());
+            assertTrue(result.getUnsatisfiedAnyBins().isEmpty());
         }
     }
 

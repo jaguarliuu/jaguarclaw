@@ -7,6 +7,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Service;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -32,6 +34,10 @@ public class SkillGatingService {
 
     // 二进制检查缓存（避免重复执行 which/where 命令）
     private final Map<String, Boolean> binExistsCache = new ConcurrentHashMap<>();
+
+    private static final String AGENT_BROWSER_BIN_ENV = "AGENT_BROWSER_EXECUTABLE_PATH";
+    private static final String AGENT_BROWSER_CHROMIUM_ENV = "AGENT_BROWSER_CHROMIUM_PATH";
+    private static final String AGENT_BROWSER_KERNEL_HOME_ENV = "AGENT_BROWSER_KERNEL_HOME";
 
     // Windows 判断
     private final boolean isWindows;
@@ -198,6 +204,9 @@ public class SkillGatingService {
     }
 
     private boolean checkBinaryExists(String binName) {
+        if (isAgentBrowserBin(binName) && isExplicitAgentBrowserBinaryAvailable()) {
+            return true;
+        }
         if (bundledRuntimeService != null && bundledRuntimeService.resolveBundledBinary(binName).isPresent()) {
             return true;
         }
@@ -219,7 +228,7 @@ public class SkillGatingService {
         if (isAgentBrowserBinaryMissing(missingBins, unsatisfiedAnyBins)) {
             return List.of();
         }
-        if (bundledRuntimeService.resolveBundledChromium().isEmpty()) {
+        if (bundledRuntimeService.resolveBundledChromium().isEmpty() && !isExplicitAgentBrowserKernelAvailable()) {
             return List.of("agent-browser: chromium kernel");
         }
         return List.of();
@@ -263,6 +272,38 @@ public class SkillGatingService {
         }
         String normalized = bin.toLowerCase();
         return normalized.contains("agent-browser");
+    }
+
+    private boolean isExplicitAgentBrowserBinaryAvailable() {
+        return readEnvPath(AGENT_BROWSER_BIN_ENV)
+                .map(Files::isRegularFile)
+                .orElse(false);
+    }
+
+    private boolean isExplicitAgentBrowserKernelAvailable() {
+        if (readEnvPath(AGENT_BROWSER_CHROMIUM_ENV).map(Files::isRegularFile).orElse(false)) {
+            return true;
+        }
+        return readEnvPath(AGENT_BROWSER_KERNEL_HOME_ENV)
+                .map(Files::isDirectory)
+                .orElse(false);
+    }
+
+    protected String readEnv(String name) {
+        return System.getenv(name);
+    }
+
+    private java.util.Optional<Path> readEnvPath(String name) {
+        String value = readEnv(name);
+        if (value == null || value.isBlank()) {
+            return java.util.Optional.empty();
+        }
+        try {
+            return java.util.Optional.of(Path.of(value).toAbsolutePath().normalize());
+        } catch (Exception e) {
+            log.warn("Invalid path in env {}: {}", name, value);
+            return java.util.Optional.empty();
+        }
     }
 
     /**

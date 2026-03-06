@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <springProperty scope="context" name="CONFIG_DIR" source="jaguarclaw.config-dir" defaultValue="./data"/>
+    <property name="LOG_DIR" value="${CONFIG_DIR}/logs"/>
+    <property name="ARCHIVE_DIR" value="${LOG_DIR}/archive"/>
+    <property name="LOG_PATTERN" value="%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"/>
+
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>${LOG_PATTERN}</pattern>
+        </encoder>
+    </appender>
+
+    <appender name="APP_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${LOG_DIR}/app.log</file>
+        <encoder>
+            <pattern>${LOG_PATTERN}</pattern>
+        </encoder>
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <fileNamePattern>${ARCHIVE_DIR}/app.%d{yyyy-MM-dd}.%i.log.gz</fileNamePattern>
+            <maxFileSize>10MB</maxFileSize>
+            <maxHistory>7</maxHistory>
+            <totalSizeCap>200MB</totalSizeCap>
+        </rollingPolicy>
+    </appender>
+
+    <appender name="RPC_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${LOG_DIR}/rpc.log</file>
+        <encoder>
+            <pattern>${LOG_PATTERN}</pattern>
+        </encoder>
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <fileNamePattern>${ARCHIVE_DIR}/rpc.%d{yyyy-MM-dd}.%i.log.gz</fileNamePattern>
+            <maxFileSize>10MB</maxFileSize>
+            <maxHistory>7</maxHistory>
+            <totalSizeCap>200MB</totalSizeCap>
+        </rollingPolicy>
+    </appender>
+
+    <appender name="RUNTIME_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${LOG_DIR}/runtime.log</file>
+        <encoder>
+            <pattern>${LOG_PATTERN}</pattern>
+        </encoder>
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <fileNamePattern>${ARCHIVE_DIR}/runtime.%d{yyyy-MM-dd}.%i.log.gz</fileNamePattern>
+            <maxFileSize>10MB</maxFileSize>
+            <maxHistory>7</maxHistory>
+            <totalSizeCap>200MB</totalSizeCap>
+        </rollingPolicy>
+    </appender>
+
+    <logger name="com.jaguarliu.ai.gateway.rpc" level="DEBUG" additivity="false">
+        <appender-ref ref="RPC_FILE"/>
+        <appender-ref ref="CONSOLE"/>
+    </logger>
+
+    <logger name="com.jaguarliu.ai.runtime" level="DEBUG" additivity="false">
+        <appender-ref ref="RUNTIME_FILE"/>
+        <appender-ref ref="CONSOLE"/>
+    </logger>
+    <logger name="com.jaguarliu.ai.skills" level="DEBUG" additivity="false">
+        <appender-ref ref="RUNTIME_FILE"/>
+        <appender-ref ref="CONSOLE"/>
+    </logger>
+    <logger name="com.jaguarliu.ai.tools.runtime" level="DEBUG" additivity="false">
+        <appender-ref ref="RUNTIME_FILE"/>
+        <appender-ref ref="CONSOLE"/>
+    </logger>
+    <logger name="com.jaguarliu.ai.tools.builtin.shell" level="DEBUG" additivity="false">
+        <appender-ref ref="RUNTIME_FILE"/>
+        <appender-ref ref="CONSOLE"/>
+    </logger>
+
+    <logger name="com.jaguarliu" level="DEBUG"/>
+
+    <root level="INFO">
+        <appender-ref ref="APP_FILE"/>
+        <appender-ref ref="CONSOLE"/>
+    </root>
+</configuration>

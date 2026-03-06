@@ -17,5 +17,25 @@ interface Window {
       restartRequired: boolean
     }>
     restartApp: () => Promise<{ accepted: boolean }>
+    getAppInfo: () => Promise<{
+      name: string
+      version: string
+      paths: {
+        appData: string
+        data: string
+        workspace: string
+        skills: string
+        logs: string
+        startupLog: string
+        desktopLog: string
+        backendBridgeLog: string
+      }
+    }>
+    openAppPath: (target: 'appData' | 'data' | 'workspace' | 'skills' | 'logs' | 'startupLog' | 'desktopLog' | 'backendBridgeLog') => Promise<{
+      target: string
+      path: string
+      success: boolean
+      error: string | null
+    }>
   }
 }

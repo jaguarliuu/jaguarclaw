@@ -9,6 +9,8 @@ contextBridge.exposeInMainWorld('electron', {
   getRuntimeConfig: () => ipcRenderer.invoke('runtime:getConfig'),
   setRuntimeMode: (mode) => ipcRenderer.invoke('runtime:setMode', { mode }),
   restartApp: () => ipcRenderer.invoke('app:restart'),
+  getAppInfo: () => ipcRenderer.invoke('app:getInfo'),
+  openAppPath: (target) => ipcRenderer.invoke('app:openPath', { target }),
 
   // 监听启动日志
   onStartupLog: (callback) => {

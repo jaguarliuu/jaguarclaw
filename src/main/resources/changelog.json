@@ -1,0 +1,46 @@
+[
+  {
+    "version": "2026.03.06",
+    "date": "2026-03-06",
+    "title": "诊断与桌面可维护性改进",
+    "sections": {
+      "added": [
+        "新增 About 页面，集中展示系统信息、更新日志、日志入口与用户数据入口。"
+      ],
+      "changed": [
+        "桌面端日志拆分为 startup、desktop、backend-bridge 三类，并加入本地归档与保留策略。"
+      ],
+      "fixed": [
+        "修复 Windows 下 agent-browser skill 对显式环境路径的可用性检测。"
+      ]
+    }
+  },
+  {
+    "version": "2026.03.04",
+    "date": "2026-03-04",
+    "title": "Bundled runtime 支持",
+    "sections": {
+      "added": [
+        "新增内置 Node/Python runtime 自动发现与切换。"
+      ],
+      "changed": [
+        "桌面端支持 bundled runtime 与 local runtime 两种模式。"
+      ],
+      "fixed": []
+    }
+  },
+  {
+    "version": "2026.03.01",
+    "date": "2026-03-01",
+    "title": "桌面端体验优化",
+    "sections": {
+      "added": [],
+      "changed": [
+        "改进设置页分组与系统运行时诊断。"
+      ],
+      "fixed": [
+        "增强启动阶段日志与健康检查反馈。"
+      ]
+    }
+  }
+]

@@ -6,6 +6,7 @@ const portfinder = require('portfinder');
 const { autoUpdater } = require('electron-updater');
 const crypto = require('crypto');
 const fs = require('fs');
+const { createLogManager } = require('./scripts/lib/log-manager');
 
 let mainWindow = null;
 let splashWindow = null;
@@ -49,8 +50,17 @@ const skillsDir = path.join(appDataPath, 'skills');
 const runtimeStoreRoot = path.join(appDataPath, 'runtime');
 const builtinSkillsDir = path.join(resourcesPath, 'skills');
 const configPath = path.join(appDataPath, 'config.json');
-const startupLogPath = path.join(appDataPath, 'startup.log');
+const logsDir = path.join(appDataPath, 'logs');
+const startupLogPath = path.join(logsDir, 'startup.log');
+const desktopLogPath = path.join(logsDir, 'desktop.log');
+const backendBridgeLogPath = path.join(logsDir, 'backend-bridge.log');
 const STARTUP_LOG_LIMIT = 300;
+const logManager = createLogManager({
+  logDir: logsDir,
+  maxFileSizeBytes: 10 * 1024 * 1024,
+  maxHistory: 20,
+  maxAgeDays: 7,
+});
 const RUNTIME_MODES = Object.freeze(['auto', 'bundled', 'local']);
 let currentRuntimeInfo = {
   mode: 'auto',
@@ -107,6 +117,22 @@ function publishStartupStatus(message, stage = null, failed = false) {
   sendToSplash('startup:status', currentStartupStatus);
 }
 
+function appendLogToChannel(channel, level, message) {
+  try {
+    logManager.append(channel, level, message);
+  } catch (err) {
+    console.error(`Failed to write ${channel} log:`, err.message);
+  }
+}
+
+function appendDesktopLog(level, message) {
+  appendLogToChannel('desktop', level, message);
+}
+
+function appendBackendBridgeLog(level, message) {
+  appendLogToChannel('backend-bridge', level, message);
+}
+
 function appendStartupLog(level, message) {
   const text = String(message ?? '').replace(/\r/g, '');
   const lines = text.split('\n').map((line) => line.trim()).filter(Boolean);
@@ -130,19 +156,13 @@ function appendStartupLog(level, message) {
       }
     }
 
-    const logLine = `[${entry.timestamp}] [${level.toUpperCase()}] ${line}\n`;
-    try {
-      fs.appendFileSync(startupLogPath, logLine, 'utf8');
-    } catch (err) {
-      console.error('Failed to write startup log:', err.message);
-    }
-
+    appendLogToChannel('startup', level, line);
     sendToSplash('startup:log', entry);
   }
 }
 
 function ensureDirectories() {
-  for (const dir of [appDataPath, dataDir, workspacePath, skillsDir, runtimeStoreRoot]) {
+  for (const dir of [appDataPath, dataDir, workspacePath, skillsDir, runtimeStoreRoot, logsDir]) {
     fs.mkdirSync(dir, { recursive: true });
   }
 }
@@ -156,7 +176,7 @@ function readAppConfig() {
     const parsed = JSON.parse(data);
     return parsed && typeof parsed === 'object' ? parsed : {};
   } catch (err) {
-    console.warn('Failed to read config, using defaults:', err.message);
+    appendDesktopLog('error', `Failed to read config, using defaults: ${err.message}`);
     return {};
   }
 }
@@ -430,21 +450,21 @@ function getOrCreateEncryptionKey() {
 
   // 检查是否已有密钥
   if (config.encryptionKey && config.encryptionKey.length === 64) {
-    console.log('Using existing encryption key from config');
+    appendDesktopLog('info', 'Using existing encryption key from config');
     return config.encryptionKey;
   }
 
   // 生成新密钥 (32 字节 = 64 hex 字符)
   const key = crypto.randomBytes(32).toString('hex');
-  console.log('Generated new encryption key');
+  appendDesktopLog('info', 'Generated new encryption key');
 
   // 保存到配置文件
   config.encryptionKey = key;
   try {
     writeAppConfig(config);
-    console.log('Encryption key saved to config');
+    appendDesktopLog('info', 'Encryption key saved to config');
   } catch (err) {
-    console.error('Failed to save encryption key:', err.message);
+    appendDesktopLog('error', `Failed to save encryption key: ${err.message}`);
     // 即使保存失败，也返回密钥继续启动
   }
 
@@ -694,6 +714,8 @@ function startJavaBackend(port, encryptionKey, runtimeInfo) {
   appendStartupLog('info', `Starting backend process on port ${port}`);
   appendStartupLog('info', `Java executable: ${javaExe}`);
   appendStartupLog('info', `Startup log file: ${startupLogPath}`);
+  appendStartupLog('info', `Desktop log file: ${desktopLogPath}`);
+  appendStartupLog('info', `Backend bridge log file: ${backendBridgeLogPath}`);
   publishStartupStatus('Starting backend server...', 'backend');
 
   javaProcess = spawn(javaExe, args, {
@@ -705,13 +727,15 @@ function startJavaBackend(port, encryptionKey, runtimeInfo) {
   javaProcess.stdout.on('data', (data) => {
     const message = data.toString();
     process.stdout.write(`[Java] ${message}`);
-    appendStartupLog('info', message);
+    appendBackendBridgeLog('info', message);
+    appendStartupLog('info', `[backend] ${message}`);
   });
 
   javaProcess.stderr.on('data', (data) => {
     const message = data.toString();
     process.stderr.write(`[Java] ${message}`);
-    appendStartupLog('error', message);
+    appendBackendBridgeLog('error', message);
+    appendStartupLog('error', `[backend] ${message}`);
   });
 
   javaProcess.on('exit', (code) => {
@@ -732,7 +756,7 @@ function startJavaBackend(port, encryptionKey, runtimeInfo) {
       }).then(({ response }) => {
         if (response === 1) {
           const { shell } = require('electron');
-          shell.openPath(appDataPath);
+          shell.openPath(logsDir);
         }
         app.quit();
       });
@@ -770,7 +794,7 @@ function showStartupError(title, message, details = null) {
     if (response === 1) {
       // 打开日志目录
       const { shell } = require('electron');
-      shell.openPath(appDataPath);
+      shell.openPath(logsDir);
     }
     app.quit();
   });
@@ -888,6 +912,8 @@ function createMainWindow(port) {
 function killJavaProcess() {
   if (!javaProcess) return;
 
+  appendDesktopLog('info', `Stopping backend process ${javaProcess.pid}`);
+
   try {
     // Windows: use taskkill to kill the process tree
     execSync(`taskkill /pid ${javaProcess.pid} /f /t`, { stdio: 'ignore' });
@@ -903,12 +929,16 @@ function killJavaProcess() {
 }
 
 function setupAutoUpdater() {
-  if (!app.isPackaged) return;
+  if (!app.isPackaged) {
+    appendDesktopLog('info', 'Skipping auto-updater in development mode');
+    return;
+  }
 
   autoUpdater.autoDownload = false;
   autoUpdater.autoInstallOnAppQuit = true;
 
   autoUpdater.on('update-available', (info) => {
+    appendDesktopLog('info', `Update available: ${info.version}`);
     dialog
       .showMessageBox(mainWindow, {
         type: 'info',
@@ -920,12 +950,16 @@ function setupAutoUpdater() {
       })
       .then(({ response }) => {
         if (response === 0) {
+          appendDesktopLog('info', `Downloading update ${info.version}`);
           autoUpdater.downloadUpdate();
+        } else {
+          appendDesktopLog('info', `Update ${info.version} postponed by user`);
         }
       });
   });
 
   autoUpdater.on('update-downloaded', () => {
+    appendDesktopLog('info', 'Update downloaded and ready to install');
     dialog
       .showMessageBox(mainWindow, {
         type: 'info',
@@ -937,16 +971,20 @@ function setupAutoUpdater() {
       })
       .then(({ response }) => {
         if (response === 0) {
+          appendDesktopLog('info', 'Installing downloaded update now');
           autoUpdater.quitAndInstall();
+        } else {
+          appendDesktopLog('info', 'Update installation deferred until app quit');
         }
       });
   });
 
   autoUpdater.on('error', (err) => {
-    console.log('Auto-updater error:', err.message);
+    appendDesktopLog('error', `Auto-updater error: ${err.message}`);
   });
 
   setTimeout(() => {
+    appendDesktopLog('info', 'Checking for application updates');
     autoUpdater.checkForUpdates();
   }, 5000);
 }
@@ -1004,19 +1042,54 @@ ipcMain.handle('app:restart', async () => {
   return { accepted: true };
 });
 
+ipcMain.handle('app:getInfo', async () => ({
+  name: app.getName(),
+  version: app.getVersion(),
+  paths: {
+    appData: appDataPath,
+    data: dataDir,
+    workspace: workspacePath,
+    skills: skillsDir,
+    logs: logsDir,
+    startupLog: startupLogPath,
+    desktopLog: desktopLogPath,
+    backendBridgeLog: backendBridgeLogPath,
+  },
+}));
+
+ipcMain.handle('app:openPath', async (_event, payload) => {
+  const target = payload && typeof payload.target === 'string' ? payload.target : '';
+  const targetMap = {
+    appData: appDataPath,
+    data: dataDir,
+    workspace: workspacePath,
+    skills: skillsDir,
+    logs: logsDir,
+    startupLog: startupLogPath,
+    desktopLog: desktopLogPath,
+    backendBridgeLog: backendBridgeLogPath,
+  };
+  const resolved = targetMap[target];
+  if (!resolved) {
+    throw new Error(`Unsupported path target: ${target || '<empty>'}`);
+  }
+  const { shell } = require('electron');
+  const result = await shell.openPath(resolved);
+  return { target, path: resolved, success: !result, error: result || null };
+});
+
 app.whenReady().then(async () => {
   try {
     // 确保目录存在
     ensureDirectories();
 
-    // 重置本次启动日志文件
-    fs.writeFileSync(startupLogPath, '', 'utf8');
-
     // 重置内存日志缓存
     javaErrorLogs = [];
     startupLogs = [];
 
+    appendDesktopLog('info', 'Electron app is ready');
     appendStartupLog('info', '=== JaguarClaw startup ===');
+    appendStartupLog('info', `Log directory: ${logsDir}`);
     publishStartupStatus('Preparing startup environment...', 'prepare');
 
     const runtimeMode = getConfiguredRuntimeMode();
@@ -1074,9 +1147,10 @@ app.whenReady().then(async () => {
     }
 
     // Check for updates
+    appendDesktopLog('info', 'Setting up auto-updater');
     setupAutoUpdater();
   } catch (err) {
-    console.error('Failed to start:', err);
+    appendDesktopLog('error', `Failed to start: ${err && err.stack ? err.stack : (err.message || err)}`);
     appendStartupLog('error', `Startup failed: ${err.message || err}`);
     publishStartupStatus('Startup failed. See error details and logs.', null, true);
 
@@ -1110,10 +1184,12 @@ app.whenReady().then(async () => {
 });
 
 app.on('window-all-closed', () => {
+  appendDesktopLog('info', 'All windows closed; shutting down application');
   killJavaProcess();
   app.quit();
 });
 
 app.on('before-quit', () => {
+  appendDesktopLog('info', 'Application is quitting');
   killJavaProcess();
 });
