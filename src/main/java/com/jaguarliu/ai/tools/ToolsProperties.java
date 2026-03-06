@@ -52,5 +52,20 @@ public class ToolsProperties {
          * runtime 可执行目录列表（相对于 home 或绝对路径）
          */
         private List<String> binPaths = new ArrayList<>();
+
+        /**
+         * agent-browser 可执行文件路径（绝对路径或相对于 runtime home）
+         */
+        private String agentBrowserExecutablePath = "";
+
+        /**
+         * Chromium 可执行文件路径（绝对路径或相对于 runtime home）
+         */
+        private String chromiumExecutablePath = "";
+
+        /**
+         * Chromium 根目录（绝对路径或相对于 runtime home）
+         */
+        private String chromiumHome = "";
     }
 }

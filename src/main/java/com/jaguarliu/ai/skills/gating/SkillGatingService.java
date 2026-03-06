@@ -66,12 +66,14 @@ public class SkillGatingService {
         List<String> unsatisfiedAnyBins = checkAnyBins(requires.getAnyBins());
         List<String> missingConfigs = checkConfigs(requires.getConfig());
         String unsupportedOs = checkOs(requires.getOs());
+        List<String> missingRuntimeDeps = checkRuntimeDeps(requires, missingBins, unsatisfiedAnyBins);
 
         boolean available = missingEnvVars.isEmpty()
                 && missingBins.isEmpty()
                 && unsatisfiedAnyBins.isEmpty()
                 && missingConfigs.isEmpty()
-                && unsupportedOs == null;
+                && unsupportedOs == null
+                && missingRuntimeDeps.isEmpty();
 
         return GatingResult.builder()
                 .available(available)
@@ -80,6 +82,7 @@ public class SkillGatingService {
                 .unsatisfiedAnyBins(unsatisfiedAnyBins)
                 .missingConfigs(missingConfigs)
                 .unsupportedOs(unsupportedOs)
+                .missingRuntimeDeps(missingRuntimeDeps)
                 .build();
     }
 
@@ -195,10 +198,71 @@ public class SkillGatingService {
     }
 
     private boolean checkBinaryExists(String binName) {
-        if (bundledRuntimeService != null && bundledRuntimeService.hasBundledBinary(binName)) {
+        if (bundledRuntimeService != null && bundledRuntimeService.resolveBundledBinary(binName).isPresent()) {
             return true;
         }
         return checkBinaryInPath(binName);
+    }
+
+    /**
+     * 针对特定技能进行运行时依赖检查。
+     * 当前仅增强 agent-browser：在 bundled runtime 模式下强依赖 Chromium kernel 可解析。
+     */
+    private List<String> checkRuntimeDeps(SkillRequires requires, List<String> missingBins, List<String> unsatisfiedAnyBins) {
+        if (!requiresAgentBrowser(requires)) {
+            return List.of();
+        }
+        if (bundledRuntimeService == null || !bundledRuntimeService.isEnabled()) {
+            return List.of();
+        }
+        // binary 尚未满足时，优先报告 binary 缺失，不重复添加 runtime 依赖错误
+        if (isAgentBrowserBinaryMissing(missingBins, unsatisfiedAnyBins)) {
+            return List.of();
+        }
+        if (bundledRuntimeService.resolveBundledChromium().isEmpty()) {
+            return List.of("agent-browser: chromium kernel");
+        }
+        return List.of();
+    }
+
+    private boolean requiresAgentBrowser(SkillRequires requires) {
+        List<String> bins = requires.getBins() != null ? requires.getBins() : List.of();
+        List<String> anyBins = requires.getAnyBins() != null ? requires.getAnyBins() : List.of();
+        for (String bin : bins) {
+            if (isAgentBrowserBin(bin)) {
+                return true;
+            }
+        }
+        for (String bin : anyBins) {
+            if (isAgentBrowserBin(bin)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean isAgentBrowserBinaryMissing(List<String> missingBins, List<String> unsatisfiedAnyBins) {
+        for (String missingBin : missingBins) {
+            if (isAgentBrowserBin(missingBin)) {
+                return true;
+            }
+        }
+        if (!unsatisfiedAnyBins.isEmpty()) {
+            for (String candidate : unsatisfiedAnyBins) {
+                if (isAgentBrowserBin(candidate)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private boolean isAgentBrowserBin(String bin) {
+        if (bin == null) {
+            return false;
+        }
+        String normalized = bin.toLowerCase();
+        return normalized.contains("agent-browser");
     }
 
     /**

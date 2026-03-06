@@ -5,7 +5,8 @@
  * 1. Resolve exact Node/Python versions from runtime/manifest.json
  * 2. Download official archives
  * 3. Extract to runtime/staging/node and runtime/staging/python
- * 4. Install runtime/requirements.txt packages into embedded Python
+ * 4. Stage bundled browser runtime (agent-browser + chromium)
+ * 5. Install runtime/requirements.txt packages into embedded Python
  *    - Windows host: run embedded python.exe + pip directly
  *    - macOS/Linux host: download win_amd64 wheels and unpack into Lib/site-packages
  *
@@ -259,6 +260,157 @@ function ensureManifestTarget(manifest) {
   }
 }
 
+function ensureNonBlank(value, fieldName) {
+  const text = String(value || '').trim();
+  if (!text) {
+    throw new Error(`manifest.${fieldName} is required`);
+  }
+  return text;
+}
+
+function resolveAssetSource(assetName, config) {
+  const localPath = String(config?.localPath || '').trim();
+  if (localPath) {
+    const absolute = path.isAbsolute(localPath) ? localPath : path.resolve(ROOT, localPath);
+    ensureExists(absolute, `${assetName} local artifact`);
+    return { kind: 'local', value: absolute };
+  }
+
+  const downloadUrl = String(config?.downloadUrl || '').trim();
+  if (downloadUrl) {
+    return { kind: 'url', value: downloadUrl };
+  }
+
+  throw new Error(
+    `${assetName} source is not configured. Set manifest.${assetName}.downloadUrl or manifest.${assetName}.localPath`
+  );
+}
+
+function copyDir(src, dest) {
+  ensureDir(dest);
+  for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
+    const srcPath = path.join(src, entry.name);
+    const destPath = path.join(dest, entry.name);
+    if (entry.isDirectory()) {
+      copyDir(srcPath, destPath);
+    } else {
+      fs.copyFileSync(srcPath, destPath);
+    }
+  }
+}
+
+function copyDirContents(src, dest) {
+  ensureDir(dest);
+  for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
+    const srcPath = path.join(src, entry.name);
+    const destPath = path.join(dest, entry.name);
+    if (entry.isDirectory()) {
+      copyDir(srcPath, destPath);
+    } else {
+      fs.copyFileSync(srcPath, destPath);
+    }
+  }
+}
+
+async function fetchAssetToFile(source, destinationFile) {
+  ensureDir(path.dirname(destinationFile));
+  if (source.kind === 'local') {
+    fs.copyFileSync(source.value, destinationFile);
+    return;
+  }
+  await downloadFile(source.value, destinationFile);
+}
+
+function normalizeDownloadType(raw) {
+  const value = String(raw || 'zip').trim().toLowerCase();
+  if (value !== 'zip' && value !== 'file') {
+    throw new Error(`Unsupported downloadType: ${raw} (expected "zip" or "file")`);
+  }
+  return value;
+}
+
+function ensureWindowsCmdShimForExe(stagedBinaryPath) {
+  if (!stagedBinaryPath || path.extname(stagedBinaryPath).toLowerCase() !== '.exe') {
+    return null;
+  }
+  const dir = path.dirname(stagedBinaryPath);
+  const base = path.basename(stagedBinaryPath, '.exe');
+  const cmdPath = path.join(dir, `${base}.cmd`);
+  if (fs.existsSync(cmdPath)) {
+    return cmdPath;
+  }
+  const content = `@echo off\r\n\"%~dp0${base}.exe\" %*\r\n`;
+  fs.writeFileSync(cmdPath, content, 'utf8');
+  return cmdPath;
+}
+
+async function stageAssetFromManifest(assetName, config) {
+  if (!config || typeof config !== 'object') {
+    throw new Error(`manifest.${assetName} is required`);
+  }
+
+  const binRel = ensureNonBlank(config.bin, `${assetName}.bin`);
+  const source = resolveAssetSource(assetName, config);
+  const downloadType = normalizeDownloadType(config.downloadType);
+
+  const downloadExt = downloadType === 'zip'
+    ? '.zip'
+    : (path.extname(binRel) || '.bin');
+  const downloaded = path.join(DOWNLOADS_DIR, `${assetName}${downloadExt}`);
+  await fetchAssetToFile(source, downloaded);
+
+  if (downloadType === 'file') {
+    const destination = path.join(STAGING_DIR, binRel);
+    ensureDir(path.dirname(destination));
+    fs.copyFileSync(downloaded, destination);
+    ensureExists(destination, `${assetName} binary`);
+    const shimPath = assetName === 'agentBrowser' ? ensureWindowsCmdShimForExe(destination) : null;
+    return {
+      bin: binRel,
+      root: path.dirname(binRel),
+      shim: shimPath ? path.relative(STAGING_DIR, shimPath) : null,
+      source: source.kind === 'url' ? source.value : source.value,
+    };
+  }
+
+  // zip 类型
+  const extractRoot = path.join(TMP_DIR, `asset-${assetName}`);
+  cleanDir(extractRoot);
+  unzipArchive(downloaded, extractRoot);
+
+  let sourceDir = extractRoot;
+  const archiveRoot = String(config.archiveRoot || '').trim();
+  if (archiveRoot) {
+    sourceDir = path.join(extractRoot, archiveRoot);
+  } else {
+    const top = firstSubdirectory(extractRoot);
+    if (top) {
+      const entries = fs.readdirSync(extractRoot, { withFileTypes: true })
+        .filter((entry) => !entry.name.startsWith('.'));
+      if (entries.length === 1 && entries[0].isDirectory()) {
+        sourceDir = top;
+      }
+    }
+  }
+  ensureExists(sourceDir, `${assetName} extracted root`);
+
+  const rootRel = String(config.root || '').trim() || path.dirname(binRel);
+  const destinationRoot = path.join(STAGING_DIR, rootRel);
+  fs.rmSync(destinationRoot, { recursive: true, force: true });
+  ensureDir(destinationRoot);
+  copyDirContents(sourceDir, destinationRoot);
+
+  const expectedBin = path.join(STAGING_DIR, binRel);
+  ensureExists(expectedBin, `${assetName} binary`);
+  const shimPath = assetName === 'agentBrowser' ? ensureWindowsCmdShimForExe(expectedBin) : null;
+  return {
+    bin: binRel,
+    root: rootRel,
+    shim: shimPath ? path.relative(STAGING_DIR, shimPath) : null,
+    source: source.kind === 'url' ? source.value : source.value,
+  };
+}
+
 function updatePythonPth(pythonDir) {
   const pthFile = fs.readdirSync(pythonDir).find((name) => /^python\d+\._pth$/i.test(name));
   if (!pthFile) {
@@ -366,9 +518,13 @@ async function main() {
 
   const manifest = readJson(MANIFEST_PATH);
   ensureManifestTarget(manifest);
+  ensureNonBlank(manifest?.agentBrowser?.bin, 'agentBrowser.bin');
+  ensureNonBlank(manifest?.chromium?.bin, 'chromium.bin');
 
   const nodeSpec = String(manifest?.node?.version || '20.x');
   const pythonSpec = String(manifest?.python?.version || '3.11.x');
+  const agentBrowserVersion = String(manifest?.agentBrowser?.version || '').trim();
+  const chromiumVersion = String(manifest?.chromium?.version || '').trim();
 
   const nodeVersion = await resolvePathSpec(nodeSpec, resolveNodeVersion);
   const pythonVersion = await resolvePathSpec(pythonSpec, resolvePythonVersion);
@@ -388,16 +544,38 @@ async function main() {
       nodeUrl,
       pythonUrl,
       getPipUrl,
+      agentBrowser: {
+        version: agentBrowserVersion || null,
+        downloadType: manifest?.agentBrowser?.downloadType || null,
+        downloadUrl: manifest?.agentBrowser?.downloadUrl || null,
+        localPath: manifest?.agentBrowser?.localPath || null,
+        bin: manifest?.agentBrowser?.bin || null,
+      },
+      chromium: {
+        version: chromiumVersion || null,
+        downloadType: manifest?.chromium?.downloadType || null,
+        downloadUrl: manifest?.chromium?.downloadUrl || null,
+        localPath: manifest?.chromium?.localPath || null,
+        archiveRoot: manifest?.chromium?.archiveRoot || null,
+        root: manifest?.chromium?.root || null,
+        bin: manifest?.chromium?.bin || null,
+      },
       stagingDir: STAGING_DIR,
       requirements: REQUIREMENTS_PATH,
     }, null, 2));
     return;
   }
 
+  // 非 dry-run 时，先校验 browser 资产来源，避免下载 Node/Python 后才失败
+  resolveAssetSource('agentBrowser', manifest.agentBrowser);
+  resolveAssetSource('chromium', manifest.chromium);
+
   const prepared = readPreparedMarker();
   if (!args.force && prepared
       && prepared.nodeVersion === nodeVersion
       && prepared.pythonVersion === pythonVersion
+      && prepared.agentBrowserVersion === agentBrowserVersion
+      && prepared.chromiumVersion === chromiumVersion
       && prepared.requirementsSha256) {
     console.log('Runtime staging already prepared and version-matched. Use --force to rebuild.');
     return;
@@ -467,11 +645,23 @@ async function main() {
     console.log('Skipping direct execution checks for node.exe/python.exe on non-Windows host.');
   }
 
+  console.log('Staging bundled agent-browser...');
+  const stagedAgentBrowser = await stageAssetFromManifest('agentBrowser', manifest.agentBrowser);
+
+  console.log('Staging bundled Chromium kernel...');
+  const stagedChromium = await stageAssetFromManifest('chromium', manifest.chromium);
+
   const requirementsData = fs.readFileSync(REQUIREMENTS_PATH);
   const requirementsSha256 = require('crypto').createHash('sha256').update(requirementsData).digest('hex');
   fs.writeFileSync(PREPARED_MARKER, JSON.stringify({
     nodeVersion,
     pythonVersion,
+    agentBrowserVersion,
+    chromiumVersion,
+    agentBrowserBin: stagedAgentBrowser.bin,
+    agentBrowserShim: stagedAgentBrowser.shim,
+    chromiumBin: stagedChromium.bin,
+    chromiumRoot: stagedChromium.root,
     hostPlatform: process.platform,
     packageInstallMode: hostIsWindows ? 'native-pip' : 'cross-wheel-extract',
     requirementsSha256,
@@ -483,6 +673,11 @@ async function main() {
   console.log(`- staging: ${STAGING_DIR}`);
   console.log(`- node:    ${nodeVersion}`);
   console.log(`- python:  ${pythonVersion}`);
+  console.log(`- browser: ${stagedAgentBrowser.bin}`);
+  if (stagedAgentBrowser.shim) {
+    console.log(`- browser shim: ${stagedAgentBrowser.shim}`);
+  }
+  console.log(`- chrome:  ${stagedChromium.bin}`);
 }
 
 main().catch((err) => {

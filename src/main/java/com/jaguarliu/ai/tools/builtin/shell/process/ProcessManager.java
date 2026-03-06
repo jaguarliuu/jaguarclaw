@@ -2,6 +2,7 @@ package com.jaguarliu.ai.tools.builtin.shell.process;
 
 import com.jaguarliu.ai.tools.ToolsProperties;
 import com.jaguarliu.ai.tools.WorkspaceResolver;
+import com.jaguarliu.ai.tools.builtin.shell.AgentBrowserEnvSupport;
 import com.jaguarliu.ai.tools.runtime.BundledRuntimeService;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
@@ -107,6 +108,7 @@ public class ProcessManager {
         Path workspacePath = WorkspaceResolver.resolveSessionWorkspace(properties);
         pb.directory(workspacePath.toFile());
         bundledRuntimeService.applyToEnvironment(pb.environment());
+        AgentBrowserEnvSupport.apply(pb.environment(), properties, bundledRuntimeService);
 
         // 合并 stdout 和 stderr
         pb.redirectErrorStream(true);

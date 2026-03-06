@@ -15,6 +15,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
 
@@ -30,6 +31,10 @@ public class BundledRuntimeService {
 
     private static final boolean IS_WINDOWS = System.getProperty("os.name", "")
             .toLowerCase().contains("win");
+
+    private static final String AGENT_BROWSER_BIN_ENV = "AGENT_BROWSER_EXECUTABLE_PATH";
+    private static final String AGENT_BROWSER_CHROMIUM_ENV = "AGENT_BROWSER_CHROMIUM_PATH";
+    private static final String AGENT_BROWSER_KERNEL_HOME_ENV = "AGENT_BROWSER_KERNEL_HOME";
 
     public boolean isEnabled() {
         return toolsProperties.getRuntime() != null && toolsProperties.getRuntime().isEnabled();
@@ -116,26 +121,85 @@ public class BundledRuntimeService {
             env.put("Path", merged);
         }
         resolveRuntimeHome().ifPresent(path -> env.put("JAGUAR_RUNTIME_HOME", path.toString()));
+        resolveBundledBinary("agent-browser").ifPresent(path ->
+                env.put(AGENT_BROWSER_BIN_ENV, path.toString()));
+        resolveBundledChromium().ifPresent(path ->
+                env.put(AGENT_BROWSER_CHROMIUM_ENV, path.toString()));
+        resolveBundledChromiumHome().ifPresent(path ->
+                env.put(AGENT_BROWSER_KERNEL_HOME_ENV, path.toString()));
+        env.putIfAbsent("AGENT_BROWSER_PROVIDER", "kernel");
+        env.put("AGENT_BROWSER_SKIP_INSTALL", "1");
     }
 
     public boolean hasBundledBinary(String binName) {
+        return resolveBundledBinary(binName).isPresent();
+    }
+
+    public Optional<Path> resolveBundledBinary(String binName) {
         if (!isEnabled() || binName == null || binName.isBlank()) {
-            return false;
+            return Optional.empty();
         }
+
+        Optional<Path> explicit = resolveExplicitBinaryPath(binName);
+        if (explicit.isPresent()) {
+            return explicit;
+        }
+
         for (Path binPath : resolveBinPaths()) {
             for (String candidateName : resolveBinaryCandidates(binName)) {
                 Path candidate = binPath.resolve(candidateName).normalize();
                 if (Files.isRegularFile(candidate)) {
-                    return true;
+                    return Optional.of(candidate);
                 }
             }
         }
-        return false;
+        return Optional.empty();
+    }
+
+    public Optional<Path> resolveBundledChromium() {
+        if (!isEnabled()) {
+            return Optional.empty();
+        }
+        Optional<Path> explicitPath = resolveConfiguredPath(
+                toolsProperties.getRuntime().getChromiumExecutablePath(),
+                AGENT_BROWSER_CHROMIUM_ENV
+        ).filter(Files::isRegularFile);
+        if (explicitPath.isPresent()) {
+            return explicitPath;
+        }
+
+        return resolveRuntimeHome()
+                .map(this::resolveChromiumFromRuntimeHome)
+                .orElse(Optional.empty());
+    }
+
+    public Optional<Path> resolveBundledChromiumHome() {
+        if (!isEnabled()) {
+            return Optional.empty();
+        }
+        Optional<Path> explicit = resolveConfiguredPath(
+                toolsProperties.getRuntime().getChromiumHome(),
+                AGENT_BROWSER_KERNEL_HOME_ENV
+        ).filter(Files::isDirectory);
+        if (explicit.isPresent()) {
+            return explicit;
+        }
+
+        return resolveRuntimeHome().flatMap(runtimeHome -> {
+            Path configured = runtimeHome.resolve("browser/chromium").toAbsolutePath().normalize();
+            if (Files.isDirectory(configured)) {
+                return Optional.of(configured);
+            }
+            return resolveBundledChromium().map(chromium -> {
+                Path parent = chromium.getParent();
+                return parent != null ? parent.toAbsolutePath().normalize() : runtimeHome;
+            });
+        });
     }
 
     private List<String> defaultBinEntries() {
         if (IS_WINDOWS) {
-            return List.of("node", "python", "python/Scripts");
+            return List.of("bin", "node", "python", "python/Scripts");
         }
         return List.of("bin");
     }
@@ -150,10 +214,64 @@ public class BundledRuntimeService {
     }
 
     private List<String> resolveBinaryCandidates(String binName) {
-        if (!IS_WINDOWS || binName.contains(".")) {
+        if (binName.contains(".")) {
             return List.of(binName);
         }
-        return List.of(binName + ".exe", binName + ".cmd", binName + ".bat", binName);
+        if (IS_WINDOWS) {
+            return List.of(binName + ".exe", binName + ".cmd", binName + ".bat", binName);
+        }
+        // 非 Windows 场景也兼容检查 Windows 后缀，便于跨平台构建/校验 win runtime
+        return List.of(binName, binName + ".exe", binName + ".cmd", binName + ".bat");
+    }
+
+    private Optional<Path> resolveExplicitBinaryPath(String binName) {
+        if (binName == null || binName.isBlank()) {
+            return Optional.empty();
+        }
+        String normalized = binName.toLowerCase(Locale.ROOT);
+        if (normalized.startsWith("agent-browser")) {
+            return resolveConfiguredPath(
+                    toolsProperties.getRuntime().getAgentBrowserExecutablePath(),
+                    AGENT_BROWSER_BIN_ENV
+            ).filter(Files::isRegularFile);
+        }
+        return Optional.empty();
+    }
+
+    private Optional<Path> resolveConfiguredPath(String configuredValue, String envName) {
+        String envValue = System.getenv(envName);
+        String value = configuredValue;
+        if (value == null || value.isBlank()) {
+            value = envValue;
+        }
+        if (value == null || value.isBlank()) {
+            return Optional.empty();
+        }
+        Path candidate = Path.of(value);
+        if (!candidate.isAbsolute()) {
+            Optional<Path> runtimeHomeOpt = resolveRuntimeHome();
+            if (runtimeHomeOpt.isEmpty()) {
+                return Optional.empty();
+            }
+            candidate = runtimeHomeOpt.get().resolve(value);
+        }
+        return Optional.of(candidate.toAbsolutePath().normalize());
+    }
+
+    private Optional<Path> resolveChromiumFromRuntimeHome(Path runtimeHome) {
+        List<Path> candidates = new ArrayList<>();
+        candidates.add(runtimeHome.resolve("browser/chromium/chrome.exe"));
+        candidates.add(runtimeHome.resolve("browser/chromium/chrome"));
+        candidates.add(runtimeHome.resolve("browser/chromium/chrome-win64/chrome.exe"));
+        candidates.add(runtimeHome.resolve("browser/chromium/chrome-linux/chrome"));
+        candidates.add(runtimeHome.resolve("browser/chromium/Chromium.app/Contents/MacOS/Chromium"));
+        for (Path candidate : candidates) {
+            Path normalized = candidate.toAbsolutePath().normalize();
+            if (Files.isRegularFile(normalized)) {
+                return Optional.of(normalized);
+            }
+        }
+        return Optional.empty();
     }
 
     private Optional<Path> resolveCompatShimDir() {

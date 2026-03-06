@@ -1,6 +1,7 @@
 package com.jaguarliu.ai.tools.builtin;
 
 import com.jaguarliu.ai.tools.ToolResult;
+import com.jaguarliu.ai.tools.ToolExecutionContext;
 import com.jaguarliu.ai.tools.ToolsProperties;
 import com.jaguarliu.ai.tools.builtin.shell.ShellTool;
 import com.jaguarliu.ai.tools.runtime.BundledRuntimeService;
@@ -100,6 +101,46 @@ class ShellToolTest {
         assertNotNull(result);
         assertTrue(result.isSuccess(), () -> "Unexpected error: " + result.getContent());
         assertTrue(result.getContent().toLowerCase().contains("bundled-python"), result::getContent);
+    }
+
+    @Test
+    @DisplayName("should inject agent-browser session/profile and bundled chromium env")
+    void shouldInjectAgentBrowserSessionProfileAndChromiumEnv() throws Exception {
+        Path runtimeHome = tempDir.resolve("runtime");
+        Path chromiumHome = runtimeHome.resolve("browser/chromium");
+        Files.createDirectories(chromiumHome);
+        Path chromiumExe = chromiumHome.resolve(isWindows() ? "chrome.exe" : "chrome");
+        Files.writeString(chromiumExe, "echo chrome");
+
+        ToolsProperties properties = propertiesWithWorkspace();
+        properties.getRuntime().setEnabled(true);
+        properties.getRuntime().setHome(runtimeHome.toString());
+        properties.getRuntime().setChromiumExecutablePath("browser/chromium/" + (isWindows() ? "chrome.exe" : "chrome"));
+        properties.getRuntime().setChromiumHome("browser/chromium");
+
+        ShellTool tool = newTool(properties);
+
+        ToolExecutionContext.set(ToolExecutionContext.builder()
+                .agentId("agent-a")
+                .sessionId("sess-001")
+                .runId("run-001")
+                .sessionWorkspacePath(tempDir)
+                .build());
+        try {
+            String command = isWindows()
+                    ? "echo %AGENT_BROWSER_SESSION% && echo %AGENT_BROWSER_PROFILE% && echo %AGENT_BROWSER_CHROMIUM_PATH%"
+                    : "echo $AGENT_BROWSER_SESSION && echo $AGENT_BROWSER_PROFILE && echo $AGENT_BROWSER_CHROMIUM_PATH";
+            ToolResult result = tool.execute(Map.of("command", command)).block();
+
+            assertNotNull(result);
+            assertTrue(result.isSuccess(), () -> "Unexpected error: " + result.getContent());
+            assertTrue(result.getContent().contains("sess-001"), result::getContent);
+            assertTrue(result.getContent().contains("browser-profiles"), result::getContent);
+            assertTrue(result.getContent().contains("agent-a"), result::getContent);
+            assertTrue(result.getContent().contains(chromiumExe.toAbsolutePath().normalize().toString()), result::getContent);
+        } finally {
+            ToolExecutionContext.clear();
+        }
     }
 
     private ToolsProperties propertiesWithWorkspace() {

@@ -60,6 +60,12 @@ let currentRuntimeInfo = {
   source: 'none',
   bundledAvailable: false,
   bundledSource: 'none',
+  browser: {
+    agentBrowserPath: null,
+    chromiumPath: null,
+    chromiumHome: null,
+    ready: false,
+  },
 };
 
 function resolveResourceFile(fileName) {
@@ -307,6 +313,49 @@ function ensureBundledRuntime() {
   }
 }
 
+function firstExistingPath(candidates) {
+  for (const candidate of candidates) {
+    if (candidate && fs.existsSync(candidate)) {
+      return candidate;
+    }
+  }
+  return null;
+}
+
+function resolveBundledBrowserInfo(runtimeHome) {
+  if (!runtimeHome) {
+    return {
+      agentBrowserPath: null,
+      chromiumPath: null,
+      chromiumHome: null,
+      ready: false,
+    };
+  }
+
+  const agentBrowserPath = firstExistingPath([
+    path.join(runtimeHome, 'bin', 'agent-browser.exe'),
+    path.join(runtimeHome, 'bin', 'agent-browser.cmd'),
+    path.join(runtimeHome, 'bin', 'agent-browser'),
+  ]);
+
+  const chromiumHome = firstExistingPath([
+    path.join(runtimeHome, 'browser', 'chromium'),
+    path.join(runtimeHome, 'browser', 'chromium', 'chrome-win64'),
+  ]);
+  const chromiumPath = firstExistingPath([
+    path.join(runtimeHome, 'browser', 'chromium', 'chrome.exe'),
+    path.join(runtimeHome, 'browser', 'chromium', 'chrome-win64', 'chrome.exe'),
+    path.join(runtimeHome, 'browser', 'chromium', 'chrome'),
+  ]);
+
+  return {
+    agentBrowserPath,
+    chromiumPath,
+    chromiumHome,
+    ready: !!(agentBrowserPath && chromiumPath),
+  };
+}
+
 function resolveRuntimeInfo(runtimeMode) {
   const mode = normalizeRuntimeMode(runtimeMode);
   const probe = probeBundledRuntimeAvailability();
@@ -320,6 +369,12 @@ function resolveRuntimeInfo(runtimeMode) {
       source: 'local',
       bundledAvailable: probe.available,
       bundledSource: probe.source,
+      browser: {
+        agentBrowserPath: null,
+        chromiumPath: null,
+        chromiumHome: null,
+        ready: false,
+      },
     };
   }
 
@@ -334,6 +389,7 @@ function resolveRuntimeInfo(runtimeMode) {
       effectiveMode: 'bundled',
       bundledAvailable: true,
       bundledSource: bundled.source || probe.source,
+      browser: resolveBundledBrowserInfo(bundled.home),
     };
   }
 
@@ -344,6 +400,7 @@ function resolveRuntimeInfo(runtimeMode) {
       effectiveMode: 'bundled',
       bundledAvailable: true,
       bundledSource: bundled.source || probe.source,
+      browser: resolveBundledBrowserInfo(bundled.home),
     };
   }
 
@@ -355,6 +412,12 @@ function resolveRuntimeInfo(runtimeMode) {
     source: 'none',
     bundledAvailable: probe.available,
     bundledSource: probe.source,
+    browser: {
+      agentBrowserPath: null,
+      chromiumPath: null,
+      chromiumHome: null,
+      ready: false,
+    },
   };
 }
 
@@ -584,6 +647,15 @@ function startJavaBackend(port, encryptionKey, runtimeInfo) {
   if (runtimeInfo && runtimeInfo.enabled && runtimeInfo.home) {
     args.push('--tools.runtime.enabled=true');
     args.push(`--tools.runtime.home=${runtimeInfo.home}`);
+    if (runtimeInfo.browser && runtimeInfo.browser.agentBrowserPath) {
+      args.push(`--tools.runtime.agent-browser-executable-path=${runtimeInfo.browser.agentBrowserPath}`);
+    }
+    if (runtimeInfo.browser && runtimeInfo.browser.chromiumPath) {
+      args.push(`--tools.runtime.chromium-executable-path=${runtimeInfo.browser.chromiumPath}`);
+    }
+    if (runtimeInfo.browser && runtimeInfo.browser.chromiumHome) {
+      args.push(`--tools.runtime.chromium-home=${runtimeInfo.browser.chromiumHome}`);
+    }
   } else {
     args.push('--tools.runtime.enabled=false');
   }
@@ -597,10 +669,26 @@ function startJavaBackend(port, encryptionKey, runtimeInfo) {
     env.TOOLS_RUNTIME_ENABLED = 'true';
     env.TOOLS_RUNTIME_HOME = runtimeInfo.home;
     env.JAGUAR_RUNTIME_HOME = runtimeInfo.home;
+    env.AGENT_BROWSER_PROVIDER = 'kernel';
+    env.AGENT_BROWSER_SKIP_INSTALL = '1';
+    if (runtimeInfo.browser && runtimeInfo.browser.agentBrowserPath) {
+      env.AGENT_BROWSER_EXECUTABLE_PATH = runtimeInfo.browser.agentBrowserPath;
+    }
+    if (runtimeInfo.browser && runtimeInfo.browser.chromiumPath) {
+      env.AGENT_BROWSER_CHROMIUM_PATH = runtimeInfo.browser.chromiumPath;
+    }
+    if (runtimeInfo.browser && runtimeInfo.browser.chromiumHome) {
+      env.AGENT_BROWSER_KERNEL_HOME = runtimeInfo.browser.chromiumHome;
+    }
   } else {
     env.TOOLS_RUNTIME_ENABLED = 'false';
     delete env.TOOLS_RUNTIME_HOME;
     delete env.JAGUAR_RUNTIME_HOME;
+    delete env.AGENT_BROWSER_EXECUTABLE_PATH;
+    delete env.AGENT_BROWSER_CHROMIUM_PATH;
+    delete env.AGENT_BROWSER_KERNEL_HOME;
+    delete env.AGENT_BROWSER_PROVIDER;
+    delete env.AGENT_BROWSER_SKIP_INSTALL;
   }
 
   appendStartupLog('info', `Starting backend process on port ${port}`);
@@ -893,6 +981,9 @@ ipcMain.handle('runtime:getConfig', async () => {
     bundledHome: fromCurrentRun
       ? (currentRuntimeInfo.enabled ? currentRuntimeInfo.home : null)
       : (probe.home || null),
+    browserReady: fromCurrentRun ? !!currentRuntimeInfo.browser?.ready : false,
+    agentBrowserPath: fromCurrentRun ? (currentRuntimeInfo.browser?.agentBrowserPath || null) : null,
+    chromiumPath: fromCurrentRun ? (currentRuntimeInfo.browser?.chromiumPath || null) : null,
   };
 });
 
@@ -935,6 +1026,16 @@ app.whenReady().then(async () => {
     currentRuntimeInfo = runtimeInfo;
     if (runtimeInfo.enabled) {
       appendStartupLog('info', `Bundled runtime enabled: ${runtimeInfo.home} (${runtimeInfo.source})`);
+      if (runtimeInfo.browser && runtimeInfo.browser.agentBrowserPath) {
+        appendStartupLog('info', `Bundled agent-browser: ${runtimeInfo.browser.agentBrowserPath}`);
+      } else {
+        appendStartupLog('error', 'Bundled agent-browser executable not found under runtime home');
+      }
+      if (runtimeInfo.browser && runtimeInfo.browser.chromiumPath) {
+        appendStartupLog('info', `Bundled chromium: ${runtimeInfo.browser.chromiumPath}`);
+      } else {
+        appendStartupLog('error', 'Bundled chromium executable not found under runtime home');
+      }
     } else {
       appendStartupLog('info', `Using system runtime (effective mode: ${runtimeInfo.effectiveMode})`);
     }

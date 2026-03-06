@@ -141,6 +141,7 @@ public class ShellTool implements Tool {
                 // 将 workspace 路径注入环境变量，供脚本输出文件使用
                 pb.environment().put("WORKSPACE_DIR", workspacePath.toString());
                 bundledRuntimeService.applyToEnvironment(pb.environment());
+                AgentBrowserEnvSupport.apply(pb.environment(), properties, bundledRuntimeService);
 
                 // 合并 stdout 和 stderr
                 pb.redirectErrorStream(true);

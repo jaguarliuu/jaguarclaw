@@ -9,36 +9,19 @@ metadata:
 
 # Browser Automation with agent-browser
 
-## Installation Required
+## Runtime Model
 
-This skill requires `agent-browser` to be installed. If you see an error that this skill is unavailable, follow the installation guide below.
+Desktop mode uses a bundled runtime:
+- bundled `agent-browser` binary
+- bundled Chromium kernel
+- per-agent/per-session profile persistence via `AGENT_BROWSER_PROFILE`
 
-### Quick Install
+In desktop mode, users should not need manual installation or PATH setup.
 
-Choose your preferred method:
-
-**Option 1: npm (Recommended)**
-```bash
-npm install -g @agent-tools/browser
-```
-
-**Option 2: Use the installation script**
-```bash
-# macOS/Linux
-bash scripts/install-agent-browser.sh
-
-# Windows
-powershell scripts/install-agent-browser.ps1
-```
-
-**Option 3: Manual installation**
-- Download from: https://github.com/hdresearch/nolita/releases
-- Add to your system PATH
-
-**Verify installation:**
-```bash
-agent-browser --version
-```
+If this skill is unavailable, first check runtime diagnostics:
+- `AGENT_BROWSER_EXECUTABLE_PATH`
+- `AGENT_BROWSER_CHROMIUM_PATH`
+- `AGENT_BROWSER_KERNEL_HOME`
 
 ---
 
@@ -47,11 +30,10 @@ agent-browser --version
 **Windows Users:**
 - Use `agent-browser.cmd` instead of `agent-browser` in commands
 - Or add `.cmd` extension: `agent-browser.cmd open <url>`
-- The installation script handles this automatically
+- Bundled runtime already includes compatible launcher/binary
 
 **All Platforms:**
-- After installation, you may need to restart your terminal
-- Verify with: `agent-browser --version`
+- Verify availability with: `agent-browser --version`
 
 ---
 

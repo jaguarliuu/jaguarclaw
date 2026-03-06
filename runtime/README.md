@@ -9,6 +9,12 @@ runtime/
   manifest.json          # runtime metadata + package list
   requirements.txt       # Python package baseline
   staging/               # unpacked runtime root (local only, gitignored)
+    bin/
+      agent-browser.cmd  # bundled browser CLI
+      agent-browser.exe  # optional (if distributed as native exe)
+    browser/
+      chromium/
+        chrome.exe       # bundled Chromium kernel
     python/
       python.exe
       Scripts/
@@ -40,11 +46,23 @@ node electron/scripts/package-runtime.js
 The script:
 
 1. `prepare-runtime` downloads Node/Python and builds `runtime/staging/`.
-2. `prepare-runtime` installs `runtime/requirements.txt`:
+2. `prepare-runtime` stages bundled browser runtime from `manifest.json`:
+   - `agentBrowser` (CLI binary)
+   - `chromium` (browser kernel)
+3. `prepare-runtime` installs `runtime/requirements.txt`:
    - on Windows host: bootstraps pip via embedded `python.exe`
    - on macOS/Linux host: downloads `win_amd64` wheels and unpacks into `Lib/site-packages`
-3. `package-runtime` validates staging and creates `runtime/runtime.zip`.
-4. `package-runtime` writes `runtime/runtime.version` from `runtime/manifest.json`.
+4. `package-runtime` validates staging and creates `runtime/runtime.zip`.
+5. `package-runtime` writes `runtime/runtime.version` from `runtime/manifest.json`.
+
+## Browser Runtime Source
+
+Browser artifacts are defined in `runtime/manifest.json`:
+
+- `agentBrowser.downloadUrl` or `agentBrowser.localPath`
+- `chromium.downloadUrl` or `chromium.localPath`
+
+`localPath` can point to a local archive/binary for offline packaging.
 
 ## Notes
 

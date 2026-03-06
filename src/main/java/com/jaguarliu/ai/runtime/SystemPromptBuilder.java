@@ -411,6 +411,7 @@ public class SystemPromptBuilder {
             if (bundledRuntimeHome != null && !bundledRuntimeHome.isBlank()) {
                 sb.append(String.format("- Bundled Runtime Home: %s\n", bundledRuntimeHome));
             }
+            sb.append("- Bundled Browser Runtime: use AGENT_BROWSER_* env, do not ask user to install Chromium manually\n");
         }
         sb.append("\n");
         return sb.toString();

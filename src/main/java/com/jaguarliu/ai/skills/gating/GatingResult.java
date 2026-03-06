@@ -51,6 +51,12 @@ public class GatingResult {
     private final String unsupportedOs;
 
     /**
+     * 缺失的运行时依赖（例如：agent-browser 对应的 Chromium kernel）
+     */
+    @Builder.Default
+    private final List<String> missingRuntimeDeps = Collections.emptyList();
+
+    /**
      * 无条件通过的结果（用于无 requires 的 skill）
      */
     public static final GatingResult PASSED = GatingResult.builder()
@@ -82,6 +88,9 @@ public class GatingResult {
         if (unsupportedOs != null) {
             reasons.add("Unsupported OS: " + unsupportedOs);
         }
+        if (!missingRuntimeDeps.isEmpty()) {
+            reasons.add("Missing runtime deps: " + String.join(", ", missingRuntimeDeps));
+        }
 
         return String.join("; ", reasons);
     }
@@ -100,6 +109,7 @@ public class GatingResult {
         int count = missingEnvVars.size() + missingBins.size() + missingConfigs.size();
         if (!unsatisfiedAnyBins.isEmpty()) count++;
         if (unsupportedOs != null) count++;
+        count += missingRuntimeDeps.size();
         return count;
     }
 }

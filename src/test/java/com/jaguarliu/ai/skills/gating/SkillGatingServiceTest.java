@@ -13,6 +13,7 @@ import org.mockito.MockitoAnnotations;
 import org.springframework.core.env.Environment;
 
 import java.util.List;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.mock;
@@ -176,7 +177,8 @@ class SkillGatingServiceTest {
         @DisplayName("bundled runtime 存在二进制时应通过")
         void bundledRuntimeBinaryPasses() {
             BundledRuntimeService runtimeService = mock(BundledRuntimeService.class);
-            when(runtimeService.hasBundledBinary("python")).thenReturn(true);
+            when(runtimeService.resolveBundledBinary("python"))
+                    .thenReturn(Optional.of(java.nio.file.Path.of("/tmp/python")));
 
             SkillGatingService service = new SkillGatingService(springEnv, runtimeService);
 
@@ -187,6 +189,46 @@ class SkillGatingServiceTest {
             GatingResult result = service.evaluate(requires);
             assertTrue(result.isAvailable());
             assertTrue(result.getMissingBins().isEmpty());
+        }
+
+        @Test
+        @DisplayName("agent-browser 在 bundled 模式下缺 chromium kernel 时失败")
+        void agentBrowserShouldFailWhenKernelMissingInBundledMode() {
+            BundledRuntimeService runtimeService = mock(BundledRuntimeService.class);
+            when(runtimeService.isEnabled()).thenReturn(true);
+            when(runtimeService.resolveBundledBinary("agent-browser"))
+                    .thenReturn(Optional.of(java.nio.file.Path.of("/tmp/agent-browser")));
+            when(runtimeService.resolveBundledChromium()).thenReturn(Optional.empty());
+
+            SkillGatingService service = new SkillGatingService(springEnv, runtimeService);
+            SkillRequires requires = SkillRequires.builder()
+                    .anyBins(List.of("agent-browser", "agent-browser.cmd"))
+                    .build();
+
+            GatingResult result = service.evaluate(requires);
+            assertFalse(result.isAvailable());
+            assertEquals(List.of("agent-browser: chromium kernel"), result.getMissingRuntimeDeps());
+            assertTrue(result.getFailureReason().contains("Missing runtime deps"));
+        }
+
+        @Test
+        @DisplayName("agent-browser 在 bundled 模式下 binary 和 kernel 就绪时通过")
+        void agentBrowserShouldPassWhenKernelReadyInBundledMode() {
+            BundledRuntimeService runtimeService = mock(BundledRuntimeService.class);
+            when(runtimeService.isEnabled()).thenReturn(true);
+            when(runtimeService.resolveBundledBinary("agent-browser"))
+                    .thenReturn(Optional.of(java.nio.file.Path.of("/tmp/agent-browser")));
+            when(runtimeService.resolveBundledChromium())
+                    .thenReturn(Optional.of(java.nio.file.Path.of("/tmp/chrome.exe")));
+
+            SkillGatingService service = new SkillGatingService(springEnv, runtimeService);
+            SkillRequires requires = SkillRequires.builder()
+                    .anyBins(List.of("agent-browser", "agent-browser.cmd"))
+                    .build();
+
+            GatingResult result = service.evaluate(requires);
+            assertTrue(result.isAvailable());
+            assertTrue(result.getMissingRuntimeDeps().isEmpty());
         }
     }
 

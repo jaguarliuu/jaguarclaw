@@ -132,6 +132,59 @@ class BundledRuntimeServiceTest {
     }
 
     @Test
+    @DisplayName("explicit agent-browser path should win over bin paths")
+    void explicitAgentBrowserPathShouldWin() throws Exception {
+        Path runtimeHome = tempDir.resolve("runtime");
+        Path explicitDir = tempDir.resolve("external");
+        Files.createDirectories(explicitDir);
+
+        Path explicitBinary = explicitDir.resolve(isWindows() ? "agent-browser.cmd" : "agent-browser");
+        Files.writeString(explicitBinary, "echo explicit");
+
+        Path bundledDir = runtimeHome.resolve("bin");
+        Files.createDirectories(bundledDir);
+        Path bundledBinary = bundledDir.resolve(isWindows() ? "agent-browser.cmd" : "agent-browser");
+        Files.writeString(bundledBinary, "echo bundled");
+
+        ToolsProperties properties = new ToolsProperties();
+        properties.getRuntime().setEnabled(true);
+        properties.getRuntime().setHome(runtimeHome.toString());
+        properties.getRuntime().setBinPaths(List.of("bin"));
+        properties.getRuntime().setAgentBrowserExecutablePath(explicitBinary.toString());
+
+        BundledRuntimeService service = new BundledRuntimeService(properties);
+        Path resolved = service.resolveBundledBinary("agent-browser").orElseThrow();
+        assertEquals(explicitBinary.toAbsolutePath().normalize(), resolved);
+    }
+
+    @Test
+    @DisplayName("should resolve bundled chromium and inject related env")
+    void shouldResolveBundledChromiumAndInjectEnv() throws Exception {
+        Path runtimeHome = tempDir.resolve("runtime");
+        Path chromiumHome = runtimeHome.resolve("browser/chromium");
+        Files.createDirectories(chromiumHome);
+        Path chromium = chromiumHome.resolve(isWindows() ? "chrome.exe" : "chrome");
+        Files.writeString(chromium, "echo chromium");
+
+        ToolsProperties properties = new ToolsProperties();
+        properties.getRuntime().setEnabled(true);
+        properties.getRuntime().setHome(runtimeHome.toString());
+        properties.getRuntime().setChromiumExecutablePath("browser/chromium/" + (isWindows() ? "chrome.exe" : "chrome"));
+        properties.getRuntime().setChromiumHome("browser/chromium");
+
+        BundledRuntimeService service = new BundledRuntimeService(properties);
+        assertEquals(chromium.toAbsolutePath().normalize(), service.resolveBundledChromium().orElseThrow());
+        assertEquals(chromiumHome.toAbsolutePath().normalize(), service.resolveBundledChromiumHome().orElseThrow());
+
+        Map<String, String> env = new java.util.HashMap<>();
+        service.applyToEnvironment(env);
+        assertEquals(chromium.toAbsolutePath().normalize().toString(), env.get("AGENT_BROWSER_CHROMIUM_PATH"));
+        assertEquals(chromiumHome.toAbsolutePath().normalize().toString(), env.get("AGENT_BROWSER_KERNEL_HOME"));
+        assertEquals("kernel", env.get("AGENT_BROWSER_PROVIDER"));
+        assertEquals("1", env.get("AGENT_BROWSER_SKIP_INSTALL"));
+    }
+
+    @Test
     @DisplayName("empty bin paths should use os defaults")
     void emptyBinPathsUseOsDefaults() {
         Path runtimeHome = tempDir.resolve("runtime");

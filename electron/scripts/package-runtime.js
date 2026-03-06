@@ -49,6 +49,10 @@ function defaultBinaryLayout(targetOs) {
   };
 }
 
+function hasNonBlank(value) {
+  return typeof value === 'string' && value.trim().length > 0;
+}
+
 function toWindowsPath(value) {
   return value.replace(/\//g, '\\');
 }
@@ -100,6 +104,29 @@ function main() {
   ensureExists(pythonBinAbs, 'Python executable');
   ensureExists(nodeBinAbs, 'Node executable');
 
+  let agentBrowserBinRel = null;
+  let chromiumRootRel = null;
+  let chromiumBinRel = null;
+  if (manifest.agentBrowser) {
+    if (!hasNonBlank(manifest.agentBrowser.bin)) {
+      throw new Error('manifest.agentBrowser.bin is required when agentBrowser section exists');
+    }
+    agentBrowserBinRel = manifest.agentBrowser.bin.trim();
+    ensureExists(path.join(sourceDir, agentBrowserBinRel), 'Agent-browser executable');
+  }
+  if (manifest.chromium) {
+    if (!hasNonBlank(manifest.chromium.root)) {
+      throw new Error('manifest.chromium.root is required when chromium section exists');
+    }
+    if (!hasNonBlank(manifest.chromium.bin)) {
+      throw new Error('manifest.chromium.bin is required when chromium section exists');
+    }
+    chromiumRootRel = manifest.chromium.root.trim();
+    chromiumBinRel = manifest.chromium.bin.trim();
+    ensureExists(path.join(sourceDir, chromiumRootRel), 'Chromium root directory');
+    ensureExists(path.join(sourceDir, chromiumBinRel), 'Chromium executable');
+  }
+
   fs.mkdirSync(path.dirname(outputZip), { recursive: true });
   zipDirectory(sourceDir, outputZip);
   fs.writeFileSync(versionFile, `${version}\n`, 'utf8');
@@ -112,6 +139,9 @@ function main() {
     versionFile,
     pythonBin: pythonBinRel,
     nodeBin: nodeBinRel,
+    agentBrowserBin: agentBrowserBinRel,
+    chromiumRoot: chromiumRootRel,
+    chromiumBin: chromiumBinRel,
     pythonPackages: manifest.python && Array.isArray(manifest.python.packages)
       ? manifest.python.packages.length
       : 0,
