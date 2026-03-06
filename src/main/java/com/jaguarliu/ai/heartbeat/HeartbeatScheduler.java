@@ -23,6 +23,7 @@ import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.Locale;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -37,6 +38,9 @@ import java.util.stream.Stream;
 @Service
 @RequiredArgsConstructor
 public class HeartbeatScheduler {
+
+    static final String SILENT_ACK_TOKEN = "HEARTBEAT_OK";
+    static final String NOTIFY_TOKEN = "HEARTBEAT_NOTIFY";
 
     private final HeartbeatConfigService configService;
     private final SessionService sessionService;
@@ -128,7 +132,7 @@ public class HeartbeatScheduler {
             // 8. Silent ack check
             int ackMaxChars = ((Number) config.getOrDefault("ackMaxChars", 300)).intValue();
             String trimmed = response.trim();
-            if (trimmed.startsWith("HEARTBEAT_OK") && trimmed.length() <= ackMaxChars) {
+            if (isSilentHeartbeatResponse(trimmed, ackMaxChars)) {
                 log.info("Heartbeat returned silent ack, discarding: agentId={}", agentId);
                 return;
             }
@@ -145,5 +149,58 @@ public class HeartbeatScheduler {
                 eventBus.publish(AgentEvent.heartbeatNotify(connId, agentId, content, sessionId, runId))
         );
         log.info("Heartbeat broadcast to {} connections", connectionManager.getConnectionCount());
+    }
+
+    /**
+     * 判定 heartbeat 响应是否应静默（不推送通知）。
+     *
+     * 兼容策略：
+     * 1) 只要包含 HEARTBEAT_OK（不要求前缀），默认视为静默；
+     * 2) 若包含 HEARTBEAT_NOTIFY，则始终视为需要通知；
+     * 3) 为兼容非规范输出，短文本且语义为“无事可报”也静默。
+     */
+    static boolean isSilentHeartbeatResponse(String response, int ackMaxChars) {
+        if (response == null || response.isBlank()) {
+            return true;
+        }
+
+        String normalized = stripCodeFence(response).trim();
+        String upper = normalized.toUpperCase(Locale.ROOT);
+
+        if (upper.contains(NOTIFY_TOKEN)) {
+            return false;
+        }
+        if (upper.contains(SILENT_ACK_TOKEN)) {
+            return true;
+        }
+
+        if (normalized.length() > ackMaxChars) {
+            return false;
+        }
+
+        String compact = normalized
+                .replaceAll("\\s+", "")
+                .toLowerCase(Locale.ROOT);
+
+        return compact.contains("无需汇报")
+                || compact.contains("没有需要汇报")
+                || compact.contains("无事可报")
+                || compact.contains("暂无事项")
+                || compact.contains("暂无需要提醒")
+                || compact.contains("nothingtoreport")
+                || compact.contains("noupdate")
+                || compact.contains("noupdates")
+                || compact.contains("noactionneeded");
+    }
+
+    private static String stripCodeFence(String text) {
+        String normalized = text.trim();
+        if (normalized.startsWith("```") && normalized.endsWith("```")) {
+            int firstNewline = normalized.indexOf('\n');
+            if (firstNewline > 0) {
+                normalized = normalized.substring(firstNewline + 1, normalized.length() - 3).trim();
+            }
+        }
+        return normalized;
     }
 }
