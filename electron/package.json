@@ -72,6 +72,10 @@
       "provider": "github",
       "owner": "jaguarliuu",
       "repo": "jaguarclaw"
+    },
+    "extraMetadata": {
+      "name": "jaguarclaw",
+      "productName": "JaguarClaw"
     }
   }
 }

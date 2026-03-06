@@ -5,7 +5,7 @@
  *   node electron/scripts/build-local.js [--name "Custom App Name"]
  *   LOCAL_APP_NAME="Custom App Name" node electron/scripts/build-local.js
  *
- * - Reads local-icon.png from project root as icon (falls back to default if absent)
+ * - Reads icon-local assets for local package identity (falls back to default if absent)
  * - Builds Windows NSIS installer only, no publish
  * - Same pipeline as build.js: Maven → Vue → copy resources → electron-builder
  */
@@ -34,7 +34,7 @@ const UI_DIR = path.join(ROOT, 'jaguarclaw-ui');
 const LOCAL_OUTPUT_DIR = path.join(ELECTRON_DIR, 'dist');
 const RUNTIME_BUNDLE_DIR = path.join(ROOT, 'runtime');
 const RUNTIME_STAGING_DIR = path.join(RUNTIME_BUNDLE_DIR, 'staging');
-const LOCAL_ICON = path.join(ELECTRON_DIR, 'assets','local-icon.ico');
+const LOCAL_ICON = path.join(ELECTRON_DIR, 'assets', 'icon-local.ico');
 const DEFAULT_ICON = path.join(ELECTRON_DIR, 'assets', 'icon.ico');
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -74,7 +74,7 @@ const envName = process.env.LOCAL_APP_NAME ? process.env.LOCAL_APP_NAME.trim() :
 const displayName = customName || envName || 'MiniClaw';
 const useCustomName = !!customName || !!envName;
 
-const iconLabel = fs.existsSync(LOCAL_ICON) ? 'local-icon.ico' : 'default icon.ico';
+const iconLabel = fs.existsSync(LOCAL_ICON) ? 'icon-local.ico' : 'default icon.ico';
 
 console.log('');
 console.log('=== JaguarClaw Local Build (Windows) ===');

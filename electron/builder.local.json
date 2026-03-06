@@ -11,7 +11,7 @@
   ],
   "extraResources": [
     {
-      "from": "assets/local-icon.png",
+      "from": "assets/icon-local.png",
       "to": "icon.png"
     },
     {
@@ -33,7 +33,7 @@
   ],
   "win": {
     "target": "nsis",
-    "icon": "assets/local-icon.ico",
+    "icon": "assets/icon-local.ico",
     "executableName": "miniclaw"
   },
   "nsis": {
@@ -47,7 +47,7 @@
   },
   "mac": {
     "target": "dmg",
-    "icon": "assets/local-icon.png",
+    "icon": "assets/icon-local.png",
     "identity": null
   },
   "publish": {
@@ -55,5 +55,9 @@
     "owner": "jaguarliuu",
     "repo": "jaguarclaw",
     "tagNamePrefix": "local-v"
+  },
+  "extraMetadata": {
+    "name": "miniclaw",
+    "productName": "MiniClaw"
   }
 }

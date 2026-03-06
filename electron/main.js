@@ -7,6 +7,7 @@ const { autoUpdater } = require('electron-updater');
 const crypto = require('crypto');
 const fs = require('fs');
 const { createLogManager } = require('./scripts/lib/log-manager');
+const { resolveAppIdentity } = require('./scripts/lib/app-identity');
 
 let mainWindow = null;
 let splashWindow = null;
@@ -34,6 +35,16 @@ let currentStartupStatus = {
 
 // Paths
 const isPackaged = app.isPackaged;
+const appIdentity = resolveAppIdentity({
+  appName: app.getName(),
+  exePath: process.execPath,
+  isPackaged,
+});
+const APP_DISPLAY_NAME = appIdentity.displayName;
+if (process.platform === 'win32' && typeof app.setAppUserModelId === 'function') {
+  app.setAppUserModelId(appIdentity.appUserModelId);
+}
+app.setPath('userData', path.join(app.getPath('appData'), appIdentity.dataDirName));
 const resourcesPath = isPackaged
   ? path.join(process.resourcesPath)
   : path.join(__dirname, 'resources');
@@ -41,7 +52,7 @@ const resourcesPath = isPackaged
 const jrePath = path.join(resourcesPath, 'jre');
 const jarPath = path.join(resourcesPath, 'app.jar');
 const webappPath = path.join(resourcesPath, 'webapp');
-const appDataPath = path.join(app.getPath('appData'), 'JaguarClaw');
+const appDataPath = app.getPath('userData');
 
 const dataDir = path.join(appDataPath, 'data');
 const dbPath = path.join(appDataPath, 'jaguarclaw.db');
@@ -892,7 +903,7 @@ function createMainWindow(port) {
     height: 800,
     minWidth: 800,
     minHeight: 600,
-    title: 'JaguarClaw',
+    title: APP_DISPLAY_NAME,
     icon: path.join(resourcesPath, 'icon.png'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -1045,7 +1056,7 @@ ipcMain.handle('app:restart', async () => {
 });
 
 ipcMain.handle('app:getInfo', async () => ({
-  name: app.getName(),
+  name: APP_DISPLAY_NAME,
   version: app.getVersion(),
   paths: {
     appData: appDataPath,
@@ -1090,7 +1101,7 @@ app.whenReady().then(async () => {
     startupLogs = [];
 
     appendDesktopLog('info', 'Electron app is ready');
-    appendStartupLog('info', '=== JaguarClaw startup ===');
+    appendStartupLog('info', `=== ${APP_DISPLAY_NAME} startup ===`);
     appendStartupLog('info', `Log directory: ${logsDir}`);
     publishStartupStatus('Preparing startup environment...', 'prepare');
 
@@ -1161,7 +1172,7 @@ app.whenReady().then(async () => {
       // 健康检查超时，显示详细日志
       showStartupError(
         'Backend Failed to Start',
-        'The JaguarClaw backend service failed to start properly.',
+        `The ${APP_DISPLAY_NAME} backend service failed to start properly.`,
         err.message
       );
     } else if (err.message && err.message.includes('EADDRINUSE')) {
@@ -1175,7 +1186,7 @@ app.whenReady().then(async () => {
       // 其他错误
       showStartupError(
         'Startup Error',
-        'Failed to start JaguarClaw. Please check the logs for more details.',
+        `Failed to start ${APP_DISPLAY_NAME}. Please check the logs for more details.`,
         err.message || 'Unknown error'
       );
     }
