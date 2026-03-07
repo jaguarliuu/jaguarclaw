@@ -53,6 +53,7 @@ class SystemPromptFacetTest {
                 Optional.of(mcpPromptProvider),
                 soulConfigService,
                 Optional.empty(),
+                Optional.empty(),
                 Optional.empty()
         );
         ReflectionTestUtils.setField(builder, "workspace", "./workspace");

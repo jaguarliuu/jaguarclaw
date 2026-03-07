@@ -131,6 +131,7 @@ class SubagentSemanticCompatibilityTest {
                 Optional.empty(),
                 soulConfigService,
                 Optional.empty(),
+                Optional.empty(),
                 Optional.empty()
         );
         ReflectionTestUtils.setField(builder, "workspace", "./workspace");

@@ -1,5 +1,6 @@
 package com.jaguarliu.ai.runtime;
 
+import com.jaguarliu.ai.agents.context.AgentWorkspaceResolver;
 import com.jaguarliu.ai.mcp.prompt.McpPromptProvider;
 import com.jaguarliu.ai.memory.search.MemorySearchService;
 import com.jaguarliu.ai.skills.index.SkillIndexBuilder;
@@ -12,6 +13,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -41,6 +43,9 @@ class SystemPromptBuilderTest {
     @Mock
     private com.jaguarliu.ai.soul.SoulConfigService soulConfigService;
 
+    @Mock
+    private AgentWorkspaceResolver agentWorkspaceResolver;
+
     private SystemPromptBuilder builder;
 
     @BeforeEach
@@ -52,7 +57,8 @@ class SystemPromptBuilderTest {
                 Optional.of(mcpPromptProvider),
                 soulConfigService,
                 Optional.empty(),
-                Optional.empty()
+                Optional.empty(),
+                Optional.of(agentWorkspaceResolver)
         );
         ReflectionTestUtils.setField(builder, "workspace", "./workspace");
         ReflectionTestUtils.setField(builder, "customSystemPrompt", "");
@@ -68,6 +74,8 @@ class SystemPromptBuilderTest {
         lenient().when(skillIndexBuilder.buildIndex("main")).thenReturn("");
         lenient().when(skillIndexBuilder.buildCompactIndex("main")).thenReturn("");
         lenient().when(soulConfigService.extractAgentName(any())).thenReturn(null);
+        lenient().when(agentWorkspaceResolver.resolveAgentWorkspace(any())).thenAnswer(invocation ->
+                Path.of("/tmp/workspace-" + invocation.getArgument(0)).toAbsolutePath().normalize());
     }
 
     // ==================== Identity 和 Name Reminder 测试 ====================
@@ -130,6 +138,8 @@ class SystemPromptBuilderTest {
             when(toolRegistry.listDefinitions(any(ToolVisibilityResolver.VisibilityRequest.class))).thenReturn(List.of());
             when(skillIndexBuilder.buildIndex("main")).thenReturn("");
             lenient().when(soulConfigService.extractAgentName(any())).thenReturn(null);
+        lenient().when(agentWorkspaceResolver.resolveAgentWorkspace(any())).thenAnswer(invocation ->
+                Path.of("/tmp/workspace-" + invocation.getArgument(0)).toAbsolutePath().normalize());
 
             String full = builder.build(SystemPromptBuilder.PromptMode.FULL);
             String minimal = builder.build(SystemPromptBuilder.PromptMode.MINIMAL);
@@ -215,6 +225,33 @@ class SystemPromptBuilderTest {
             String result = builder.build(SystemPromptBuilder.PromptMode.MINIMAL);
 
             assertTrue(result.contains("## Workspace"));
+        }
+
+        @Test
+        @DisplayName("默认 build(agentId) 应使用 agent workspace resolver")
+        void usesAgentWorkspaceResolverForDefaultBuild() {
+            lenient().when(toolRegistry.listDefinitions()).thenReturn(List.of());
+            when(toolRegistry.listDefinitions(any(ToolVisibilityResolver.VisibilityRequest.class))).thenReturn(List.of());
+            when(agentWorkspaceResolver.resolveAgentWorkspace("agent-a"))
+                    .thenReturn(Path.of("/tmp/custom-agent-a-workspace").toAbsolutePath().normalize());
+
+            String result = builder.build(SystemPromptBuilder.PromptMode.MINIMAL, null, null, "agent-a");
+
+            assertTrue(result.contains("Working directory: `/tmp/custom-agent-a-workspace`"));
+        }
+
+        @Test
+        @DisplayName("workspace 段落应使用传入的 agent workspace，并要求 write_file 使用相对路径")
+        void usesResolvedAgentWorkspaceAndRelativePathGuidance() {
+            lenient().when(toolRegistry.listDefinitions()).thenReturn(List.of());
+            when(toolRegistry.listDefinitions(any(ToolVisibilityResolver.VisibilityRequest.class))).thenReturn(List.of());
+
+            Path agentWorkspace = Path.of("/tmp/agent-main-workspace").toAbsolutePath().normalize();
+            String result = builder.build(SystemPromptBuilder.PromptMode.MINIMAL, null, null, "main", agentWorkspace);
+
+            assertTrue(result.contains("Working directory: `" + agentWorkspace + "`"));
+            assertTrue(result.contains("Use relative paths with `write_file`"));
+            assertFalse(result.contains("unless specified otherwise"));
         }
 
         @Test

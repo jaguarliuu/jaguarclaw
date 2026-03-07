@@ -1,5 +1,6 @@
 package com.jaguarliu.ai.runtime;
 
+import com.jaguarliu.ai.agents.context.AgentWorkspaceResolver;
 import com.jaguarliu.ai.heartbeat.HeartbeatConfigService;
 import com.jaguarliu.ai.mcp.prompt.McpPromptProvider;
 import com.jaguarliu.ai.memory.search.MemorySearchService;
@@ -57,6 +58,7 @@ public class SystemPromptBuilder {
     private final SoulConfigService soulConfigService;
     private final Optional<HeartbeatConfigService> heartbeatConfigService;
     private final Optional<MemoryStore> memoryStore;
+    private final Optional<AgentWorkspaceResolver> agentWorkspaceResolver;
 
     @Value("${tools.workspace:./workspace}")
     private String workspace;
@@ -181,7 +183,8 @@ public class SystemPromptBuilder {
                                 Optional<McpPromptProvider> mcpPromptProvider,
                                 SoulConfigService soulConfigService,
                                 Optional<HeartbeatConfigService> heartbeatConfigService,
-                                Optional<MemoryStore> memoryStore) {
+                                Optional<MemoryStore> memoryStore,
+                                Optional<AgentWorkspaceResolver> agentWorkspaceResolver) {
         this.toolRegistry = toolRegistry;
         this.skillIndexBuilder = skillIndexBuilder;
         this.memorySearchService = memorySearchService;
@@ -189,6 +192,7 @@ public class SystemPromptBuilder {
         this.soulConfigService = soulConfigService;
         this.heartbeatConfigService = heartbeatConfigService;
         this.memoryStore = memoryStore;
+        this.agentWorkspaceResolver = agentWorkspaceResolver;
 
         this.kernelPromptFacet = new KernelPromptFacet();
         this.soulPromptFacet = new SoulPromptFacet(soulConfigService);
@@ -223,6 +227,14 @@ public class SystemPromptBuilder {
      * 构建系统提示（支持 agentId，用于多 Agent 作用域）
      */
     public String build(PromptMode mode, Set<String> allowedTools, Set<String> excludedMcpServers, String agentId) {
+        return build(mode, allowedTools, excludedMcpServers, agentId, resolveWorkspacePath(agentId));
+    }
+
+    public String build(PromptMode mode,
+                        Set<String> allowedTools,
+                        Set<String> excludedMcpServers,
+                        String agentId,
+                        Path sessionWorkspacePath) {
         if (mode == PromptMode.NONE) {
             String name = soulConfigService.extractAgentName(agentId);
             if (name != null && !name.isBlank()) {
@@ -248,7 +260,7 @@ public class SystemPromptBuilder {
         blocks.put("MEMORY", memoryPromptFacet.supports(context) ? memoryPromptFacet.render(context) : "");
         blocks.put("HEARTBEAT", mode == PromptMode.FULL ? buildHeartbeatSection(context.getAgentId()) : "");
         blocks.put("SKILLS", mode == PromptMode.FULL ? buildSkillsSection(context.getAgentId()) : "");
-        blocks.put("WORKSPACE", buildWorkspaceSection());
+        blocks.put("WORKSPACE", buildWorkspaceSection(sessionWorkspacePath));
         blocks.put("DATETIME", mode == PromptMode.FULL ? buildDateTimeSection() : "");
         blocks.put("RUNTIME", buildRuntimeSection(mode));
         blocks.put("MCP", mode == PromptMode.FULL ? buildMcpSection(excludedMcpServers) : "");
@@ -320,6 +332,13 @@ public class SystemPromptBuilder {
         return mcpAdditions.trim() + "\n\n";
     }
 
+    private Path resolveWorkspacePath(String agentId) {
+        if (agentWorkspaceResolver.isPresent()) {
+            return agentWorkspaceResolver.get().resolveAgentWorkspace(agentId);
+        }
+        return Path.of(workspace).toAbsolutePath().normalize();
+    }
+
     private String buildCustomSection() {
         if (customSystemPrompt == null || customSystemPrompt.isBlank()) {
             return "";
@@ -372,13 +391,15 @@ public class SystemPromptBuilder {
     /**
      * 构建工作目录段落
      */
-    private String buildWorkspaceSection() {
-        Path workspacePath = Path.of(workspace).toAbsolutePath().normalize();
+    private String buildWorkspaceSection(Path sessionWorkspacePath) {
+        Path workspacePath = sessionWorkspacePath == null
+                ? Path.of(workspace).toAbsolutePath().normalize()
+                : sessionWorkspacePath.toAbsolutePath().normalize();
 
         StringBuilder sb = new StringBuilder();
         sb.append("## Workspace\n\n");
         sb.append(String.format("Working directory: `%s`\n\n", workspacePath));
-        sb.append("File operations should be relative to this directory unless specified otherwise.\n\n");
+        sb.append("File operations should stay within this directory. Use relative paths with `write_file`; do not construct absolute paths.\n\n");
         return sb.toString();
     }
 
