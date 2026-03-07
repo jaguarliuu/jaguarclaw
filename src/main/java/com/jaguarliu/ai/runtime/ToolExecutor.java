@@ -18,6 +18,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CancellationException;
@@ -134,7 +135,7 @@ public class ToolExecutor {
                         false,
                         rejectResult.getContent()));
 
-                return new ToolExecutionResult(callId, rejectResult);
+                return new ToolExecutionResult(callId, rejectResult, inferFailureCategory(rejectResult));
             }
 
             // 如果用户修改了参数，使用修改后的参数
@@ -187,7 +188,7 @@ public class ToolExecutor {
         log.info("Tool executed: name={}, success={}, runId={}",
                 toolName, result.isSuccess(), context.getRunId());
 
-        return new ToolExecutionResult(callId, result);
+        return new ToolExecutionResult(callId, result, inferFailureCategory(result));
     }
 
     private Set<String> resolveConfirmBefore(RunContext context) {
@@ -275,6 +276,32 @@ public class ToolExecutor {
     /**
      * 工具执行结果
      */
-    public record ToolExecutionResult(String callId, ToolResult result) {
+    private String inferFailureCategory(ToolResult result) {
+        if (result == null || result.isSuccess() || result.getContent() == null) {
+            return null;
+        }
+        String normalized = result.getContent().toLowerCase(Locale.ROOT);
+        if (normalized.contains("command not found")
+                || normalized.contains("not installed")
+                || normalized.contains("missing ")
+                || normalized.contains("permission denied")
+                || normalized.contains("login required")) {
+            return "environment_missing";
+        }
+        if (normalized.contains("paid plan")
+                || normalized.contains("subscription")
+                || normalized.contains("requires payment")) {
+            return "user_decision_required";
+        }
+        if (normalized.contains(HITL_REJECTED_MARKER.toLowerCase(Locale.ROOT))) {
+            return "hitl_rejected";
+        }
+        return "tool_error";
+    }
+
+    public record ToolExecutionResult(String callId, ToolResult result, String failureCategory) {
+        public ToolExecutionResult(String callId, ToolResult result) {
+            this(callId, result, null);
+        }
     }
 }

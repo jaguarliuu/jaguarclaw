@@ -117,7 +117,7 @@
 在调研中，`ralph-loop-agent` 提供了非常重要的启发。其核心思想不是让 Agent 一直循环，而是：
 
 - 在普通工具循环之外再包一层**外部验证循环**；
-- 由外部 `verifyCompletion` 判断任务是否真正完成；
+- 由外部 `TaskVerifier` / `VerificationResult` 判断任务是否真正完成；
 - 使用迭代次数、token、成本等预算控制外层循环；
 - 当验证失败时，将失败原因反馈给下一轮，而不是盲重试。
 
@@ -132,7 +132,7 @@
 它非常适合解决以下问题：
 
 - 遇到依赖缺失、结果未达标、目标文件未生成时，不能只听模型说“已经完成”；
-- 需要引入 `maxTokens`、`maxCost` 之类的预算，而不只是 `maxSteps`；
+- 需要引入 `maxTokens`、`maxCostUsd`、`maxRepeatedFailures` 之类的预算，而不只是 `maxSteps`；
 - 需要在长任务中对历史上下文进行压缩与重建，而不是简单累加。
 
 ### 4.2 Ralph 不能单独解决的问题
@@ -226,7 +226,7 @@ flowchart TD
     P -->|需用户确认| O4[Outcome: blocked_pending_user_decision]
     P -->|不值得继续| O5[Outcome: not_worth_continuing]
 
-    T --> L[Loop Supervisor\nRalphized Outer Loop]
+    T --> L[LoopOrchestrator\nRalphized Outer Loop]
     L --> E[Executor\nReAct Tool Loop]
     E --> V[Verifier\n外部验证 / 质量检查 / 前提回检]
     V -->|完成| O1[Outcome: completed]
@@ -392,7 +392,7 @@ flowchart TD
 除现有 `maxSteps` 之外，至少再增加：
 
 - `maxTokens`
-- `maxCost`
+- `maxCostUsd`
 - `maxRepeatedFailures`
 - `maxLowProgressRounds`
 - `maxEnvironmentRepairAttempts`
@@ -523,10 +523,10 @@ flowchart TD
 ```mermaid
 flowchart LR
     A[AgentRuntime] --> B[Policy Supervisor]
-    A --> C[Loop Supervisor]
+    A --> C[LoopOrchestrator]
     C --> D[ReAct Executor]
     C --> E[Verifier]
-    C --> F[Outcome Resolver]
+    C --> F[StopDecision / RunOutcome]
 
     G[RunContext] --> B
     G --> C
@@ -542,6 +542,8 @@ flowchart LR
 ```
 
 ### 12.3 关键职责调整
+
+> 结合当前实现，`RunOutcome`、`PolicySupervisor`、`TaskVerifier`、`StopDecision` 与 `run.outcome` 事件已具备落地点；`LoopState` 仍作为兼容层保留。
 
 - `AgentRuntime`
   - 从“直接驱动 ReAct 全循环”变成总编排入口。
@@ -561,8 +563,8 @@ flowchart LR
 - 新增 `TaskVerifier`
   - 负责结构化完成判断。
 
-- 新增 `OutcomeResolver`
-  - 负责把运行态转成可返回给用户的结果类型。
+- 新增 `StopDecision` 与 `RUN_OUTCOME` 事件
+  - 前者负责把预算与止损条件变成结构化停止判断，后者负责把最终结果发布给 UI 与自动化链路。
 
 ---
 
@@ -621,9 +623,9 @@ flowchart LR
 
 目标：把停止从“靠感觉”变成“靠外部验证与预算”。
 
-- 引入 `TaskCompletion` / `verifyCompletion`
-- 增加 `maxTokens` / `maxCost` / `maxRepeatedFailures`
-- 支持失败反馈注入
+- 引入 `TaskVerifier` / `VerificationResult`
+- 增加 `maxTokens` / `maxCostUsd` / `maxRepeatedFailures` / `maxLowProgressRounds`
+- 通过 `StopDecision` 与失败分类反馈注入约束下一轮
 
 ### Phase 3：引入 Policy / Supervisor
 

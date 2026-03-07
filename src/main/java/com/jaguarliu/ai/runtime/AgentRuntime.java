@@ -67,6 +67,8 @@ public class AgentRuntime {
     private final ToolExecutor toolExecutor;
     private final SkillActivator skillActivator;
     private final SubagentBarrier subagentBarrier;
+    private final TaskVerifier taskVerifier;
+    private final PolicySupervisor policySupervisor;
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
@@ -80,7 +82,7 @@ public class AgentRuntime {
         context.setOriginalInput(originalInput);
         cancellationManager.register(runId);
 
-        return executeLoopWithContext(context, messages);
+        return executeLoopWithContext(context, messages, originalInput);
     }
 
     /**
@@ -90,6 +92,13 @@ public class AgentRuntime {
                                           String originalInput) throws TimeoutException {
         if (originalInput != null) {
             context.setOriginalInput(originalInput);
+            PolicyDecision decision = policySupervisor.evaluate(originalInput, List.of());
+            context.setTaskContract(decision.contract());
+            if (decision.outcome() != null && !decision.enterHeavyLoop()) {
+                context.setOutcome(decision.outcome());
+                publishOutcomeEvent(context, decision.outcome(), "policy_gate");
+                return renderOutcomeMessage(decision.outcome());
+            }
         }
         return executeLoopWithContext(context, messages);
     }
@@ -117,22 +126,29 @@ public class AgentRuntime {
         List<String> pendingSubRunIds = new ArrayList<>();
 
         while (true) {
-            // 使用 LoopOrchestrator 检查循环状态
-            LoopOrchestrator.LoopState loopState = loopOrchestrator.checkLoopState(context);
-            if (!loopState.shouldContinue()) {
-                if (loopState.isCancelled()) {
+            StopDecision stopDecision = loopOrchestrator.checkStopDecision(context);
+            if (stopDecision.stop()) {
+                if (stopDecision.isCancelled()) {
                     throw new CancellationException("Run cancelled by user");
                 }
-                if (loopState.isTimeout()) {
+                if (stopDecision.isTimeout()) {
                     throw new TimeoutException("ReAct loop timeout after " +
                             context.getElapsedSeconds() + " seconds");
                 }
-                // max steps - 继续执行最后一步获取总结
-                log.warn("Loop reached max steps: runId={}, maxSteps={}",
-                        context.getRunId(), context.getConfig().getMaxSteps());
-                StepResult finalResult = executeSingleStep(context, messages);
-                messages.add(LlmRequest.Message.assistant(finalResult.content()));
-                return finalResult.content();
+                if (stopDecision.isMaxSteps()) {
+                    log.warn("Loop reached max steps: runId={}, maxSteps={}",
+                            context.getRunId(), context.getConfig().getMaxSteps());
+                    StepResult finalResult = executeSingleStep(context, messages);
+                    messages.add(LlmRequest.Message.assistant(finalResult.content()));
+                    VerificationResult verification = resolveVerifier(context)
+                            .verify(context, finalResult.content(), List.of());
+                    return resolveVerificationResult(context, verification, finalResult.content());
+                }
+                if (stopDecision.outcome() != null) {
+                    context.setOutcome(stopDecision.outcome());
+                    loopOrchestrator.publishStopDecision(context, stopDecision);
+                    return renderOutcomeMessage(stopDecision.outcome());
+                }
             }
 
             // Pre-compaction flush
@@ -159,11 +175,12 @@ public class AgentRuntime {
                     continue;
                 }
 
-                // 正常结束
                 messages.add(LlmRequest.Message.assistant(result.content()));
+                VerificationResult verification = resolveVerifier(context)
+                        .verify(context, result.content(), List.of());
                 log.info("Loop completed normally: runId={}, steps={}",
                         context.getRunId(), context.getCurrentStep());
-                return result.content();
+                return resolveVerificationResult(context, verification, result.content());
             }
 
             // 有 tool_calls，使用 ToolExecutor 执行
@@ -260,9 +277,81 @@ public class AgentRuntime {
                 return stopMessage;
             }
 
-            // 增加步数并发布事件
+            recordToolRoundProgress(context, toolResults);
+            List<String> observations = toolResults.stream()
+                    .map(execResult -> execResult.result().getContent())
+                    .filter(content -> content != null && !content.isBlank())
+                    .toList();
+            VerificationResult verification = resolveVerifier(context)
+                    .verify(context, null, observations);
+            if (verification.terminal()) {
+                return resolveVerificationResult(context, verification, verification.feedback());
+            }
+            if (verification.feedback() != null && !verification.feedback().isBlank()) {
+                messages.add(LlmRequest.Message.user(verification.feedback()));
+            }
+
             loopOrchestrator.incrementStepAndPublish(context);
         }
+    }
+
+    TaskVerifier resolveVerifier(RunContext context) {
+        return context.getTaskVerifier() != null ? context.getTaskVerifier() : taskVerifier;
+    }
+
+    String resolveVerificationResult(RunContext context, VerificationResult verification, String fallbackMessage) {
+        if (verification == null) {
+            return fallbackMessage;
+        }
+        if (verification.failureCategory() != null) {
+            context.recordFailure(verification.failureCategory());
+        } else if (verification.terminal()) {
+            context.recordMeaningfulProgress();
+        }
+        if (verification.outcome() != null) {
+            context.setOutcome(verification.outcome());
+            publishOutcomeEvent(context, verification.outcome(),
+                    verification.failureCategory() != null ? verification.failureCategory() : "verifier");
+            return renderOutcomeMessage(verification.outcome());
+        }
+        return fallbackMessage;
+    }
+
+    void recordToolRoundProgress(RunContext context, List<ToolExecutor.ToolExecutionResult> toolResults) {
+        boolean hasSuccess = toolResults.stream().anyMatch(result -> result.result() != null && result.result().isSuccess());
+        if (hasSuccess) {
+            context.recordMeaningfulProgress();
+            return;
+        }
+        context.recordLowProgressRound();
+        toolResults.stream()
+                .map(ToolExecutor.ToolExecutionResult::failureCategory)
+                .filter(category -> category != null && !category.isBlank())
+                .forEach(context::recordFailure);
+    }
+
+    private void publishOutcomeEvent(RunContext context, RunOutcome outcome, String reason) {
+        if (outcome == null) {
+            return;
+        }
+        eventBus.publish(AgentEvent.runOutcome(
+                context.getConnectionId(),
+                context.getRunId(),
+                outcome.status().name(),
+                reason,
+                context.getCurrentStep(),
+                context.getTotalTokens()
+        ));
+    }
+
+    private String renderOutcomeMessage(RunOutcome outcome) {
+        if (outcome == null) {
+            return null;
+        }
+        if (outcome.detail() != null && !outcome.detail().isBlank()) {
+            return outcome.detail();
+        }
+        return outcome.message();
     }
 
     /**
