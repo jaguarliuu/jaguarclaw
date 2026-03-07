@@ -142,4 +142,42 @@ class RunContextTest {
         assertTrue(ctx.hasOutcome());
         assertEquals(RunOutcomeStatus.BLOCKED_BY_ENVIRONMENT, ctx.getOutcome().status());
     }
+
+    @Test
+    @DisplayName("Should track repeated failures and low progress rounds")
+    void shouldTrackRepeatedFailuresAndLowProgressRounds() {
+        RunContext ctx = RunContext.create(
+                "r1", "c1", "s1",
+                LoopConfig.builder()
+                        .maxRepeatedFailures(2)
+                        .maxLowProgressRounds(2)
+                        .build(),
+                new CancellationManager()
+        );
+
+        ctx.recordFailure("environment_missing");
+        ctx.recordFailure("environment_missing");
+        ctx.recordLowProgressRound();
+        ctx.recordLowProgressRound();
+
+        assertTrue(ctx.isRepeatedFailureLimitReached());
+        assertTrue(ctx.isLowProgressLimitReached());
+    }
+
+    @Test
+    @DisplayName("Should detect token budget exhaustion")
+    void shouldDetectTokenBudgetExhaustion() {
+        RunContext ctx = RunContext.create(
+                "r1", "c1", "s1",
+                LoopConfig.builder().maxTokens(120).build(),
+                new CancellationManager()
+        );
+
+        ctx.addUsage(LlmResponse.Usage.builder()
+                .promptTokens(100)
+                .completionTokens(30)
+                .build());
+
+        assertTrue(ctx.isTokenBudgetReached());
+    }
 }
