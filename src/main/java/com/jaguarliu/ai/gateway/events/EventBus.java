@@ -41,8 +41,10 @@ public class EventBus {
      * 发布事件
      */
     public void publish(AgentEvent event) {
-        log.debug("Publishing event: type={}, runId={}, connectionId={}",
-                event.getType(), event.getRunId(), event.getConnectionId());
+        if (shouldLogEvent(event)) {
+            log.info("Publishing event: type={}, runId={}, connectionId={}",
+                    event.getType().getValue(), event.getRunId(), event.getConnectionId());
+        }
 
         // 直接推送到对应的 WebSocket 连接
         pushToConnection(event);
@@ -50,6 +52,35 @@ public class EventBus {
         // 同时发布到全局流（供其他订阅者使用）
         // 使用 busyLooping 策略处理多线程并发 emit（subagent 并行场景）
         sink.emitNext(event, RETRY_NON_SERIALIZED);
+    }
+
+    boolean shouldLogEvent(AgentEvent event) {
+        if (event == null || event.getType() == null) {
+            return false;
+        }
+        return switch (event.getType()) {
+            case LIFECYCLE_START,
+                 LIFECYCLE_END,
+                 LIFECYCLE_ERROR,
+                 STEP_COMPLETED,
+                 TOOL_CALL,
+                 TOOL_RESULT,
+                 TOOL_CONFIRM_REQUEST,
+                 SKILL_ACTIVATED,
+                 SUBAGENT_SPAWNED,
+                 SUBAGENT_STARTED,
+                 SUBAGENT_ANNOUNCED,
+                 SUBAGENT_FAILED,
+                 FILE_CREATED,
+                 RUN_OUTCOME -> true;
+            case ASSISTANT_DELTA,
+                 SESSION_RENAMED,
+                 ARTIFACT_OPEN,
+                 ARTIFACT_DELTA,
+                 HEARTBEAT_NOTIFY,
+                 TOKEN_USAGE,
+                 CONTEXT_COMPACTED -> false;
+        };
     }
 
     /**

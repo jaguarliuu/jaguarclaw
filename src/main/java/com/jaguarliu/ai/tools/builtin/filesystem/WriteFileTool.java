@@ -69,7 +69,8 @@ public class WriteFileTool implements Tool {
                 // 安全检查：写入只允许在 workspace 内（skill 资源目录只允许读取，不允许写入）
                 if (!filePath.startsWith(workspacePath)) {
                     log.warn("Write path traversal attempt: {}", pathStr);
-                    return ToolResult.error("Access denied: write only allowed within workspace");
+                    return ToolResult.error("Access denied: write only allowed within workspace. Attempted: "
+                            + filePath + ". Allowed workspace: " + workspacePath);
                 }
 
                 // 检查内容大小
