@@ -188,6 +188,9 @@ public class RunContext {
     @Setter
     private RunOutcome outcome;
 
+    @Setter
+    private TaskVerifier taskVerifier;
+
     /**
      * Skill 激活计数器（skillName -> count）（线程安全）
      */
