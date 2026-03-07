@@ -1,9 +1,10 @@
 package com.jaguarliu.ai.runtime;
 
 import com.jaguarliu.ai.llm.model.LlmResponse;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
@@ -42,7 +43,6 @@ class RunContextTest {
     @Test
     @DisplayName("Should reach limit after 3 activations")
     void testActivationLimit() {
-        // 激活 3 次
         context.incrementSkillActivation("skill_a");
         context.incrementSkillActivation("skill_a");
         int thirdCount = context.incrementSkillActivation("skill_a");
@@ -58,10 +58,7 @@ class RunContextTest {
         context.incrementSkillActivation("skill_a");
         context.incrementSkillActivation("skill_a");
 
-        // skill_a 达到限制
         assertTrue(context.isSkillActivationLimitReached("skill_a"));
-
-        // skill_b 未达到限制
         assertFalse(context.isSkillActivationLimitReached("skill_b"));
         assertEquals(1, context.incrementSkillActivation("skill_b"));
     }
@@ -69,12 +66,10 @@ class RunContextTest {
     @Test
     @DisplayName("Should not exceed limit even with more activations")
     void testExceedLimit() {
-        // 激活 5 次
         for (int i = 0; i < 5; i++) {
             context.incrementSkillActivation("skill_a");
         }
 
-        // 仍然显示达到限制
         assertTrue(context.isSkillActivationLimitReached("skill_a"));
     }
 
@@ -131,5 +126,20 @@ class RunContextTest {
         assertEquals(50, ctx.getTotalOutputTokens());
         assertEquals(0, ctx.getTotalCacheReadTokens());
         assertEquals(150, ctx.getTotalTokens());
+    }
+
+    @Test
+    @DisplayName("Should store terminal outcome in RunContext")
+    void shouldStoreTerminalOutcomeInRunContext() {
+        RunContext ctx = RunContext.create(
+                "r1", "c1", "s1",
+                LoopConfig.builder().build(),
+                new CancellationManager()
+        );
+
+        ctx.setOutcome(RunOutcome.blockedByEnvironment("missing wkhtmltopdf"));
+
+        assertTrue(ctx.hasOutcome());
+        assertEquals(RunOutcomeStatus.BLOCKED_BY_ENVIRONMENT, ctx.getOutcome().status());
     }
 }

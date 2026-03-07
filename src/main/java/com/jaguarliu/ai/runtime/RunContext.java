@@ -170,6 +170,12 @@ public class RunContext {
     private String latestAssistantDraft;
 
     /**
+     * 当前运行的结构化结果（如果已终止）。
+     */
+    @Setter
+    private RunOutcome outcome;
+
+    /**
      * Skill 激活计数器（skillName -> count）（线程安全）
      */
     @Builder.Default
@@ -264,6 +270,10 @@ public class RunContext {
 
     public int getTotalTokens() {
         return totalInputTokens.get() + totalOutputTokens.get();
+    }
+
+    public boolean hasOutcome() {
+        return outcome != null;
     }
 
     /**
