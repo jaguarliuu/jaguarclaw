@@ -64,6 +64,7 @@ public class AgentEvent {
         HEARTBEAT_NOTIFY("heartbeat.notify"),
         // Token 监控事件
         TOKEN_USAGE("token.usage"),
+        RUN_OUTCOME("run.outcome"),
         // P2 扩展占位：上下文压缩通知
         CONTEXT_COMPACTED("context.compacted");
 
@@ -268,6 +269,17 @@ public class AgentEvent {
                 .build();
     }
 
+    public static AgentEvent runOutcome(String connectionId, String runId,
+                                        String status, String reason,
+                                        int step, int totalTokens) {
+        return AgentEvent.builder()
+                .type(EventType.RUN_OUTCOME)
+                .connectionId(connectionId)
+                .runId(runId)
+                .data(new RunOutcomeData(status, reason, step, totalTokens))
+                .build();
+    }
+
     @Data
     @AllArgsConstructor
     public static class DeltaData {
@@ -466,6 +478,15 @@ public class AgentEvent {
         private int cacheReadTokens;
         private int historyMessages;
         private int step;
+    }
+
+    @Data
+    @AllArgsConstructor
+    public static class RunOutcomeData {
+        private String status;
+        private String reason;
+        private int step;
+        private int totalTokens;
     }
 
 }

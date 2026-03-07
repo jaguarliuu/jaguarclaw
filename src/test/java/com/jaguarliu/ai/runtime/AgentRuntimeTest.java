@@ -1,5 +1,6 @@
 package com.jaguarliu.ai.runtime;
 
+import com.jaguarliu.ai.gateway.events.AgentEvent;
 import com.jaguarliu.ai.gateway.events.EventBus;
 import com.jaguarliu.ai.llm.LlmClient;
 import com.jaguarliu.ai.llm.model.LlmChunk;
@@ -16,6 +17,7 @@ import com.jaguarliu.ai.tools.ToolVisibilityResolver;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import reactor.core.publisher.Flux;
@@ -29,7 +31,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -50,7 +53,7 @@ class AgentRuntimeTest {
     @Mock private SkillActivator skillActivator;
     @Mock private SubagentBarrier subagentBarrier;
     @Mock private TaskVerifier taskVerifier;
-     private PolicySupervisor policySupervisor;
+    @Mock private PolicySupervisor policySupervisor;
 
     @Test
     @DisplayName("should detect HITL rejection marker from tool result")
@@ -115,6 +118,14 @@ class AgentRuntimeTest {
         assertTrue(result.contains("wkhtmltopdf"));
         assertTrue(context.hasOutcome());
         assertEquals(RunOutcomeStatus.BLOCKED_BY_ENVIRONMENT, context.getOutcome().status());
+
+        ArgumentCaptor<AgentEvent> captor = ArgumentCaptor.forClass(AgentEvent.class);
+        verify(eventBus, atLeastOnce()).publish(captor.capture());
+        boolean found = captor.getAllValues().stream()
+                .anyMatch(event -> event.getType() == AgentEvent.EventType.RUN_OUTCOME
+                        && ((AgentEvent.RunOutcomeData) event.getData()).getStatus()
+                        .equals(RunOutcomeStatus.BLOCKED_BY_ENVIRONMENT.name()));
+        assertTrue(found);
     }
 
     @Test
@@ -141,7 +152,40 @@ class AgentRuntimeTest {
         assertTrue(context.isLowProgressLimitReached());
     }
 
+    @Test
+    @DisplayName("should publish stop reason when budget is exceeded")
+    void shouldPublishStopReasonWhenBudgetIsExceeded() throws Exception {
+        LoopOrchestrator realLoopOrchestrator = new LoopOrchestrator(eventBus);
+        AgentRuntime runtime = createRuntime(realLoopOrchestrator);
+        RunContext context = RunContext.create(
+                "run-2", "conn-2", "session-2",
+                LoopConfig.builder().maxRepeatedFailures(2).build(),
+                new CancellationManager()
+        );
+        context.recordFailure("environment_missing");
+        context.recordFailure("environment_missing");
+
+        String result = runtime.executeLoopWithContext(context,
+                new ArrayList<>(List.of(LlmRequest.Message.user("导出 PDF"))));
+
+        assertTrue(result.contains("Repeated failure") || result.contains("environment"));
+
+        ArgumentCaptor<AgentEvent> captor = ArgumentCaptor.forClass(AgentEvent.class);
+        verify(eventBus, atLeastOnce()).publish(captor.capture());
+        AgentEvent outcomeEvent = captor.getAllValues().stream()
+                .filter(event -> event.getType() == AgentEvent.EventType.RUN_OUTCOME)
+                .findFirst()
+                .orElseThrow();
+        AgentEvent.RunOutcomeData data = (AgentEvent.RunOutcomeData) outcomeEvent.getData();
+        assertEquals(RunOutcomeStatus.NOT_WORTH_CONTINUING.name(), data.getStatus());
+        assertEquals("repeated_failures", data.getReason());
+    }
+
     private AgentRuntime createRuntime() {
+        return createRuntime(loopOrchestrator);
+    }
+
+    private AgentRuntime createRuntime(LoopOrchestrator orchestrator) {
         return new AgentRuntime(
                 llmClient,
                 toolRegistry,
@@ -154,7 +198,7 @@ class AgentRuntimeTest {
                 flushHook,
                 subagentCompletionTracker,
                 sessionFileService,
-                loopOrchestrator,
+                orchestrator,
                 toolExecutor,
                 skillActivator,
                 subagentBarrier,

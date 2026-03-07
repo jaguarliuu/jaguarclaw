@@ -114,6 +114,20 @@ public class LoopOrchestrator {
         publishStepEvent(context);
     }
 
+    public void publishStopDecision(RunContext context, StopDecision decision) {
+        if (decision == null || decision.outcome() == null) {
+            return;
+        }
+        eventBus.publish(AgentEvent.runOutcome(
+                context.getConnectionId(),
+                context.getRunId(),
+                decision.outcome().status().name(),
+                decision.reason(),
+                context.getCurrentStep(),
+                context.getTotalTokens()
+        ));
+    }
+
     public LoopState checkAndIncrement(RunContext context) {
         LoopState state = checkLoopState(context);
         if (state.shouldContinue()) {

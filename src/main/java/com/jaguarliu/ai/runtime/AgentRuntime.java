@@ -82,7 +82,7 @@ public class AgentRuntime {
         context.setOriginalInput(originalInput);
         cancellationManager.register(runId);
 
-        return executeLoopWithContext(context, messages);
+        return executeLoopWithContext(context, messages, originalInput);
     }
 
     /**
@@ -96,6 +96,7 @@ public class AgentRuntime {
             context.setTaskContract(decision.contract());
             if (decision.outcome() != null && !decision.enterHeavyLoop()) {
                 context.setOutcome(decision.outcome());
+                publishOutcomeEvent(context, decision.outcome(), "policy_gate");
                 return renderOutcomeMessage(decision.outcome());
             }
         }
@@ -145,6 +146,7 @@ public class AgentRuntime {
                 }
                 if (stopDecision.outcome() != null) {
                     context.setOutcome(stopDecision.outcome());
+                    loopOrchestrator.publishStopDecision(context, stopDecision);
                     return renderOutcomeMessage(stopDecision.outcome());
                 }
             }
@@ -308,6 +310,8 @@ public class AgentRuntime {
         }
         if (verification.outcome() != null) {
             context.setOutcome(verification.outcome());
+            publishOutcomeEvent(context, verification.outcome(),
+                    verification.failureCategory() != null ? verification.failureCategory() : "verifier");
             return renderOutcomeMessage(verification.outcome());
         }
         return fallbackMessage;
@@ -324,6 +328,20 @@ public class AgentRuntime {
                 .map(ToolExecutor.ToolExecutionResult::failureCategory)
                 .filter(category -> category != null && !category.isBlank())
                 .forEach(context::recordFailure);
+    }
+
+    private void publishOutcomeEvent(RunContext context, RunOutcome outcome, String reason) {
+        if (outcome == null) {
+            return;
+        }
+        eventBus.publish(AgentEvent.runOutcome(
+                context.getConnectionId(),
+                context.getRunId(),
+                outcome.status().name(),
+                reason,
+                context.getCurrentStep(),
+                context.getTotalTokens()
+        ));
     }
 
     private String renderOutcomeMessage(RunOutcome outcome) {
