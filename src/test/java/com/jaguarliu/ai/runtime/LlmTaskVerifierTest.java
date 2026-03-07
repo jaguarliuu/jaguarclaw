@@ -1,6 +1,6 @@
 package com.jaguarliu.ai.runtime;
 
-import com.jaguarliu.ai.llm.LlmClient;
+import com.jaguarliu.ai.llm.StructuredOutputExecutor;
 import com.jaguarliu.ai.llm.model.StructuredLlmResult;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -23,14 +23,14 @@ import static org.mockito.Mockito.when;
 class LlmTaskVerifierTest {
 
     @Mock
-    private LlmClient llmClient;
+    private StructuredOutputExecutor structuredOutputExecutor;
 
     private LlmTaskVerifier verifier;
     private RunContext context;
 
     @BeforeEach
     void setUp() {
-        verifier = new LlmTaskVerifier(llmClient);
+        verifier = new LlmTaskVerifier(structuredOutputExecutor);
         context = RunContext.create(
                 "run-1", "conn-1", "session-1",
                 LoopConfig.builder().build(),
@@ -42,7 +42,7 @@ class LlmTaskVerifierTest {
     @Test
     @DisplayName("should map structured LLM decision to blocked by environment")
     void shouldMapStructuredDecisionToBlockedByEnvironment() {
-        when(llmClient.structured(any(), eq(VerifierDecision.class))).thenReturn(
+        when(structuredOutputExecutor.execute(any(), eq(VerifierDecision.class))).thenReturn(
                 StructuredLlmResult.<VerifierDecision>builder()
                         .value(VerifierDecision.builder()
                                 .terminal(true)
@@ -70,7 +70,7 @@ class LlmTaskVerifierTest {
     @Test
     @DisplayName("should map structured LLM decision to blocked pending user decision")
     void shouldMapStructuredDecisionToBlockedPendingUserDecision() {
-        when(llmClient.structured(any(), eq(VerifierDecision.class))).thenReturn(
+        when(structuredOutputExecutor.execute(any(), eq(VerifierDecision.class))).thenReturn(
                 StructuredLlmResult.<VerifierDecision>builder()
                         .value(VerifierDecision.builder()
                                 .terminal(true)
@@ -97,7 +97,7 @@ class LlmTaskVerifierTest {
     @Test
     @DisplayName("should degrade to continue when provider or parsing fails")
     void shouldDegradeToContinueWhenProviderFails() {
-        when(llmClient.structured(any(), eq(VerifierDecision.class)))
+        when(structuredOutputExecutor.execute(any(), eq(VerifierDecision.class)))
                 .thenThrow(new RuntimeException("provider unavailable"));
 
         VerificationResult result = verifier.verify(context, null, List.of("tool failed"));

@@ -1,6 +1,6 @@
 package com.jaguarliu.ai.runtime;
 
-import com.jaguarliu.ai.llm.LlmClient;
+import com.jaguarliu.ai.llm.StructuredOutputExecutor;
 import com.jaguarliu.ai.llm.model.LlmRequest;
 import com.jaguarliu.ai.llm.model.StructuredLlmResult;
 import com.jaguarliu.ai.llm.model.StructuredOutputSpec;
@@ -25,7 +25,7 @@ public class LlmTaskVerifier implements TaskVerifier {
 
     private static final Map<String, Object> VERIFIER_DECISION_SCHEMA = buildSchema();
 
-    private final LlmClient llmClient;
+    private final StructuredOutputExecutor structuredOutputExecutor;
 
     @Override
     public VerificationResult verify(RunContext context, String assistantReply, List<String> observations) {
@@ -36,7 +36,7 @@ public class LlmTaskVerifier implements TaskVerifier {
         }
 
         try {
-            StructuredLlmResult<VerifierDecision> result = llmClient.structured(
+            StructuredLlmResult<VerifierDecision> result = structuredOutputExecutor.execute(
                     buildVerifierRequest(context, assistantReply, observations),
                     VerifierDecision.class
             );
