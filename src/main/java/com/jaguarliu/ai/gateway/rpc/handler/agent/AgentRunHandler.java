@@ -258,7 +258,7 @@ public class AgentRunHandler implements RpcHandler {
                     routingDecision.getRouteMode(), routingDecision.getComplexity(), runId, routingDecision.getReason());
 
             String response = switch (routingDecision.getRouteMode()) {
-                case CHAT, DIRECT -> executeDirectRoute(historyMessages, prompt, run.getAgentId(), modelSelection);
+                case CHAT, DIRECT -> executeDirectRoute(connectionId, runId, historyMessages, prompt, run.getAgentId(), modelSelection);
                 case LIGHT -> {
                     ContextBuilder.SkillAwareRequest request = contextBuilder.buildForPolicyDecision(
                             historyMessages, prompt, true, TaskComplexity.LIGHT, run.getAgentId());
@@ -348,7 +348,9 @@ public class AgentRunHandler implements RpcHandler {
         }
     }
 
-    private String executeDirectRoute(List<LlmRequest.Message> historyMessages,
+    private String executeDirectRoute(String connectionId,
+                                      String runId,
+                                      List<LlmRequest.Message> historyMessages,
                                       String prompt,
                                       String agentId,
                                       String modelSelection) {
@@ -356,7 +358,26 @@ public class AgentRunHandler implements RpcHandler {
                 historyMessages, prompt, false, TaskComplexity.DIRECT, agentId);
         applyConversationModelSelection(request.request(), modelSelection);
         LlmResponse response = llmClient.chat(request.request());
-        return response.getContent();
+        String content = response.getContent() != null ? response.getContent() : "";
+
+        if (!content.isBlank()) {
+            eventBus.publish(AgentEvent.assistantDelta(connectionId, runId, content));
+        }
+
+        if (response.getUsage() != null) {
+            int historyCount = (int) request.request().getMessages().stream()
+                    .filter(message -> !"system".equals(message.getRole()))
+                    .count() - 1;
+            eventBus.publish(AgentEvent.tokenUsage(
+                    connectionId,
+                    runId,
+                    response.getUsage(),
+                    Math.max(0, historyCount),
+                    1
+            ));
+        }
+
+        return content;
     }
 
     private RunContext buildRoutedContext(RunEntity run,

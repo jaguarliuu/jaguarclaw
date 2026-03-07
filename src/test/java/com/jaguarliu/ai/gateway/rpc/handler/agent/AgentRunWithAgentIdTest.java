@@ -1,6 +1,7 @@
 package com.jaguarliu.ai.gateway.rpc.handler.agent;
 
 import com.jaguarliu.ai.agents.context.AgentWorkspaceResolver;
+import com.jaguarliu.ai.gateway.events.AgentEvent;
 import com.jaguarliu.ai.gateway.events.EventBus;
 import com.jaguarliu.ai.gateway.rpc.handler.session.SessionCreateHandler;
 import com.jaguarliu.ai.gateway.rpc.model.RpcRequest;
@@ -55,6 +56,7 @@ import java.util.function.Supplier;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -446,6 +448,13 @@ class AgentRunWithAgentIdTest {
             verify(strategyResolver, org.mockito.Mockito.never()).resolve(any());
             verify(agentRuntime, org.mockito.Mockito.never()).executeLoopWithContext(any(RunContext.class), anyList(), anyString());
             verify(messageService).saveAssistantMessage("session-chat", "run-chat", "hello there", PRINCIPAL_ID);
+
+            ArgumentCaptor<AgentEvent> eventCaptor = ArgumentCaptor.forClass(AgentEvent.class);
+            verify(eventBus, org.mockito.Mockito.atLeast(2)).publish(eventCaptor.capture());
+            assertTrue(eventCaptor.getAllValues().stream().anyMatch(event ->
+                    event.getType() == AgentEvent.EventType.ASSISTANT_DELTA
+                            && event.getData() instanceof AgentEvent.DeltaData delta
+                            && "hello there".equals(delta.getContent())));
         }
 
         @Test
