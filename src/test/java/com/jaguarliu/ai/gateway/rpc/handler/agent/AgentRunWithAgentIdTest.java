@@ -11,6 +11,8 @@ import com.jaguarliu.ai.gateway.ws.ConnectionManager;
 import com.jaguarliu.ai.llm.LlmCapabilityService;
 import com.jaguarliu.ai.llm.LlmClient;
 import com.jaguarliu.ai.llm.LlmProperties;
+import com.jaguarliu.ai.llm.model.LlmRequest;
+import com.jaguarliu.ai.llm.model.LlmResponse;
 import com.jaguarliu.ai.nodeconsole.AuditLogService;
 import com.jaguarliu.ai.runtime.AgentRuntime;
 import com.jaguarliu.ai.runtime.CancellationManager;
@@ -19,6 +21,10 @@ import com.jaguarliu.ai.runtime.ContextBuilder;
 import com.jaguarliu.ai.runtime.LoopConfig;
 import com.jaguarliu.ai.runtime.RunContext;
 import com.jaguarliu.ai.runtime.SessionLaneManager;
+import com.jaguarliu.ai.runtime.TaskComplexity;
+import com.jaguarliu.ai.runtime.TaskRouteMode;
+import com.jaguarliu.ai.runtime.TaskRouter;
+import com.jaguarliu.ai.runtime.TaskRoutingDecision;
 import com.jaguarliu.ai.runtime.strategy.AgentExecutionPlan;
 import com.jaguarliu.ai.runtime.strategy.AgentStrategy;
 import com.jaguarliu.ai.runtime.strategy.AgentStrategyResolver;
@@ -50,6 +56,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -97,6 +104,8 @@ class AgentRunWithAgentIdTest {
     private CancellationManager cancellationManager;
     @Mock
     private ChatRouter chatRouter;
+    @Mock
+    private TaskRouter taskRouter;
     @Mock
     private ConnectionManager connectionManager;
     @Mock
@@ -288,7 +297,7 @@ class AgentRunWithAgentIdTest {
                     .build());
             when(messageService.getSessionHistory(eq("session-mm"), anyInt(), eq(PRINCIPAL_ID)))
                     .thenReturn(List.of());
-            when(agentRuntime.executeLoopWithContext(any(RunContext.class), anyList(), eq("describe this image")))
+            when(agentRuntime.executeLoopWithContext(any(RunContext.class), anyList()))
                     .thenReturn("answer");
             when(sessionLaneManager.submit(eq("session-mm"), eq("run-mm"), eq(9L), any(Supplier.class)))
                     .thenAnswer(invocation -> {
@@ -319,7 +328,7 @@ class AgentRunWithAgentIdTest {
 
             @SuppressWarnings("unchecked")
             ArgumentCaptor<List<com.jaguarliu.ai.llm.model.LlmRequest.Message>> messagesCaptor = ArgumentCaptor.forClass(List.class);
-            verify(agentRuntime).executeLoopWithContext(any(RunContext.class), messagesCaptor.capture(), eq("describe this image"));
+            verify(agentRuntime).executeLoopWithContext(any(RunContext.class), messagesCaptor.capture());
 
             List<com.jaguarliu.ai.llm.model.LlmRequest.Message> messages = messagesCaptor.getValue();
             com.jaguarliu.ai.llm.model.LlmRequest.Message userMessage = messages.get(messages.size() - 1);
@@ -367,7 +376,7 @@ class AgentRunWithAgentIdTest {
                     .build());
             when(messageService.getSessionHistory(eq("session-ctx"), anyInt(), eq(PRINCIPAL_ID)))
                     .thenReturn(List.of());
-            when(agentRuntime.executeLoopWithContext(any(RunContext.class), anyList(), eq("hello")))
+            when(agentRuntime.executeLoopWithContext(any(RunContext.class), anyList()))
                     .thenReturn("answer");
             when(sessionLaneManager.submit(eq("session-ctx"), eq("run-ctx"), eq(10L), any(Supplier.class)))
                     .thenAnswer(invocation -> {
@@ -388,8 +397,102 @@ class AgentRunWithAgentIdTest {
             assertNull(response.getError());
 
             ArgumentCaptor<RunContext> contextCaptor = ArgumentCaptor.forClass(RunContext.class);
-            verify(agentRuntime).executeLoopWithContext(contextCaptor.capture(), anyList(), eq("hello"));
+            verify(agentRuntime).executeLoopWithContext(contextCaptor.capture(), anyList());
             assertEquals("coder", contextCaptor.getValue().getAgentId());
+        }
+
+        @Test
+        void chatRouteShouldBypassStrategyAndRuntime() throws Exception {
+            AgentRunHandler handler = newAgentRunHandler();
+            mockCommonRunPrerequisites();
+
+            when(sessionService.get("session-chat", PRINCIPAL_ID))
+                    .thenReturn(Optional.of(sessionEntity("session-chat", "Chat", "coder")));
+            when(sessionLaneManager.nextSequence("session-chat")).thenReturn(12L);
+            when(runService.create("session-chat", "hi", "coder", PRINCIPAL_ID))
+                    .thenReturn(runEntity("run-chat", "session-chat", "coder", "hi"));
+            when(messageService.getSessionHistory(eq("session-chat"), anyInt(), eq(PRINCIPAL_ID)))
+                    .thenReturn(List.of());
+            when(taskRouter.route(eq("hi"), anyList(), eq(false), nullable(String.class)))
+                    .thenReturn(TaskRoutingDecision.builder()
+                            .routeMode(TaskRouteMode.CHAT)
+                            .complexity(TaskComplexity.DIRECT)
+                            .shouldUseTools(false)
+                            .shouldUseStrategy(false)
+                            .reason("greeting")
+                            .build());
+            when(contextBuilder.buildForPolicyDecision(anyList(), eq("hi"), eq(false), eq(TaskComplexity.DIRECT), eq("coder")))
+                    .thenReturn(new ContextBuilder.SkillAwareRequest(
+                            LlmRequest.builder().messages(List.of(LlmRequest.Message.system("minimal"), LlmRequest.Message.user("hi"))).build(),
+                            null, null, null, null
+                    ));
+            when(llmClient.chat(any())).thenReturn(LlmResponse.builder().content("hello there").build());
+            when(sessionLaneManager.submit(eq("session-chat"), eq("run-chat"), eq(12L), any(Supplier.class)))
+                    .thenAnswer(invocation -> {
+                        @SuppressWarnings("unchecked")
+                        Supplier<Object> task = (Supplier<Object>) invocation.getArgument(3);
+                        task.get();
+                        return Mono.empty();
+                    });
+
+            RpcResponse response = handler.handle(CONNECTION_ID, RpcRequest.builder()
+                    .id("7")
+                    .method("agent.run")
+                    .payload(Map.of("sessionId", "session-chat", "prompt", "hi"))
+                    .build()).block();
+
+            assertNotNull(response);
+            assertNull(response.getError());
+            verify(strategyResolver, org.mockito.Mockito.never()).resolve(any());
+            verify(agentRuntime, org.mockito.Mockito.never()).executeLoopWithContext(any(RunContext.class), anyList(), anyString());
+            verify(messageService).saveAssistantMessage("session-chat", "run-chat", "hello there", PRINCIPAL_ID);
+        }
+
+        @Test
+        void lightRouteShouldUseLightRuntimePathWithoutStrategyPlan() throws Exception {
+            AgentRunHandler handler = newAgentRunHandler();
+            mockCommonRunPrerequisites();
+
+            when(sessionService.get("session-light", PRINCIPAL_ID))
+                    .thenReturn(Optional.of(sessionEntity("session-light", "Light", "coder")));
+            when(sessionLaneManager.nextSequence("session-light")).thenReturn(13L);
+            when(runService.create("session-light", "read this file", "coder", PRINCIPAL_ID))
+                    .thenReturn(runEntity("run-light", "session-light", "coder", "read this file"));
+            when(messageService.getSessionHistory(eq("session-light"), anyInt(), eq(PRINCIPAL_ID)))
+                    .thenReturn(List.of());
+            when(taskRouter.route(eq("read this file"), anyList(), eq(false), nullable(String.class)))
+                    .thenReturn(TaskRoutingDecision.builder()
+                            .routeMode(TaskRouteMode.LIGHT)
+                            .complexity(TaskComplexity.LIGHT)
+                            .shouldUseTools(true)
+                            .shouldUseStrategy(false)
+                            .reason("small task")
+                            .build());
+            when(contextBuilder.buildForPolicyDecision(anyList(), eq("read this file"), eq(true), eq(TaskComplexity.LIGHT), eq("coder")))
+                    .thenReturn(new ContextBuilder.SkillAwareRequest(
+                            LlmRequest.builder().messages(List.of(LlmRequest.Message.system("minimal"), LlmRequest.Message.user("read this file"))).build(),
+                            null, null, null, null
+                    ));
+            when(agentRuntime.executeLoopWithContext(any(RunContext.class), anyList()))
+                    .thenReturn("light result");
+            when(sessionLaneManager.submit(eq("session-light"), eq("run-light"), eq(13L), any(Supplier.class)))
+                    .thenAnswer(invocation -> {
+                        @SuppressWarnings("unchecked")
+                        Supplier<Object> task = (Supplier<Object>) invocation.getArgument(3);
+                        task.get();
+                        return Mono.empty();
+                    });
+
+            RpcResponse response = handler.handle(CONNECTION_ID, RpcRequest.builder()
+                    .id("8")
+                    .method("agent.run")
+                    .payload(Map.of("sessionId", "session-light", "prompt", "read this file"))
+                    .build()).block();
+
+            assertNotNull(response);
+            assertNull(response.getError());
+            verify(strategyResolver, org.mockito.Mockito.never()).resolve(any());
+            verify(agentRuntime).executeLoopWithContext(any(RunContext.class), anyList());
         }
 
         @Test
@@ -411,7 +514,7 @@ class AgentRunWithAgentIdTest {
                     .build());
             when(messageService.getSessionHistory(eq("session-cancel"), anyInt(), eq(PRINCIPAL_ID)))
                     .thenReturn(List.of());
-            when(agentRuntime.executeLoopWithContext(any(RunContext.class), anyList(), eq("hello")))
+            when(agentRuntime.executeLoopWithContext(any(RunContext.class), anyList()))
                     .thenThrow(new CancellationException("Run cancelled by user"));
             when(sessionLaneManager.submit(eq("session-cancel"), eq("run-cancel"), eq(11L), any(Supplier.class)))
                     .thenAnswer(invocation -> {
@@ -457,6 +560,7 @@ class AgentRunWithAgentIdTest {
                 loopConfig,
                 cancellationManager,
                 chatRouter,
+                taskRouter,
                 connectionManager,
                 tokenBudgetService,
                 auditLogService
@@ -480,6 +584,14 @@ class AgentRunWithAgentIdTest {
                             : sessionAgentId != null && !sessionAgentId.isBlank() ? sessionAgentId : "main";
                     return new ChatRouter.RouteDecision(resolvedAgentId, prompt, null, false);
                 });
+        lenient().when(taskRouter.route(anyString(), anyList(), anyBoolean(), nullable(String.class)))
+                .thenReturn(TaskRoutingDecision.builder()
+                        .routeMode(TaskRouteMode.HEAVY)
+                        .complexity(TaskComplexity.HEAVY)
+                        .shouldUseTools(true)
+                        .shouldUseStrategy(true)
+                        .reason("default")
+                        .build());
     }
 
     private SessionEntity sessionEntity(String id, String name, String agentId) {

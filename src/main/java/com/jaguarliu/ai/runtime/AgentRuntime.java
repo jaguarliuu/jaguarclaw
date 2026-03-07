@@ -92,12 +92,14 @@ public class AgentRuntime {
                                           String originalInput) throws TimeoutException {
         if (originalInput != null) {
             context.setOriginalInput(originalInput);
-            PolicyDecision decision = policySupervisor.evaluate(originalInput, List.of());
-            context.setTaskContract(decision.contract());
-            if (decision.outcome() != null && !decision.enterHeavyLoop()) {
-                context.setOutcome(decision.outcome());
-                publishOutcomeEvent(context, decision.outcome(), "policy_gate");
-                return renderOutcomeMessage(decision.outcome());
+            if (context.getTaskContract() == null) {
+                PolicyDecision decision = policySupervisor.evaluate(originalInput, List.of());
+                context.setTaskContract(decision.contract());
+                if (decision.outcome() != null && !decision.enterHeavyLoop()) {
+                    context.setOutcome(decision.outcome());
+                    publishOutcomeEvent(context, decision.outcome(), "policy_gate");
+                    return renderOutcomeMessage(decision.outcome());
+                }
             }
         }
         return executeLoopWithContext(context, messages);
