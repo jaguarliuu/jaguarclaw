@@ -2,49 +2,42 @@ package com.jaguarliu.ai.runtime;
 
 import org.springframework.stereotype.Component;
 
+import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 
 /**
- * 默认运行时验证器，优先处理显式终态与常见环境阻塞。
+ * 默认运行时验证器，只保留高置信度规则。
  */
 @Component
 public class DefaultTaskVerifier implements TaskVerifier {
 
     @Override
     public VerificationResult verify(RunContext context, String assistantReply, List<String> observations) {
+        List<String> signals = new ArrayList<>();
+        if (observations != null) {
+            signals.addAll(observations);
+        }
         if (assistantReply != null && !assistantReply.isBlank()) {
-            return VerificationResult.completed(assistantReply);
+            signals.add(assistantReply);
         }
 
-        if (observations != null) {
-            for (String observation : observations) {
-                if (observation == null || observation.isBlank()) {
-                    continue;
-                }
-                String normalized = observation.toLowerCase(Locale.ROOT);
-                if (normalized.contains("command not found")
-                        || normalized.contains("not installed")
-                        || normalized.contains("missing ")
-                        || normalized.contains("permission denied")
-                        || normalized.contains("login required")) {
-                    return VerificationResult.terminal(
-                            RunOutcome.blockedByEnvironment(observation),
-                            "environment_missing"
-                    );
-                }
-                if (normalized.contains("paid plan")
-                        || normalized.contains("subscription")
-                        || normalized.contains("requires payment")) {
-                    return VerificationResult.terminal(
-                            new RunOutcome(
-                                    RunOutcomeStatus.BLOCKED_PENDING_USER_DECISION,
-                                    "Task requires user decision",
-                                    observation
-                            ),
-                            "user_decision_required"
-                    );
-                }
+        for (String signal : signals) {
+            String category = RuntimeFailureClassifier.inferFailureCategory(signal);
+            if ("environment_missing".equals(category)) {
+                return VerificationResult.terminal(
+                        RunOutcome.blockedByEnvironment(signal),
+                        category
+                );
+            }
+            if ("user_decision_required".equals(category)) {
+                return VerificationResult.terminal(
+                        new RunOutcome(
+                                RunOutcomeStatus.BLOCKED_PENDING_USER_DECISION,
+                                "Task requires user decision",
+                                signal
+                        ),
+                        category
+                );
             }
         }
 

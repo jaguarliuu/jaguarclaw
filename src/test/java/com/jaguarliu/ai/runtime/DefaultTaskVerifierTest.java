@@ -27,14 +27,12 @@ class DefaultTaskVerifierTest {
     }
 
     @Test
-    @DisplayName("should return completed when assistant reply is final")
-    void shouldReturnCompletedWhenAssistantReplyIsFinal() {
+    @DisplayName("should not auto complete only because assistant replied")
+    void shouldNotAutoCompleteOnlyBecauseAssistantReplied() {
         VerificationResult result = verifier.verify(context, "Here is the answer", List.of());
 
-        assertTrue(result.terminal());
-        assertFalse(result.continueLoop());
-        assertEquals(RunOutcomeStatus.COMPLETED, result.outcome().status());
-        assertEquals("Here is the answer", result.outcome().message());
+        assertFalse(result.terminal());
+        assertTrue(result.continueLoop());
     }
 
     @Test
@@ -47,6 +45,26 @@ class DefaultTaskVerifierTest {
         assertFalse(result.continueLoop());
         assertEquals(RunOutcomeStatus.BLOCKED_BY_ENVIRONMENT, result.outcome().status());
         assertEquals("environment_missing", result.failureCategory());
+    }
+
+    @Test
+    @DisplayName("should return blocked by environment for localized windows errors")
+    void shouldReturnBlockedByEnvironmentForLocalizedWindowsErrors() {
+        VerificationResult result = verifier.verify(context, null,
+                List.of("'wkhtmltopdf' 不是内部或外部命令，也不是可运行的程序"));
+
+        assertTrue(result.terminal());
+        assertEquals(RunOutcomeStatus.BLOCKED_BY_ENVIRONMENT, result.outcome().status());
+    }
+
+    @Test
+    @DisplayName("should return blocked by environment for missing file signals")
+    void shouldReturnBlockedByEnvironmentForMissingFileSignals() {
+        VerificationResult result = verifier.verify(context, null,
+                List.of("Error: File not found: README.md"));
+
+        assertTrue(result.terminal());
+        assertEquals(RunOutcomeStatus.BLOCKED_BY_ENVIRONMENT, result.outcome().status());
     }
 
     @Test

@@ -281,22 +281,11 @@ public class ToolExecutor {
             return null;
         }
         String normalized = result.getContent().toLowerCase(Locale.ROOT);
-        if (normalized.contains("command not found")
-                || normalized.contains("not installed")
-                || normalized.contains("missing ")
-                || normalized.contains("permission denied")
-                || normalized.contains("login required")) {
-            return "environment_missing";
-        }
-        if (normalized.contains("paid plan")
-                || normalized.contains("subscription")
-                || normalized.contains("requires payment")) {
-            return "user_decision_required";
-        }
         if (normalized.contains(HITL_REJECTED_MARKER.toLowerCase(Locale.ROOT))) {
             return "hitl_rejected";
         }
-        return "tool_error";
+        String category = RuntimeFailureClassifier.inferFailureCategory(result.getContent());
+        return category != null ? category : "tool_error";
     }
 
     public record ToolExecutionResult(String callId, ToolResult result, String failureCategory) {
