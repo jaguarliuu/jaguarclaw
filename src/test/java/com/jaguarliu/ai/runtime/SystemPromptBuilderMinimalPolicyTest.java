@@ -37,6 +37,7 @@ class SystemPromptBuilderMinimalPolicyTest {
                 Optional.<McpPromptProvider>empty(),
                 soulConfigService,
                 Optional.<HeartbeatConfigService>empty(),
+                Optional.empty(),
                 Optional.empty()
         );
 
