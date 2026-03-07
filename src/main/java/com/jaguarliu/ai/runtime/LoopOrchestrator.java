@@ -21,42 +21,80 @@ public class LoopOrchestrator {
 
     private final EventBus eventBus;
 
-    /**
-     * 执行循环状态检查
-     *
-     * @param context 运行上下文
-     * @return 循环状态（是否应该继续 + 原因）
-     */
-    public LoopState checkLoopState(RunContext context) {
-        // 检查取消
+    public StopDecision checkStopDecision(RunContext context) {
         if (context.isAborted()) {
             log.info("Loop aborted by cancellation: runId={}, step={}",
                     context.getRunId(), context.getCurrentStep());
-            return LoopState.cancelled();
+            return StopDecision.cancelled();
         }
 
-        // 检查超时
         if (context.isTimedOut()) {
             log.warn("Loop timed out: runId={}, elapsed={}s, limit={}s",
                     context.getRunId(), context.getElapsedSeconds(),
                     context.getConfig().getRunTimeoutSeconds());
-            return LoopState.timeout();
+            return StopDecision.timeout();
         }
 
-        // 检查步数
         if (context.isMaxStepsReached()) {
             log.warn("Loop reached max steps: runId={}, maxSteps={}",
                     context.getRunId(), context.getConfig().getMaxSteps());
-            return LoopState.maxSteps();
+            return StopDecision.maxSteps();
         }
 
-        return LoopState.continue_();
+        if (context.isRepeatedFailureLimitReached()) {
+            ProgressSnapshot snapshot = context.snapshotProgress();
+            log.warn("Loop stopped by repeated failures: runId={}, category={}, count={}",
+                    context.getRunId(), snapshot.lastFailureCategory(), snapshot.repeatedFailureCount());
+            return StopDecision.notWorthContinuing(
+                    "Repeated failure category: " + snapshot.lastFailureCategory(),
+                    "repeated_failures"
+            );
+        }
+
+        if (context.isLowProgressLimitReached()) {
+            ProgressSnapshot snapshot = context.snapshotProgress();
+            log.warn("Loop stopped by low progress: runId={}, rounds={}",
+                    context.getRunId(), snapshot.lowProgressRounds());
+            return StopDecision.notWorthContinuing(
+                    "Low progress rounds: " + snapshot.lowProgressRounds(),
+                    "low_progress"
+            );
+        }
+
+        if (context.isTokenBudgetReached()) {
+            log.warn("Loop stopped by token budget: runId={}, totalTokens={}, budget={}",
+                    context.getRunId(), context.getTotalTokens(), context.getConfig().getMaxTokens());
+            return StopDecision.notWorthContinuing(
+                    "Token budget exceeded: " + context.getTotalTokens(),
+                    "token_budget"
+            );
+        }
+
+        return StopDecision.continueLoop();
+    }
+
+    /**
+     * 执行循环状态检查
+     */
+    public LoopState checkLoopState(RunContext context) {
+        StopDecision decision = checkStopDecision(context);
+        if (!decision.stop()) {
+            return LoopState.continue_();
+        }
+        if (decision.isCancelled()) {
+            return LoopState.cancelled();
+        }
+        if (decision.isTimeout()) {
+            return LoopState.timeout();
+        }
+        if (decision.isMaxSteps()) {
+            return LoopState.maxSteps();
+        }
+        return LoopState.stopped(decision.reason());
     }
 
     /**
      * 发布步骤完成事件
-     *
-     * @param context 运行上下文
      */
     public void publishStepEvent(RunContext context) {
         eventBus.publish(AgentEvent.stepCompleted(
@@ -71,22 +109,11 @@ public class LoopOrchestrator {
                 context.getConfig().getMaxSteps());
     }
 
-    /**
-     * 增加步数并发布事件
-     *
-     * @param context 运行上下文
-     */
     public void incrementStepAndPublish(RunContext context) {
         context.incrementStep();
         publishStepEvent(context);
     }
 
-    /**
-     * 检查是否应该继续循环（带步数增加）
-     *
-     * @param context 运行上下文
-     * @return 循环状态
-     */
     public LoopState checkAndIncrement(RunContext context) {
         LoopState state = checkLoopState(context);
         if (state.shouldContinue()) {
@@ -95,9 +122,6 @@ public class LoopOrchestrator {
         return state;
     }
 
-    /**
-     * 循环状态
-     */
     public record LoopState(boolean shouldContinue, String reason) {
 
         private static final String CONTINUE = "continue";
@@ -121,6 +145,10 @@ public class LoopOrchestrator {
             return new LoopState(false, MAX_STEPS);
         }
 
+        public static LoopState stopped(String reason) {
+            return new LoopState(false, reason);
+        }
+
         public boolean isCancelled() {
             return CANCELLED.equals(reason);
         }
@@ -133,9 +161,6 @@ public class LoopOrchestrator {
             return MAX_STEPS.equals(reason);
         }
 
-        /**
-         * 获取用户友好的状态描述
-         */
         public String getDescription() {
             if (shouldContinue) {
                 return "继续执行";
@@ -144,7 +169,7 @@ public class LoopOrchestrator {
                 case CANCELLED -> "用户取消";
                 case TIMEOUT -> "执行超时";
                 case MAX_STEPS -> "达到最大步数";
-                default -> "未知原因: " + reason;
+                default -> "停止执行: " + reason;
             };
         }
     }
