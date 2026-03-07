@@ -9,6 +9,7 @@ import com.jaguarliu.ai.llm.model.LlmChunk;
 import com.jaguarliu.ai.llm.model.LlmProviderConfig;
 import com.jaguarliu.ai.llm.model.LlmRequest;
 import com.jaguarliu.ai.llm.model.LlmResponse;
+import com.jaguarliu.ai.llm.model.StructuredLlmResult;
 import com.jaguarliu.ai.llm.model.ToolCall;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
@@ -39,10 +40,18 @@ public class OpenAiCompatibleLlmClient implements LlmClient {
     private final LlmProperties properties;
     private final ConcurrentHashMap<String, WebClient> clientCache = new ConcurrentHashMap<>();
     private final ObjectMapper objectMapper;
+    private final StructuredOutputService structuredOutputService;
 
     public OpenAiCompatibleLlmClient(LlmProperties properties, ObjectMapper objectMapper) {
+        this(properties, objectMapper, new StructuredOutputService());
+    }
+
+    public OpenAiCompatibleLlmClient(LlmProperties properties,
+                                     ObjectMapper objectMapper,
+                                     StructuredOutputService structuredOutputService) {
         this.properties = properties;
         this.objectMapper = objectMapper;
+        this.structuredOutputService = structuredOutputService;
 
         // 初始化所有已配置的 Provider 的 WebClient
         if (properties.getProviders() != null && !properties.getProviders().isEmpty()) {
@@ -147,6 +156,66 @@ public class OpenAiCompatibleLlmClient implements LlmClient {
             return endpoint;
         }
         return endpoint + "/v1";
+    }
+
+    @Override
+    public <T> StructuredLlmResult<T> structured(LlmRequest request, Class<T> responseType) {
+        try {
+            LlmResponse response = chat(request);
+            T value = structuredOutputService.parse(response.getContent(), responseType);
+            return StructuredLlmResult.<T>builder()
+                    .value(value)
+                    .rawText(response.getContent())
+                    .nativeStructuredOutput(true)
+                    .fallbackUsed(false)
+                    .build();
+        } catch (Exception primaryFailure) {
+            if (request.getStructuredOutput() == null
+                    || !Boolean.TRUE.equals(request.getStructuredOutput().getFallbackToPromptJson())) {
+                throw primaryFailure;
+            }
+            LlmRequest fallbackRequest = buildPromptJsonFallbackRequest(request);
+            LlmResponse fallbackResponse = chat(fallbackRequest);
+            T value = structuredOutputService.parse(fallbackResponse.getContent(), responseType);
+            return StructuredLlmResult.<T>builder()
+                    .value(value)
+                    .rawText(fallbackResponse.getContent())
+                    .nativeStructuredOutput(false)
+                    .fallbackUsed(true)
+                    .build();
+        }
+    }
+
+    LlmRequest buildPromptJsonFallbackRequest(LlmRequest request) {
+        List<LlmRequest.Message> fallbackMessages = new ArrayList<>();
+        fallbackMessages.add(LlmRequest.Message.system(buildPromptJsonFallbackInstruction(request)));
+        if (request.getMessages() != null && !request.getMessages().isEmpty()) {
+            fallbackMessages.addAll(request.getMessages());
+        }
+
+        return LlmRequest.builder()
+                .messages(fallbackMessages)
+                .model(request.getModel())
+                .temperature(request.getTemperature())
+                .maxTokens(request.getMaxTokens())
+                .stream(request.getStream())
+                .tools(request.getTools())
+                .toolChoice(request.getToolChoice())
+                .providerId(request.getProviderId())
+                .structuredOutput(null)
+                .build();
+    }
+
+    private String buildPromptJsonFallbackInstruction(LlmRequest request) {
+        String schema = "{}";
+        if (request.getStructuredOutput() != null && request.getStructuredOutput().getJsonSchema() != null) {
+            try {
+                schema = objectMapper.writeValueAsString(request.getStructuredOutput().getJsonSchema());
+            } catch (JsonProcessingException e) {
+                log.warn("Failed to serialize structured output schema for prompt fallback", e);
+            }
+        }
+        return "Return valid JSON only. Do not include markdown fences or explanation. JSON schema: " + schema;
     }
 
     @Override
@@ -388,6 +457,17 @@ public class OpenAiCompatibleLlmClient implements LlmClient {
         if (request.getTools() != null && !request.getTools().isEmpty()) {
             builder.tools(request.getTools());
             builder.toolChoice(request.getToolChoice() != null ? request.getToolChoice() : "auto");
+        }
+
+        if (request.getStructuredOutput() != null && request.getStructuredOutput().getJsonSchema() != null) {
+            builder.responseFormat(Map.of(
+                    "type", "json_schema",
+                    "json_schema", Map.of(
+                            "name", request.getStructuredOutput().getName() != null ? request.getStructuredOutput().getName() : "structured_output",
+                            "schema", request.getStructuredOutput().getJsonSchema(),
+                            "strict", request.getStructuredOutput().getStrict() != null ? request.getStructuredOutput().getStrict() : Boolean.TRUE
+                    )
+            ));
         }
 
         return builder.build();
@@ -639,6 +719,8 @@ public class OpenAiCompatibleLlmClient implements LlmClient {
         private List<Map<String, Object>> tools;
         @JsonProperty("tool_choice")
         private String toolChoice;
+        @JsonProperty("response_format")
+        private Map<String, Object> responseFormat;
     }
 
     @Data

@@ -3,6 +3,7 @@ package com.jaguarliu.ai.llm;
 import com.jaguarliu.ai.llm.model.LlmChunk;
 import com.jaguarliu.ai.llm.model.LlmRequest;
 import com.jaguarliu.ai.llm.model.LlmResponse;
+import com.jaguarliu.ai.llm.model.StructuredLlmResult;
 import reactor.core.publisher.Flux;
 
 /**
@@ -19,4 +20,9 @@ public interface LlmClient {
      * 流式调用 LLM
      */
     Flux<LlmChunk> stream(LlmRequest request);
+
+    /**
+     * 结构化输出调用。
+     */
+    <T> StructuredLlmResult<T> structured(LlmRequest request, Class<T> responseType);
 }
