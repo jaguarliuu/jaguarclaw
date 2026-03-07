@@ -59,6 +59,11 @@ public class LlmRequest {
      */
     private String providerId;
 
+    /**
+     * 结构化输出要求（可选）
+     */
+    private StructuredOutputSpec structuredOutput;
+
     @Data
     @NoArgsConstructor
     @AllArgsConstructor

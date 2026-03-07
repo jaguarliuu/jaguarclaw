@@ -111,4 +111,35 @@ class ToolExecutorTest {
 
         assertEquals("environment_missing", results.get(0).failureCategory());
     }
+
+    @Test
+    @DisplayName("localized windows tool errors should be tagged as environment missing")
+    void localizedWindowsToolErrorsShouldBeTaggedAsEnvironmentMissing() {
+        RunContext context = RunContext.create(
+                "run-1",
+                "conn-1",
+                "session-1",
+                new LoopConfig(),
+                new CancellationManager()
+        );
+
+        ToolCall call = ToolCall.builder()
+                .id("call-3")
+                .function(ToolCall.FunctionCall.builder()
+                        .name("bash")
+                        .arguments("{\"command\":\"wkhtmltopdf --version\"}")
+                        .build())
+                .build();
+
+        when(agentWorkspaceResolver.resolveAgentWorkspace(anyString())).thenReturn(Path.of("."));
+        when(toolDispatcher.requiresHitl(anyString(), any(), anyMap())).thenReturn(false);
+        when(toolDispatcher.dispatch(anyString(), anyMap(), any()))
+                .thenReturn(Mono.just(com.jaguarliu.ai.tools.ToolResult.error(
+                        "'wkhtmltopdf' 不是内部或外部命令，也不是可运行的程序或批处理文件。"
+                )));
+
+        List<ToolExecutor.ToolExecutionResult> results = toolExecutor.executeToolCalls(context, List.of(call));
+
+        assertEquals("environment_missing", results.get(0).failureCategory());
+    }
 }

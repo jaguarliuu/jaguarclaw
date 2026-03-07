@@ -32,6 +32,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -54,6 +55,7 @@ class AgentRuntimeTest {
     @Mock private SubagentBarrier subagentBarrier;
     @Mock private TaskVerifier taskVerifier;
     @Mock private PolicySupervisor policySupervisor;
+    @Mock private LlmTaskVerifier llmTaskVerifier;
 
     @Test
     @DisplayName("should detect HITL rejection marker from tool result")
@@ -129,6 +131,53 @@ class AgentRuntimeTest {
     }
 
     @Test
+    @DisplayName("should surface README missing as blocked by environment through composite verifier")
+    void shouldSurfaceReadmeMissingAsBlockedByEnvironmentThroughCompositeVerifier() throws Exception {
+        TaskVerifier compositeVerifier = new CompositeTaskVerifier(new DefaultTaskVerifier(), llmTaskVerifier);
+        AgentRuntime runtime = createRuntime(compositeVerifier);
+        RunContext context = RunContext.create(
+                "run-3", "conn-3", "session-3",
+                LoopConfig.builder().build(),
+                new CancellationManager()
+        );
+        context.setOriginalInput("请用 wkhtmltopdf 把 README.md 导出成 PDF");
+
+        ToolCall toolCall = ToolCall.builder()
+                .id("call-3")
+                .function(ToolCall.FunctionCall.builder()
+                        .name("read_file")
+                        .arguments("{\"path\":\"README.md\"}")
+                        .build())
+                .build();
+
+        when(loopOrchestrator.checkStopDecision(any())).thenReturn(StopDecision.continueLoop());
+        when(toolRegistry.toOpenAiTools(any(ToolVisibilityResolver.VisibilityRequest.class))).thenReturn(List.of());
+        when(toolRegistry.listVisibleToolNames(any())).thenReturn(Set.of("read_file"));
+        when(llmClient.stream(any())).thenReturn(Flux.just(LlmChunk.builder()
+                .toolCalls(List.of(toolCall))
+                .usage(LlmResponse.Usage.builder().promptTokens(10).completionTokens(5).build())
+                .done(true)
+                .build()));
+        when(skillActivator.detectToolActivation(any(), any())).thenReturn(Optional.empty());
+        when(toolExecutor.executeToolCalls(any(), any())).thenReturn(List.of(
+                new ToolExecutor.ToolExecutionResult(
+                        "call-3",
+                        ToolResult.error("Error: File not found: README.md"),
+                        "tool_error"
+                )
+        ));
+        when(flushHook.checkAndFlush(any(), any())).thenReturn(false);
+
+        String result = runtime.executeLoopWithContext(context,
+                new ArrayList<>(List.of(LlmRequest.Message.user("请用 wkhtmltopdf 把 README.md 导出成 PDF"))));
+
+        assertTrue(result.contains("README.md"));
+        assertTrue(context.hasOutcome());
+        assertEquals(RunOutcomeStatus.BLOCKED_BY_ENVIRONMENT, context.getOutcome().status());
+        verify(llmTaskVerifier, never()).verify(any(), any(), any());
+    }
+
+    @Test
     @DisplayName("should record low progress after repeated no-op tool rounds")
     void shouldRecordLowProgressAfterRepeatedNoOpToolRounds() {
         AgentRuntime runtime = createRuntime();
@@ -156,7 +205,7 @@ class AgentRuntimeTest {
     @DisplayName("should publish stop reason when budget is exceeded")
     void shouldPublishStopReasonWhenBudgetIsExceeded() throws Exception {
         LoopOrchestrator realLoopOrchestrator = new LoopOrchestrator(eventBus);
-        AgentRuntime runtime = createRuntime(realLoopOrchestrator);
+        AgentRuntime runtime = createRuntime(taskVerifier, realLoopOrchestrator);
         RunContext context = RunContext.create(
                 "run-2", "conn-2", "session-2",
                 LoopConfig.builder().maxRepeatedFailures(2).build(),
@@ -182,10 +231,14 @@ class AgentRuntimeTest {
     }
 
     private AgentRuntime createRuntime() {
-        return createRuntime(loopOrchestrator);
+        return createRuntime(taskVerifier, loopOrchestrator);
     }
 
-    private AgentRuntime createRuntime(LoopOrchestrator orchestrator) {
+    private AgentRuntime createRuntime(TaskVerifier verifier) {
+        return createRuntime(verifier, loopOrchestrator);
+    }
+
+    private AgentRuntime createRuntime(TaskVerifier verifier, LoopOrchestrator orchestrator) {
         return new AgentRuntime(
                 llmClient,
                 toolRegistry,
@@ -202,7 +255,7 @@ class AgentRuntimeTest {
                 toolExecutor,
                 skillActivator,
                 subagentBarrier,
-                taskVerifier,
+                verifier,
                 policySupervisor
         );
     }

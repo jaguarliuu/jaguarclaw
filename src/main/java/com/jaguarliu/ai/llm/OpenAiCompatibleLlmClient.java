@@ -39,7 +39,6 @@ public class OpenAiCompatibleLlmClient implements LlmClient {
     private final LlmProperties properties;
     private final ConcurrentHashMap<String, WebClient> clientCache = new ConcurrentHashMap<>();
     private final ObjectMapper objectMapper;
-
     public OpenAiCompatibleLlmClient(LlmProperties properties, ObjectMapper objectMapper) {
         this.properties = properties;
         this.objectMapper = objectMapper;
@@ -390,6 +389,17 @@ public class OpenAiCompatibleLlmClient implements LlmClient {
             builder.toolChoice(request.getToolChoice() != null ? request.getToolChoice() : "auto");
         }
 
+        if (request.getStructuredOutput() != null && request.getStructuredOutput().getJsonSchema() != null) {
+            builder.responseFormat(Map.of(
+                    "type", "json_schema",
+                    "json_schema", Map.of(
+                            "name", request.getStructuredOutput().getName() != null ? request.getStructuredOutput().getName() : "structured_output",
+                            "schema", request.getStructuredOutput().getJsonSchema(),
+                            "strict", request.getStructuredOutput().getStrict() != null ? request.getStructuredOutput().getStrict() : Boolean.TRUE
+                    )
+            ));
+        }
+
         return builder.build();
     }
 
@@ -639,6 +649,8 @@ public class OpenAiCompatibleLlmClient implements LlmClient {
         private List<Map<String, Object>> tools;
         @JsonProperty("tool_choice")
         private String toolChoice;
+        @JsonProperty("response_format")
+        private Map<String, Object> responseFormat;
     }
 
     @Data
