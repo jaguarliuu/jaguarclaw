@@ -1,5 +1,6 @@
 package com.jaguarliu.ai.runtime;
 
+import com.jaguarliu.ai.agents.context.AgentWorkspaceResolver;
 import com.jaguarliu.ai.gateway.events.EventBus;
 import com.jaguarliu.ai.llm.model.ToolCall;
 import com.jaguarliu.ai.session.SessionFileService;
@@ -13,8 +14,10 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import reactor.core.publisher.Mono;
 
+import java.nio.file.Path;
 import java.util.List;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -42,6 +45,9 @@ class ToolExecutorTest {
 
     @Mock
     private SessionFileService sessionFileService;
+
+    @Mock
+    private AgentWorkspaceResolver agentWorkspaceResolver;
 
     @InjectMocks
     private ToolExecutor toolExecutor;
@@ -73,7 +79,36 @@ class ToolExecutorTest {
 
         assertFalse(results.get(0).result().isSuccess());
         assertTrue(results.get(0).result().getContent().contains(ToolExecutor.HITL_REJECTED_MARKER));
+        assertEquals("hitl_rejected", results.get(0).failureCategory());
         verify(toolDispatcher, never()).dispatch(anyString(), anyMap(), any());
     }
-}
 
+    @Test
+    @DisplayName("tool errors should be tagged with machine readable failure category")
+    void toolErrorsShouldBeTaggedWithFailureCategory() {
+        RunContext context = RunContext.create(
+                "run-1",
+                "conn-1",
+                "session-1",
+                new LoopConfig(),
+                new CancellationManager()
+        );
+
+        ToolCall call = ToolCall.builder()
+                .id("call-2")
+                .function(ToolCall.FunctionCall.builder()
+                        .name("bash")
+                        .arguments("{\"command\":\"wkhtmltopdf\"}")
+                        .build())
+                .build();
+
+        when(agentWorkspaceResolver.resolveAgentWorkspace(anyString())).thenReturn(Path.of("."));
+        when(toolDispatcher.requiresHitl(anyString(), any(), anyMap())).thenReturn(false);
+        when(toolDispatcher.dispatch(anyString(), anyMap(), any()))
+                .thenReturn(Mono.just(com.jaguarliu.ai.tools.ToolResult.error("wkhtmltopdf: command not found")));
+
+        List<ToolExecutor.ToolExecutionResult> results = toolExecutor.executeToolCalls(context, List.of(call));
+
+        assertEquals("environment_missing", results.get(0).failureCategory());
+    }
+}
