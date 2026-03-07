@@ -1,5 +1,12 @@
 # LLM 会话上下文管理优化方案
 
+## 🆕 2026-03 运行时更新
+
+- 已引入基于 `PolicySupervisor` 的 direct / light / heavy 路径判定，简单问题可走更轻的上下文装配。
+- `ContextBuilder.buildForPolicyDecision(...)` 已作为最小 prompt 路径的入口，避免所有请求默认注入重型技能态。
+- 后续上下文优化仍应继续推进 prefix caching、滑动窗口与压缩，但这些策略现在要服务于 policy 决策，而不是单纯堆叠更多历史。
+
+
 > 问题：当前系统累计全量历史会话，导致上下文爆炸
 > 目标：优化 token 消耗，提升性能，保持上下文连续性
 > 日期：2026-03-02

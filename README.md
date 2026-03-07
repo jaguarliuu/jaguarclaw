@@ -49,6 +49,15 @@ User: "Analyze the error logs from today and create a summary report"
 - Human-in-the-loop confirmation for dangerous operations
 - Cancellation support at any step
 
+### Outcome-Aware Runtime Control
+
+JaguarClaw now treats "stop", "degrade", and "ask the user" as first-class outcomes instead of forcing every task through maximum-effort execution.
+
+- `RunOutcome` models `COMPLETED`, `COMPLETED_WITH_DEGRADATION`, `BLOCKED_BY_ENVIRONMENT`, `BLOCKED_PENDING_USER_DECISION`, `NOT_WORTH_CONTINUING`, and `FAILED_UNEXPECTEDLY`
+- `PolicySupervisor` routes direct questions to minimal prompts and blocks heavy paths when prerequisites are obviously missing
+- `TaskVerifier` and budget-aware `StopDecision` halt repeated low-progress or repeated-failure loops before they become wasteful
+- `run.outcome` events make final runtime decisions observable to the UI and downstream automation
+
 ### Built-in Tools
 
 | Tool | Description | Safety |

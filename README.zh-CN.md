@@ -49,6 +49,15 @@ JaguarClaw 实现了 ReAct（推理 + 行动）循环，支持全流式输出：
 - 危险操作需人工确认（Human-in-the-Loop）
 - 任意步骤可取消
 
+### 面向结果的运行时控制
+
+JaguarClaw 不再把 "一路硬做到底" 当成唯一正确路径，而是把 "及时停止"、"降级交付"、"转用户决策" 都视为一等结果。
+
+- `RunOutcome` 统一表达 `COMPLETED`、`COMPLETED_WITH_DEGRADATION`、`BLOCKED_BY_ENVIRONMENT`、`BLOCKED_PENDING_USER_DECISION`、`NOT_WORTH_CONTINUING`、`FAILED_UNEXPECTEDLY`
+- `PolicySupervisor` 会把直接问题导向最小上下文路径，并在前置条件明显不满足时阻止重型执行
+- `TaskVerifier` 与带预算感知的 `StopDecision` 会在重复失败或低进展时及时止损
+- `run.outcome` 事件会把最终运行结论发布到 UI 和后续自动化链路
+
 ### 内置工具
 
 | 工具 | 描述 | 安全性 |
