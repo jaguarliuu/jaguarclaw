@@ -64,7 +64,7 @@ public class GatewayWebSocketHandler implements WebSocketHandler {
 
         // 处理接收到的消息并发送响应
         // agent.run 等需要排队的请求会立即返回 runId，结果通过事件推送
-        Flux<WebSocketMessage> output = session.receive()
+        Flux<WebSocketMessage> rpcOutput = session.receive()
                 .filter(message -> message.getType() == WebSocketMessage.Type.TEXT)
                 .flatMap(message -> handleMessage(connectionId, session, message))
                 .doOnError(error -> {
@@ -78,7 +78,12 @@ public class GatewayWebSocketHandler implements WebSocketHandler {
                             connectionId,
                             null
                     );
-                })
+                });
+
+        Flux<WebSocketMessage> eventOutput = connectionManager.outbound(connectionId)
+                .map(session::textMessage);
+
+        Flux<WebSocketMessage> output = Flux.merge(rpcOutput, eventOutput)
                 .doFinally(signalType -> {
                     connectionManager.remove(connectionId);
                     messageRateLimiter.clear(connectionId);

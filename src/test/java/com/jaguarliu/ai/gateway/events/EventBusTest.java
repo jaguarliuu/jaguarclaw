@@ -9,6 +9,7 @@ import com.jaguarliu.ai.gateway.ws.ConnectionManager;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.slf4j.LoggerFactory;
+import reactor.core.Disposable;
 
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CountDownLatch;
@@ -23,6 +24,32 @@ import static org.mockito.Mockito.mock;
 
 @DisplayName("EventBus Tests")
 class EventBusTest {
+
+    @Test
+    @DisplayName("should ignore zero subscriber sink result for stream events")
+    void shouldIgnoreZeroSubscriberSinkResultForStreamEvents() {
+        EventBus eventBus = new EventBus(mock(ConnectionManager.class), new ObjectMapper());
+        Logger logger = (Logger) LoggerFactory.getLogger(EventBus.class);
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        logger.addAppender(appender);
+        logger.setLevel(Level.INFO);
+
+        Disposable subscription = eventBus.subscribeAll().subscribe();
+        subscription.dispose();
+
+        try {
+            eventBus.publish(AgentEvent.assistantDelta("__scheduled__", "run-1", "hello"));
+            eventBus.publish(AgentEvent.tokenUsage("__scheduled__", "run-1",
+                    com.jaguarliu.ai.llm.model.LlmResponse.Usage.builder()
+                            .promptTokens(1).completionTokens(1).totalTokens(2).build(), 0, 1));
+
+            assertTrue(appender.list.isEmpty(), "zero-subscriber stream events should stay silent");
+        } finally {
+            logger.detachAppender(appender);
+        }
+    }
+
 
     @Test
     @DisplayName("should tolerate concurrent publishes")

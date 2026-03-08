@@ -7,7 +7,6 @@ import com.jaguarliu.ai.gateway.ws.ConnectionManager;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
-import org.springframework.web.reactive.socket.WebSocketSession;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Sinks;
 
@@ -53,6 +52,10 @@ public class EventBus {
     private void emitToGlobalSink(AgentEvent event) {
         synchronized (sinkEmitLock) {
             Sinks.EmitResult result = sink.tryEmitNext(event);
+            if (result == Sinks.EmitResult.FAIL_ZERO_SUBSCRIBER
+                    || result == Sinks.EmitResult.FAIL_CANCELLED) {
+                return;
+            }
             if (result.isFailure()) {
                 log.warn("Failed to emit event to global sink: type={}, runId={}, result={}",
                         event.getType() != null ? event.getType().getValue() : null,
@@ -121,8 +124,7 @@ public class EventBus {
             return;
         }
 
-        WebSocketSession session = connectionManager.get(connectionId);
-        if (session == null) {
+        if (connectionManager.get(connectionId) == null) {
             log.warn("Connection not found: connectionId={}", connectionId);
             return;
         }
@@ -134,13 +136,10 @@ public class EventBus {
                     event.getData()
             );
             String json = objectMapper.writeValueAsString(rpcEvent);
-
-            session.send(Flux.just(session.textMessage(json)))
-                    .subscribe(
-                            null,
-                            e -> log.error("Failed to send event: connectionId={}, runId={}",
-                                    connectionId, event.getRunId(), e)
-                    );
+            if (!connectionManager.emit(connectionId, json)) {
+                log.warn("Failed to enqueue event: connectionId={}, runId={}, type={}",
+                        connectionId, event.getRunId(), event.getType().getValue());
+            }
         } catch (JsonProcessingException e) {
             log.error("Failed to serialize event", e);
         }
