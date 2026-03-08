@@ -357,27 +357,36 @@ public class AgentRunHandler implements RpcHandler {
         ContextBuilder.SkillAwareRequest request = contextBuilder.buildForPolicyDecision(
                 historyMessages, prompt, false, TaskComplexity.DIRECT, agentId);
         applyConversationModelSelection(request.request(), modelSelection);
-        LlmResponse response = llmClient.chat(request.request());
-        String content = response.getContent() != null ? response.getContent() : "";
 
-        if (!content.isBlank()) {
-            eventBus.publish(AgentEvent.assistantDelta(connectionId, runId, content));
-        }
+        StringBuilder content = new StringBuilder();
+        LlmResponse.Usage[] usageHolder = {null};
 
-        if (response.getUsage() != null) {
+        llmClient.stream(request.request())
+                .doOnNext(chunk -> {
+                    if (chunk.getDelta() != null) {
+                        content.append(chunk.getDelta());
+                        eventBus.publish(AgentEvent.assistantDelta(connectionId, runId, chunk.getDelta()));
+                    }
+                    if (chunk.getUsage() != null) {
+                        usageHolder[0] = chunk.getUsage();
+                    }
+                })
+                .blockLast();
+
+        if (usageHolder[0] != null) {
             int historyCount = (int) request.request().getMessages().stream()
                     .filter(message -> !"system".equals(message.getRole()))
                     .count() - 1;
             eventBus.publish(AgentEvent.tokenUsage(
                     connectionId,
                     runId,
-                    response.getUsage(),
+                    usageHolder[0],
                     Math.max(0, historyCount),
                     1
             ));
         }
 
-        return content;
+        return content.toString();
     }
 
     private RunContext buildRoutedContext(RunEntity run,

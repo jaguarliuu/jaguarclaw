@@ -14,6 +14,7 @@ import com.jaguarliu.ai.llm.LlmClient;
 import com.jaguarliu.ai.llm.LlmProperties;
 import com.jaguarliu.ai.llm.model.LlmRequest;
 import com.jaguarliu.ai.llm.model.LlmResponse;
+import com.jaguarliu.ai.llm.model.LlmChunk;
 import com.jaguarliu.ai.nodeconsole.AuditLogService;
 import com.jaguarliu.ai.runtime.AgentRuntime;
 import com.jaguarliu.ai.runtime.CancellationManager;
@@ -43,6 +44,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.lang.reflect.Method;
@@ -428,7 +430,14 @@ class AgentRunWithAgentIdTest {
                             LlmRequest.builder().messages(List.of(LlmRequest.Message.system("minimal"), LlmRequest.Message.user("hi"))).build(),
                             null, null, null, null
                     ));
-            when(llmClient.chat(any())).thenReturn(LlmResponse.builder().content("hello there").build());
+            when(llmClient.stream(any())).thenReturn(Flux.just(
+                    LlmChunk.builder().delta("hello ").build(),
+                    LlmChunk.builder().delta("there").usage(LlmResponse.Usage.builder()
+                            .promptTokens(3)
+                            .completionTokens(2)
+                            .totalTokens(5)
+                            .build()).done(true).build()
+            ));
             when(sessionLaneManager.submit(eq("session-chat"), eq("run-chat"), eq(12L), any(Supplier.class)))
                     .thenAnswer(invocation -> {
                         @SuppressWarnings("unchecked")
@@ -447,14 +456,21 @@ class AgentRunWithAgentIdTest {
             assertNull(response.getError());
             verify(strategyResolver, org.mockito.Mockito.never()).resolve(any());
             verify(agentRuntime, org.mockito.Mockito.never()).executeLoopWithContext(any(RunContext.class), anyList(), anyString());
+            verify(llmClient).stream(any());
             verify(messageService).saveAssistantMessage("session-chat", "run-chat", "hello there", PRINCIPAL_ID);
 
             ArgumentCaptor<AgentEvent> eventCaptor = ArgumentCaptor.forClass(AgentEvent.class);
-            verify(eventBus, org.mockito.Mockito.atLeast(2)).publish(eventCaptor.capture());
+            verify(eventBus, org.mockito.Mockito.atLeast(4)).publish(eventCaptor.capture());
+            List<AgentEvent> assistantDeltas = eventCaptor.getAllValues().stream()
+                    .filter(event -> event.getType() == AgentEvent.EventType.ASSISTANT_DELTA)
+                    .toList();
+            assertEquals(2, assistantDeltas.size());
+            assertTrue(assistantDeltas.get(0).getData() instanceof AgentEvent.DeltaData first
+                    && "hello ".equals(first.getContent()));
+            assertTrue(assistantDeltas.get(1).getData() instanceof AgentEvent.DeltaData second
+                    && "there".equals(second.getContent()));
             assertTrue(eventCaptor.getAllValues().stream().anyMatch(event ->
-                    event.getType() == AgentEvent.EventType.ASSISTANT_DELTA
-                            && event.getData() instanceof AgentEvent.DeltaData delta
-                            && "hello there".equals(delta.getContent())));
+                    event.getType() == AgentEvent.EventType.TOKEN_USAGE));
         }
 
         @Test
