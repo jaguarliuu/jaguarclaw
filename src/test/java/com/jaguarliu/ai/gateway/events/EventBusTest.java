@@ -10,12 +10,64 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.slf4j.LoggerFactory;
 
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 
 @DisplayName("EventBus Tests")
 class EventBusTest {
+
+    @Test
+    @DisplayName("should tolerate concurrent publishes")
+    void shouldTolerateConcurrentPublishes() throws Exception {
+        EventBus eventBus = new EventBus(mock(ConnectionManager.class), new ObjectMapper());
+        eventBus.subscribeAll().subscribe();
+
+        int threads = 8;
+        int publishesPerThread = 200;
+        ExecutorService executor = Executors.newFixedThreadPool(threads);
+        CountDownLatch ready = new CountDownLatch(threads);
+        CountDownLatch start = new CountDownLatch(1);
+        CountDownLatch done = new CountDownLatch(threads);
+        ConcurrentLinkedQueue<Throwable> failures = new ConcurrentLinkedQueue<>();
+
+        try {
+            for (int i = 0; i < threads; i++) {
+                final int threadNo = i;
+                executor.submit(() -> {
+                    ready.countDown();
+                    try {
+                        if (!start.await(5, TimeUnit.SECONDS)) {
+                            failures.add(new AssertionError("start latch timeout"));
+                            return;
+                        }
+                        for (int j = 0; j < publishesPerThread; j++) {
+                            eventBus.publish(AgentEvent.assistantDelta("__scheduled__", "run-" + threadNo, "chunk-" + j));
+                        }
+                    } catch (Throwable t) {
+                        failures.add(t);
+                    } finally {
+                        done.countDown();
+                    }
+                });
+            }
+
+            assertTrue(ready.await(5, TimeUnit.SECONDS), "workers should be ready");
+            start.countDown();
+            assertTrue(done.await(10, TimeUnit.SECONDS), "workers should finish");
+            assertTrue(failures.isEmpty(), () -> "unexpected failures: " + failures);
+        } finally {
+            executor.shutdownNow();
+            assertTrue(executor.awaitTermination(5, TimeUnit.SECONDS), "executor should terminate");
+        }
+    }
 
     @Test
     @DisplayName("should not log high-frequency stream events")
