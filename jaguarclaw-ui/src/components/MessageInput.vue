@@ -500,17 +500,6 @@ onMounted(() => {
           </button>
         </div>
       </div>
-
-      <!-- Context attachment chips -->
-      <div v-if="attachedContexts && attachedContexts.length > 0" class="attached-contexts">
-        <ContextChip
-          v-for="context in attachedContexts"
-          :key="context.id"
-          :context="context"
-          @remove="emit('remove-context', $event)"
-        />
-      </div>
-
       <div
         class="input-wrap"
         :class="{
@@ -1072,14 +1061,6 @@ textarea:disabled {
   background: rgba(0, 0, 0, 0.1);
   color: var(--color-gray-700);
   transform: translateY(-1px);
-}
-
-.attached-contexts {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-bottom: 12px;
-  animation: slideDown 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .input-hint {

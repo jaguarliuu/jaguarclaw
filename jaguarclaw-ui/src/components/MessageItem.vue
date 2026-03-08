@@ -7,7 +7,10 @@ import ToolCallCard from './ToolCallCard.vue'
 import SkillActivationCard from './SkillActivationCard.vue'
 import SubagentCard from './SubagentCard.vue'
 import FileCard from './FileCard.vue'
+import ContextFileCard from './ContextFileCard.vue'
+import ContextFolderCard from './ContextFolderCard.vue'
 import ContextChip from './ContextChip.vue'
+import { isFileAttachedContext, isFolderAttachedContext } from '@/utils/attachments'
 
 const props = defineProps<{
   message: Message
@@ -25,8 +28,9 @@ const { render } = useMarkdown()
 const { t } = useI18n()
 
 // 是否有交错的 blocks（assistant 消息）
-const hasBlocks = computed(() =>
-  props.message.role === 'assistant' && props.message.blocks && props.message.blocks.length > 0
+const hasBlocks = computed(
+  () =>
+    props.message.role === 'assistant' && props.message.blocks && props.message.blocks.length > 0,
 )
 
 // 简单内容渲染（用于 user 消息或没有 blocks 的 assistant 消息）
@@ -54,14 +58,30 @@ const displayContexts = computed(() => {
   }
   return []
 })
+
+const fileContexts = computed(() =>
+  displayContexts.value.filter((context) => isFileAttachedContext(context)),
+)
+const folderContexts = computed(() =>
+  displayContexts.value.filter((context) => isFolderAttachedContext(context)),
+)
+const chipContexts = computed(() =>
+  displayContexts.value.filter(
+    (context) => !isFileAttachedContext(context) && !isFolderAttachedContext(context),
+  ),
+)
 </script>
 
 <template>
   <article class="message" :class="message.role" :id="anchorId">
     <div class="message-inner">
       <div class="message-meta">
-        <span class="msg-avatar" :class="message.role">{{ message.role === 'user' ? t('message.you')[0] : assistantAvatarInitial }}</span>
-        <span class="role">{{ message.role === 'user' ? t('message.you') : (assistantName || t('message.assistant')) }}</span>
+        <span class="msg-avatar" :class="message.role">{{
+          message.role === 'user' ? t('message.you')[0] : assistantAvatarInitial
+        }}</span>
+        <span class="role">{{
+          message.role === 'user' ? t('message.you') : assistantName || t('message.assistant')
+        }}</span>
       </div>
 
       <!-- 有 blocks 的 assistant 消息：交错显示 -->
@@ -109,13 +129,31 @@ const displayContexts = computed(() => {
       <template v-else>
         <!-- 用户消息附带的上下文 -->
         <div v-if="message.role === 'user' && displayContexts.length > 0" class="user-contexts">
-          <!-- 上下文 chips -->
-          <ContextChip
-            v-for="context in displayContexts"
-            :key="context.id"
-            :context="context"
-            :readonly="true"
-          />
+          <div v-if="fileContexts.length > 0" class="user-file-contexts">
+            <ContextFileCard
+              v-for="context in fileContexts"
+              :key="context.id"
+              :context="context"
+              :session-id="message.sessionId"
+            />
+          </div>
+
+          <div v-if="folderContexts.length > 0" class="user-file-contexts">
+            <ContextFolderCard
+              v-for="context in folderContexts"
+              :key="context.id"
+              :context="context"
+            />
+          </div>
+
+          <div v-if="chipContexts.length > 0" class="user-context-chips">
+            <ContextChip
+              v-for="context in chipContexts"
+              :key="context.id"
+              :context="context"
+              :readonly="true"
+            />
+          </div>
         </div>
         <div class="message-content markdown-body" v-html="renderedContent"></div>
       </template>
@@ -199,10 +237,25 @@ const displayContexts = computed(() => {
 
 .user-contexts {
   display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+  width: 100%;
+  max-width: 100%;
+  margin-bottom: 10px;
+}
+
+.user-file-contexts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.user-context-chips {
+  display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  padding-left: 30px;
-  margin-bottom: 6px;
   justify-content: flex-end;
 }
 
