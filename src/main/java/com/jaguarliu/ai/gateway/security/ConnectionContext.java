@@ -5,6 +5,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.springframework.web.reactive.socket.WebSocketSession;
+import reactor.core.publisher.Sinks;
 
 import java.time.LocalDateTime;
 
@@ -46,5 +47,11 @@ public class ConnectionContext {
      * 是否已认证
      */
     private boolean authenticated;
+
+    /**
+     * 连接级出站事件队列
+     */
+    @Builder.Default
+    private Sinks.Many<String> outboundSink = Sinks.many().unicast().onBackpressureBuffer();
 }
 

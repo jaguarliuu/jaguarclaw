@@ -5,6 +5,8 @@ import com.jaguarliu.ai.gateway.security.ConnectionPrincipal;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.socket.WebSocketSession;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Sinks;
 
 import java.time.LocalDateTime;
 import java.util.Map;
@@ -51,7 +53,10 @@ public class ConnectionManager {
      * 移除连接
      */
     public void remove(String connectionId) {
-        connections.remove(connectionId);
+        ConnectionContext context = connections.remove(connectionId);
+        if (context != null && context.getOutboundSink() != null) {
+            context.getOutboundSink().tryEmitComplete();
+        }
         log.info("WebSocket disconnected: connectionId={}, total={}", connectionId, connections.size());
     }
 
@@ -68,6 +73,24 @@ public class ConnectionManager {
      */
     public ConnectionContext getContext(String connectionId) {
         return connections.get(connectionId);
+    }
+
+
+    public Flux<String> outbound(String connectionId) {
+        ConnectionContext context = connections.get(connectionId);
+        if (context == null || context.getOutboundSink() == null) {
+            return Flux.empty();
+        }
+        return context.getOutboundSink().asFlux();
+    }
+
+    public boolean emit(String connectionId, String payload) {
+        ConnectionContext context = connections.get(connectionId);
+        if (context == null || context.getOutboundSink() == null) {
+            return false;
+        }
+        Sinks.EmitResult result = context.getOutboundSink().tryEmitNext(payload);
+        return result.isSuccess();
     }
 
     /**

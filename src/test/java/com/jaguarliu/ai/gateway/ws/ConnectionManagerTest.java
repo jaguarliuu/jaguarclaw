@@ -8,6 +8,7 @@ import org.springframework.web.reactive.socket.HandshakeInfo;
 import org.springframework.web.reactive.socket.WebSocketSession;
 
 import java.net.InetSocketAddress;
+import java.time.Duration;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -16,6 +17,20 @@ import static org.mockito.Mockito.when;
 
 @DisplayName("ConnectionManager Tests")
 class ConnectionManagerTest {
+
+    @Test
+    @DisplayName("emit 后消息可从 outbound flux 读到")
+    void emitShouldReachOutboundFlux() {
+        ConnectionManager manager = new ConnectionManager();
+        WebSocketSession session = mockSession("127.0.0.1", 9003);
+        manager.register("conn-4", session);
+
+        assertTrue(manager.emit("conn-4", "hello"));
+        String value = manager.outbound("conn-4").blockFirst(Duration.ofSeconds(1));
+
+        assertEquals("hello", value);
+    }
+
 
     @Test
     @DisplayName("register 后可获取 session 与 context")

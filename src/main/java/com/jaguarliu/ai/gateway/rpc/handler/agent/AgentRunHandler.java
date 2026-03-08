@@ -22,7 +22,12 @@ import com.jaguarliu.ai.runtime.ChatRouter;
 import com.jaguarliu.ai.runtime.ContextBuilder;
 import com.jaguarliu.ai.runtime.LoopConfig;
 import com.jaguarliu.ai.runtime.RunContext;
+import com.jaguarliu.ai.runtime.RunOutcome;
 import com.jaguarliu.ai.runtime.SessionLaneManager;
+import com.jaguarliu.ai.runtime.TaskComplexity;
+import com.jaguarliu.ai.runtime.TaskRouteMode;
+import com.jaguarliu.ai.runtime.TaskRouter;
+import com.jaguarliu.ai.runtime.TaskRoutingDecision;
 import com.jaguarliu.ai.runtime.strategy.AgentContext;
 import com.jaguarliu.ai.runtime.strategy.AgentExecutionPlan;
 import com.jaguarliu.ai.runtime.strategy.AgentStrategy;
@@ -75,6 +80,7 @@ public class AgentRunHandler implements RpcHandler {
     private final LoopConfig loopConfig;
     private final CancellationManager cancellationManager;
     private final ChatRouter chatRouter;
+    private final TaskRouter taskRouter;
     private final ConnectionManager connectionManager;
     private final TokenBudgetService tokenBudgetService;
     private final AuditLogService auditLogService;
@@ -213,7 +219,6 @@ public class AgentRunHandler implements RpcHandler {
         RunContext context = null;
 
         try {
-            // 取消可能发生在队列等待阶段，执行前先读取最新状态
             var latestRun = runService.get(runId, principalId);
             if (latestRun.isPresent()) {
                 RunStatus latestStatus = RunStatus.fromValue(latestRun.get().getStatus());
@@ -223,72 +228,95 @@ public class AgentRunHandler implements RpcHandler {
                 }
             }
 
-            // 1. lifecycle.start
             runService.updateStatus(runId, RunStatus.RUNNING);
             eventBus.publish(AgentEvent.lifecycleStart(connectionId, runId));
 
-            // 2. 保存用户消息
             LlmRequest.Message currentUserMessage = buildUserMessage(prompt, attachments, run.getAgentId());
             messageService.saveUserMessage(sessionId, runId, currentUserMessage, principalId);
 
-            // 3. 获取历史消息
             List<MessageEntity> history = messageService.getSessionHistory(sessionId, maxHistoryMessages, principalId);
-            // 排除刚保存的这条用户消息
             List<LlmRequest.Message> historyMessages = messageService.toRequestMessages(history.stream()
                     .filter(m -> !runId.equals(m.getRunId()))
                     .toList());
 
-            // 4. 构建策略上下文
-            AgentContext agentCtx = AgentContext.builder()
-                    .sessionId(sessionId)
-                    .runId(runId)
-                    .connectionId(connectionId)
-                    .agentId(run.getAgentId())
-                    .prompt(prompt)
-                    .excludedMcpServers(excludedMcpServers)
-                    .build();
-
-            // 5. 解析策略并生成执行方案
-            AgentStrategy strategy = strategyResolver.resolve(agentCtx);
-            AgentExecutionPlan plan = strategy.prepare(agentCtx);
-
-            // 6. 组装消息（使用策略的 system prompt + 会话历史 + 用户输入）
-            List<LlmRequest.Message> messages = new ArrayList<>();
-            messages.add(LlmRequest.Message.system(plan.getSystemPrompt()));
-            messages.addAll(historyMessages);
-            messages.add(currentUserMessage);
-
-            log.debug("Context built: strategy={}, history={} messages",
-                    plan.getStrategyName(), historyMessages.size());
-
-            // 7. 构建 RunContext 并设置工具白名单
-            LoopConfig effectiveConfig = plan.getMaxStepsOverride() != null
-                    ? LoopConfig.withMaxSteps(plan.getMaxStepsOverride(), loopConfig)
-                    : loopConfig;
-            context = RunContext.create(runId, connectionId, sessionId,
-                    run.getAgentId(), effectiveConfig, cancellationManager);
-            context.setExcludedMcpServers(plan.getExcludedMcpServers());
-            context.setStrategyAllowedTools(plan.getAllowedTools());
-            context.setOriginalInput(prompt);
-            if (modelSelection != null && !modelSelection.isBlank()) {
-                context.setModelSelection(modelSelection);
+            TaskRoutingDecision routingDecision = taskRouter.route(
+                    prompt,
+                    historyMessages,
+                    hasImageAttachments(attachments),
+                    modelSelection
+            );
+            if (routingDecision == null || routingDecision.getRouteMode() == null) {
+                routingDecision = TaskRoutingDecision.builder()
+                        .routeMode(TaskRouteMode.HEAVY)
+                        .complexity(TaskComplexity.HEAVY)
+                        .shouldUseTools(true)
+                        .shouldUseStrategy(true)
+                        .reason("router_default")
+                        .build();
             }
+            log.info("Task routed: mode={}, complexity={}, runId={}, reason={}",
+                    routingDecision.getRouteMode(), routingDecision.getComplexity(), runId, routingDecision.getReason());
 
-            // 8. 执行
-            String response = agentRuntime.executeLoopWithContext(context, messages, prompt);
+            String response = switch (routingDecision.getRouteMode()) {
+                case CHAT, DIRECT -> executeDirectRoute(connectionId, runId, historyMessages, prompt, run.getAgentId(), modelSelection);
+                case LIGHT -> {
+                    ContextBuilder.SkillAwareRequest request = contextBuilder.buildForPolicyDecision(
+                            historyMessages, prompt, true, TaskComplexity.LIGHT, run.getAgentId());
+                    context = buildRoutedContext(run, connectionId, sessionId, excludedMcpServers,
+                            LoopConfig.withMaxSteps(3, loopConfig), modelSelection, routingDecision);
+                    yield agentRuntime.executeLoopWithContext(context, new ArrayList<>(request.request().getMessages()));
+                }
+                case BLOCKED -> {
+                    context = buildRoutedContext(run, connectionId, sessionId, excludedMcpServers,
+                            loopConfig, modelSelection, routingDecision);
+                    RunOutcome outcome = routingDecision.toOutcome();
+                    if (outcome != null) {
+                        context.setOutcome(outcome);
+                        publishRoutedOutcome(context, outcome, routingDecision.getReason());
+                    }
+                    yield renderOutcomeMessage(outcome);
+                }
+                case HEAVY -> {
+                    AgentContext agentCtx = AgentContext.builder()
+                            .sessionId(sessionId)
+                            .runId(runId)
+                            .connectionId(connectionId)
+                            .agentId(run.getAgentId())
+                            .prompt(prompt)
+                            .excludedMcpServers(excludedMcpServers)
+                            .build();
 
-            // 9. 保存助手消息
-            messageService.saveAssistantMessage(sessionId, runId, response, principalId);
-            tokenBudgetService.tryConsume(principalId, tokenBudgetService.estimateTokens(response));
+                    AgentStrategy strategy = strategyResolver.resolve(agentCtx);
+                    AgentExecutionPlan plan = strategy.prepare(agentCtx);
 
-            // 10. lifecycle.end
+                    List<LlmRequest.Message> messages = new ArrayList<>();
+                    messages.add(LlmRequest.Message.system(plan.getSystemPrompt()));
+                    messages.addAll(historyMessages);
+                    messages.add(currentUserMessage);
+
+                    log.debug("Context built: strategy={}, history={} messages",
+                            plan.getStrategyName(), historyMessages.size());
+
+                    LoopConfig effectiveConfig = plan.getMaxStepsOverride() != null
+                            ? LoopConfig.withMaxSteps(plan.getMaxStepsOverride(), loopConfig)
+                            : loopConfig;
+                    context = buildRoutedContext(run, connectionId, sessionId, plan.getExcludedMcpServers(),
+                            effectiveConfig, modelSelection, routingDecision);
+                    context.setStrategyAllowedTools(plan.getAllowedTools());
+                    yield agentRuntime.executeLoopWithContext(context, messages);
+                }
+            };
+
+            String persistedAssistantMessage = buildPersistedAssistantMessage(context, response);
+            messageService.saveAssistantMessage(sessionId, runId, persistedAssistantMessage, principalId);
+            tokenBudgetService.tryConsume(principalId, tokenBudgetService.estimateTokens(persistedAssistantMessage));
+
             runService.updateStatus(runId, RunStatus.DONE);
             eventBus.publish(AgentEvent.lifecycleEnd(connectionId, runId));
 
-            log.info("Run completed: id={}, strategy={}, response length={}",
-                    runId, plan.getStrategyName(), response.length());
+            log.info("Run completed: id={}, route={}, response length={}",
+                    runId, routingDecision.getRouteMode(), response.length());
 
-            // 11. 自动生成会话标题（首轮对话）
             tryGenerateSessionTitle(connectionId, runId, sessionId, prompt, response, modelSelection, principalId);
 
         } catch (java.util.concurrent.CancellationException e) {
@@ -317,9 +345,116 @@ public class AgentRunHandler implements RpcHandler {
             } catch (Exception ignored) {}
             eventBus.publish(AgentEvent.lifecycleError(connectionId, runId, e.getMessage()));
         } finally {
-            // 清除搜索结果临时白名单
             toolConfigProperties.clearSearchDiscoveredDomains();
         }
+    }
+
+    private String executeDirectRoute(String connectionId,
+                                      String runId,
+                                      List<LlmRequest.Message> historyMessages,
+                                      String prompt,
+                                      String agentId,
+                                      String modelSelection) {
+        ContextBuilder.SkillAwareRequest request = contextBuilder.buildForPolicyDecision(
+                historyMessages, prompt, false, TaskComplexity.DIRECT, agentId);
+        applyConversationModelSelection(request.request(), modelSelection);
+
+        StringBuilder content = new StringBuilder();
+        LlmResponse.Usage[] usageHolder = {null};
+
+        llmClient.stream(request.request())
+                .doOnNext(chunk -> {
+                    if (chunk.getDelta() != null) {
+                        content.append(chunk.getDelta());
+                        eventBus.publish(AgentEvent.assistantDelta(connectionId, runId, chunk.getDelta()));
+                    }
+                    if (chunk.getUsage() != null) {
+                        usageHolder[0] = chunk.getUsage();
+                    }
+                })
+                .blockLast();
+
+        if (usageHolder[0] != null) {
+            int historyCount = (int) request.request().getMessages().stream()
+                    .filter(message -> !"system".equals(message.getRole()))
+                    .count() - 1;
+            eventBus.publish(AgentEvent.tokenUsage(
+                    connectionId,
+                    runId,
+                    usageHolder[0],
+                    Math.max(0, historyCount),
+                    1
+            ));
+        }
+
+        return content.toString();
+    }
+
+    private RunContext buildRoutedContext(RunEntity run,
+                                          String connectionId,
+                                          String sessionId,
+                                          Set<String> excludedMcpServers,
+                                          LoopConfig effectiveConfig,
+                                          String modelSelection,
+                                          TaskRoutingDecision routingDecision) {
+        RunContext context = RunContext.create(run.getId(), connectionId, sessionId,
+                run.getAgentId(), effectiveConfig, cancellationManager);
+        context.setExcludedMcpServers(excludedMcpServers);
+        context.setOriginalInput(run.getPrompt());
+        context.setTaskContract(routingDecision.toTaskContract(run.getPrompt()));
+        if (modelSelection != null && !modelSelection.isBlank()) {
+            context.setModelSelection(modelSelection);
+        }
+        return context;
+    }
+
+    private void applyConversationModelSelection(LlmRequest request, String modelSelection) {
+        if (modelSelection == null || !modelSelection.contains(":")) {
+            return;
+        }
+        String[] parts = modelSelection.split(":", 2);
+        if (parts.length == 2) {
+            request.setProviderId(parts[0]);
+            request.setModel(parts[1]);
+        }
+    }
+
+    private void publishRoutedOutcome(RunContext context, RunOutcome outcome, String reason) {
+        if (context == null || outcome == null) {
+            return;
+        }
+        eventBus.publish(AgentEvent.runOutcome(
+                context.getConnectionId(),
+                context.getRunId(),
+                outcome.status().name(),
+                reason != null ? reason : "router",
+                context.getCurrentStep(),
+                context.getTotalTokens()
+        ));
+    }
+
+    private String renderOutcomeMessage(RunOutcome outcome) {
+        if (outcome == null) {
+            return null;
+        }
+        if (outcome.detail() != null && !outcome.detail().isBlank()) {
+            return outcome.detail();
+        }
+        return outcome.message();
+    }
+
+    private String buildPersistedAssistantMessage(RunContext context, String response) {
+        if (response == null) {
+            response = "";
+        }
+        if (context == null || context.getOutcome() == null) {
+            return response;
+        }
+        String draft = context.getLatestAssistantDraft();
+        if (draft != null && !draft.isBlank()) {
+            return draft;
+        }
+        return response;
     }
 
     private String buildCancellationAssistantMessage(RunContext context) {

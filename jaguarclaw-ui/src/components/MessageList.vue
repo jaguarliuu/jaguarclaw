@@ -28,6 +28,12 @@ const containerRef = ref<HTMLElement | null>(null)
 const { render } = useMarkdown()
 const { t } = useI18n()
 
+const assistantAvatarInitial = computed(() => {
+  const label = props.assistantName?.trim()
+  if (!label) return 'M'
+  return label[0]?.toUpperCase() || 'M'
+})
+
 // 渲染文本块的 Markdown
 function renderTextBlock(content: string | undefined): string {
   return render(content || '')
@@ -91,22 +97,24 @@ watch(
 
         <!-- Streaming message with interleaved blocks -->
         <article v-if="isStreaming" class="message assistant streaming">
-          <div class="message-meta">
-            <span class="role">{{ assistantName || t('message.assistant') }}</span>
-            <span class="streaming-indicator">
-              <span class="streaming-dot"></span>
-              <span class="streaming-dot"></span>
-              <span class="streaming-dot"></span>
-            </span>
-          </div>
+          <div class="message-inner">
+            <div class="message-meta">
+              <span class="msg-avatar assistant">{{ assistantAvatarInitial }}</span>
+              <span class="role">{{ assistantName || t('message.assistant') }}</span>
+              <span class="streaming-indicator">
+                <span class="streaming-dot"></span>
+                <span class="streaming-dot"></span>
+                <span class="streaming-dot"></span>
+              </span>
+            </div>
 
-          <!-- Thinking state when no content yet -->
-          <div v-if="!hasContent" class="message-content">
-            <p class="thinking">...</p>
-          </div>
+            <!-- Thinking state when no content yet -->
+            <div v-if="!hasContent" class="message-content">
+              <p class="thinking">...</p>
+            </div>
 
-          <!-- Interleaved blocks -->
-          <template v-for="block in streamBlocks" :key="block.id">
+            <!-- Interleaved blocks -->
+            <template v-for="block in streamBlocks" :key="block.id">
             <!-- Text block -->
             <div
               v-if="block.type === 'text' && block.content"
@@ -137,6 +145,7 @@ watch(
               :session-id="currentSessionId ?? undefined"
             />
           </template>
+          </div>
         </article>
       </div>
 
@@ -209,6 +218,11 @@ watch(
   border-bottom: 1px solid var(--color-gray-100);
 }
 
+.message-inner {
+  display: flex;
+  flex-direction: column;
+}
+
 .message-meta {
   display: flex;
   align-items: center;
@@ -218,9 +232,27 @@ watch(
 
 .role {
   font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-gray-600);
+}
+
+.msg-avatar {
+  width: 22px;
+  height: 22px;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
   font-size: 11px;
-  font-weight: 500;
-  color: var(--color-gray-500);
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.msg-avatar.assistant {
+  background: var(--color-primary);
+  color: white;
 }
 
 .streaming-indicator {
@@ -245,6 +277,7 @@ watch(
 .message-content {
   font-size: 15px;
   line-height: 1.7;
+  padding-left: 30px;
 }
 
 .message-content p {

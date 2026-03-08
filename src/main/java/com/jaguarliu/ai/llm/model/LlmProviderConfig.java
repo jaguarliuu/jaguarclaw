@@ -45,4 +45,9 @@ public class LlmProviderConfig {
      * 显式声明支持视觉输入的模型列表（可选）
      */
     private List<String> visionModels;
+
+    /**
+     * 显式声明支持原生 structured output 的模型列表（可选）
+     */
+    private List<String> structuredOutputModels;
 }

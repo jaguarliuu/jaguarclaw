@@ -7,11 +7,9 @@ import com.jaguarliu.ai.gateway.ws.ConnectionManager;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
-import org.springframework.web.reactive.socket.WebSocketSession;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Sinks;
 
-import java.time.Duration;
 
 /**
  * 事件总线
@@ -31,11 +29,9 @@ public class EventBus {
     private final Sinks.Many<AgentEvent> sink = Sinks.many().multicast().onBackpressureBuffer();
 
     /**
-     * 多线程安全的 EmitFailureHandler
-     * 当并发线程同时 emit 导致 FAIL_NON_SERIALIZED 时自旋重试
+     * sink 发射锁，确保对 Reactor sink 的 signal 串行化
      */
-    private static final Sinks.EmitFailureHandler RETRY_NON_SERIALIZED =
-            Sinks.EmitFailureHandler.busyLooping(Duration.ofSeconds(1));
+    private final Object sinkEmitLock = new Object();
 
     /**
      * 发布事件
@@ -50,8 +46,23 @@ public class EventBus {
         pushToConnection(event);
 
         // 同时发布到全局流（供其他订阅者使用）
-        // 使用 busyLooping 策略处理多线程并发 emit（subagent 并行场景）
-        sink.emitNext(event, RETRY_NON_SERIALIZED);
+        emitToGlobalSink(event);
+    }
+
+    private void emitToGlobalSink(AgentEvent event) {
+        synchronized (sinkEmitLock) {
+            Sinks.EmitResult result = sink.tryEmitNext(event);
+            if (result == Sinks.EmitResult.FAIL_ZERO_SUBSCRIBER
+                    || result == Sinks.EmitResult.FAIL_CANCELLED) {
+                return;
+            }
+            if (result.isFailure()) {
+                log.warn("Failed to emit event to global sink: type={}, runId={}, result={}",
+                        event.getType() != null ? event.getType().getValue() : null,
+                        event.getRunId(),
+                        result);
+            }
+        }
     }
 
     boolean shouldLogEvent(AgentEvent event) {
@@ -113,8 +124,7 @@ public class EventBus {
             return;
         }
 
-        WebSocketSession session = connectionManager.get(connectionId);
-        if (session == null) {
+        if (connectionManager.get(connectionId) == null) {
             log.warn("Connection not found: connectionId={}", connectionId);
             return;
         }
@@ -126,13 +136,10 @@ public class EventBus {
                     event.getData()
             );
             String json = objectMapper.writeValueAsString(rpcEvent);
-
-            session.send(Flux.just(session.textMessage(json)))
-                    .subscribe(
-                            null,
-                            e -> log.error("Failed to send event: connectionId={}, runId={}",
-                                    connectionId, event.getRunId(), e)
-                    );
+            if (!connectionManager.emit(connectionId, json)) {
+                log.warn("Failed to enqueue event: connectionId={}, runId={}, type={}",
+                        connectionId, event.getRunId(), event.getType().getValue());
+            }
         } catch (JsonProcessingException e) {
             log.error("Failed to serialize event", e);
         }
