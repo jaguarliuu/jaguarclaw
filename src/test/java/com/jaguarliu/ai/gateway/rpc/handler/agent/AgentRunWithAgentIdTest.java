@@ -521,6 +521,60 @@ class AgentRunWithAgentIdTest {
         }
 
         @Test
+        void heavyRouteShouldPersistLatestDraftInsteadOfOutcomeSummary() throws Exception {
+            AgentRunHandler handler = newAgentRunHandler();
+            mockCommonRunPrerequisites();
+
+            when(sessionService.get("session-heavy", PRINCIPAL_ID))
+                    .thenReturn(Optional.of(sessionEntity("session-heavy", "Heavy Chat", "coder")));
+            when(sessionLaneManager.nextSequence("session-heavy")).thenReturn(14L);
+            when(runService.create("session-heavy", "summarize today's AI news", "coder", PRINCIPAL_ID))
+                    .thenReturn(runEntity("run-heavy", "session-heavy", "coder", "summarize today's AI news"));
+
+            AgentStrategy strategy = org.mockito.Mockito.mock(AgentStrategy.class);
+            when(strategyResolver.resolve(any())).thenReturn(strategy);
+            when(strategy.prepare(any())).thenReturn(AgentExecutionPlan.builder()
+                    .systemPrompt("system prompt")
+                    .strategyName("default")
+                    .build());
+            when(messageService.getSessionHistory(eq("session-heavy"), anyInt(), eq(PRINCIPAL_ID)))
+                    .thenReturn(List.of());
+            when(agentRuntime.executeLoopWithContext(any(RunContext.class), anyList()))
+                    .thenAnswer(invocation -> {
+                        RunContext context = invocation.getArgument(0);
+                        context.setLatestAssistantDraft("Full streamed answer about today's AI news");
+                        context.setOutcome(new com.jaguarliu.ai.runtime.RunOutcome(
+                                com.jaguarliu.ai.runtime.RunOutcomeStatus.COMPLETED,
+                                "Assistant provided a comprehensive summary of AI-related news as requested, fulfilling the original task.",
+                                null
+                        ));
+                        return "Assistant provided a comprehensive summary of AI-related news as requested, fulfilling the original task.";
+                    });
+            when(sessionLaneManager.submit(eq("session-heavy"), eq("run-heavy"), eq(14L), any(Supplier.class)))
+                    .thenAnswer(invocation -> {
+                        @SuppressWarnings("unchecked")
+                        Supplier<Object> task = (Supplier<Object>) invocation.getArgument(3);
+                        task.get();
+                        return Mono.empty();
+                    });
+
+            RpcResponse response = handler.handle(CONNECTION_ID, RpcRequest.builder()
+                    .id("9")
+                    .method("agent.run")
+                    .payload(Map.of("sessionId", "session-heavy", "prompt", "summarize today's AI news"))
+                    .build()).block();
+
+            assertNotNull(response);
+            assertNull(response.getError());
+            verify(messageService).saveAssistantMessage(
+                    "session-heavy",
+                    "run-heavy",
+                    "Full streamed answer about today's AI news",
+                    PRINCIPAL_ID
+            );
+        }
+
+        @Test
         void cancelledRunShouldPersistAssistantCancellationMessage() throws Exception {
             AgentRunHandler handler = newAgentRunHandler();
             mockCommonRunPrerequisites();

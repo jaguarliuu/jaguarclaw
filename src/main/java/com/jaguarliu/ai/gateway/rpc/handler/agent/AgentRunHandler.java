@@ -307,8 +307,9 @@ public class AgentRunHandler implements RpcHandler {
                 }
             };
 
-            messageService.saveAssistantMessage(sessionId, runId, response, principalId);
-            tokenBudgetService.tryConsume(principalId, tokenBudgetService.estimateTokens(response));
+            String persistedAssistantMessage = buildPersistedAssistantMessage(context, response);
+            messageService.saveAssistantMessage(sessionId, runId, persistedAssistantMessage, principalId);
+            tokenBudgetService.tryConsume(principalId, tokenBudgetService.estimateTokens(persistedAssistantMessage));
 
             runService.updateStatus(runId, RunStatus.DONE);
             eventBus.publish(AgentEvent.lifecycleEnd(connectionId, runId));
@@ -440,6 +441,20 @@ public class AgentRunHandler implements RpcHandler {
             return outcome.detail();
         }
         return outcome.message();
+    }
+
+    private String buildPersistedAssistantMessage(RunContext context, String response) {
+        if (response == null) {
+            response = "";
+        }
+        if (context == null || context.getOutcome() == null) {
+            return response;
+        }
+        String draft = context.getLatestAssistantDraft();
+        if (draft != null && !draft.isBlank()) {
+            return draft;
+        }
+        return response;
     }
 
     private String buildCancellationAssistantMessage(RunContext context) {
