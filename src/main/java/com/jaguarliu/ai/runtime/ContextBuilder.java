@@ -343,54 +343,6 @@ public class ContextBuilder {
     }
 
     /**
-     * 处理 LLM 回复中的 [USE_SKILL:xxx]
-     * 如果检测到，返回新的请求用于重新调用 LLM
-     *
-     * @param llmResponse LLM 的回复
-     * @param originalInput 原始用户输入
-     * @param history 历史消息
-     * @param enableTools 是否启用工具
-     * @return 如果需要重新调用返回新请求，否则返回 empty
-     */
-    public Optional<SkillAwareRequest> handleAutoSkillSelection(
-            String llmResponse,
-            String originalInput,
-            List<LlmRequest.Message> history,
-            boolean enableTools) {
-        return handleAutoSkillSelection(llmResponse, originalInput, history, enableTools, "main");
-    }
-
-    public Optional<SkillAwareRequest> handleAutoSkillSelection(
-            String llmResponse,
-            String originalInput,
-            List<LlmRequest.Message> history,
-            boolean enableTools,
-            String agentId) {
-
-        SkillSelection selection = skillSelector.parseFromLlmResponse(llmResponse, originalInput, agentId);
-
-        if (!selection.isSelected()) {
-            return Optional.empty();
-        }
-
-        Optional<LoadedSkill> loaded = skillRegistry.activate(selection.getSkillName(), agentId);
-        if (loaded.isEmpty()) {
-            return Optional.empty();
-        }
-
-        log.info("Auto skill activation from LLM: {}", selection.getSkillName());
-
-        return Optional.of(buildWithActiveSkill(
-                loaded.get(),
-                selection.getArguments(),
-                history,
-                originalInput,
-                enableTools,
-                agentId
-        ));
-    }
-
-    /**
      * 通过 skill 名称直接激活 skill（use_skill 工具调用路径）
      *
      * @param skillName     要激活的 skill 名称
