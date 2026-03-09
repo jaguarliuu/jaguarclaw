@@ -24,6 +24,8 @@ import com.jaguarliu.ai.runtime.LoopConfig;
 import com.jaguarliu.ai.runtime.RunContext;
 import com.jaguarliu.ai.runtime.RunOutcome;
 import com.jaguarliu.ai.runtime.RunOutcomeStatus;
+import com.jaguarliu.ai.runtime.ReactEntrySkillSelector;
+import com.jaguarliu.ai.runtime.ReactEntrySkillSelection;
 import com.jaguarliu.ai.runtime.SessionLaneManager;
 import com.jaguarliu.ai.runtime.TaskComplexity;
 import com.jaguarliu.ai.runtime.TaskRouteMode;
@@ -118,6 +120,8 @@ class AgentRunWithAgentIdTest {
     private TokenBudgetService tokenBudgetService;
     @Mock
     private AuditLogService auditLogService;
+    @Mock
+    private ReactEntrySkillSelector reactEntrySkillSelector;
 
     private ConnectionPrincipal principal;
     private LoopConfig loopConfig;
@@ -520,6 +524,75 @@ class AgentRunWithAgentIdTest {
         }
 
         @Test
+        void reactRouteShouldSelectEntrySkillBeforeRuntime() throws Exception {
+            AgentRunHandler handler = newAgentRunHandler();
+            mockCommonRunPrerequisites();
+
+            when(sessionService.get("session-skill", PRINCIPAL_ID))
+                    .thenReturn(Optional.of(sessionEntity("session-skill", "Skill Chat", "coder")));
+            when(sessionLaneManager.nextSequence("session-skill")).thenReturn(16L);
+            when(runService.create("session-skill", "打开浏览器访问知乎", "coder", PRINCIPAL_ID))
+                    .thenReturn(runEntity("run-skill", "session-skill", "coder", "打开浏览器访问知乎"));
+            when(messageService.getSessionHistory(eq("session-skill"), anyInt(), eq(PRINCIPAL_ID)))
+                    .thenReturn(List.of());
+            when(taskRouter.route(eq("打开浏览器访问知乎"), anyList(), eq(false), nullable(String.class)))
+                    .thenReturn(TaskRoutingDecision.builder()
+                            .routeMode(TaskRouteMode.REACT)
+                            .complexity(TaskComplexity.HEAVY)
+                            .reason("browser task")
+                            .build());
+            AgentStrategy strategy = org.mockito.Mockito.mock(AgentStrategy.class);
+            when(strategyResolver.resolve(any())).thenReturn(strategy);
+            when(strategy.prepare(any())).thenReturn(AgentExecutionPlan.builder()
+                    .systemPrompt("system prompt")
+                    .strategyName("default")
+                    .build());
+            when(reactEntrySkillSelector.select(eq("打开浏览器访问知乎"), anyList(), eq("coder"), nullable(String.class)))
+                    .thenReturn(Optional.of(ReactEntrySkillSelection.builder()
+                            .skillName("agent-browser")
+                            .reason("browser automation skill fits best")
+                            .confidence(0.96)
+                            .build()));
+
+            LlmRequest skillRequest = LlmRequest.builder()
+                    .messages(List.of(
+                            LlmRequest.Message.system("skill system"),
+                            LlmRequest.Message.user("打开浏览器访问知乎")
+                    ))
+                    .build();
+            when(contextBuilder.handleSkillActivationByName(eq("agent-browser"), eq("打开浏览器访问知乎"), anyList(), eq(true), eq("coder")))
+                    .thenReturn(Optional.of(new ContextBuilder.SkillAwareRequest(
+                            skillRequest,
+                            "agent-browser",
+                            java.util.Set.of("shell"),
+                            java.util.Set.of(),
+                            java.nio.file.Path.of("/tmp/agent-browser")
+                    )));
+            when(agentRuntime.executeLoopWithContext(any(RunContext.class), anyList()))
+                    .thenReturn("skill result");
+            when(sessionLaneManager.submit(eq("session-skill"), eq("run-skill"), eq(16L), any(Supplier.class)))
+                    .thenAnswer(invocation -> {
+                        @SuppressWarnings("unchecked")
+                        Supplier<Object> task = (Supplier<Object>) invocation.getArgument(3);
+                        task.get();
+                        return Mono.empty();
+                    });
+
+            RpcResponse response = handler.handle(CONNECTION_ID, RpcRequest.builder()
+                    .id("skill-1")
+                    .method("agent.run")
+                    .payload(Map.of("sessionId", "session-skill", "prompt", "打开浏览器访问知乎"))
+                    .build()).block();
+
+            assertNotNull(response);
+            ArgumentCaptor<RunContext> contextCaptor = ArgumentCaptor.forClass(RunContext.class);
+            ArgumentCaptor<List<LlmRequest.Message>> messagesCaptor = ArgumentCaptor.forClass(List.class);
+            verify(agentRuntime).executeLoopWithContext(contextCaptor.capture(), messagesCaptor.capture());
+            assertEquals("agent-browser", contextCaptor.getValue().getActiveSkill().activeSkillName());
+            assertEquals("skill system", messagesCaptor.getValue().get(0).getContent());
+        }
+
+        @Test
         void heavyRouteShouldPersistLatestDraftInsteadOfOutcomeSummary() throws Exception {
             AgentRunHandler handler = newAgentRunHandler();
             mockCommonRunPrerequisites();
@@ -701,7 +774,8 @@ class AgentRunWithAgentIdTest {
                 taskRouter,
                 connectionManager,
                 tokenBudgetService,
-                auditLogService
+                auditLogService,
+                reactEntrySkillSelector
         );
     }
 
@@ -728,6 +802,8 @@ class AgentRunWithAgentIdTest {
                         .complexity(TaskComplexity.HEAVY)
                         .reason("default")
                         .build());
+        lenient().when(reactEntrySkillSelector.select(anyString(), anyList(), anyString(), nullable(String.class)))
+                .thenReturn(Optional.empty());
     }
 
     private SessionEntity sessionEntity(String id, String name, String agentId) {

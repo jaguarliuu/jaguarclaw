@@ -23,6 +23,7 @@ import com.jaguarliu.ai.runtime.ContextBuilder;
 import com.jaguarliu.ai.runtime.LoopConfig;
 import com.jaguarliu.ai.runtime.RunContext;
 import com.jaguarliu.ai.runtime.RunOutcome;
+import com.jaguarliu.ai.runtime.ReactEntrySkillSelector;
 import com.jaguarliu.ai.runtime.SessionLaneManager;
 import com.jaguarliu.ai.runtime.TaskComplexity;
 import com.jaguarliu.ai.runtime.TaskRouteMode;
@@ -84,6 +85,7 @@ public class AgentRunHandler implements RpcHandler {
     private final ConnectionManager connectionManager;
     private final TokenBudgetService tokenBudgetService;
     private final AuditLogService auditLogService;
+    private final ReactEntrySkillSelector reactEntrySkillSelector;
 
     /**
      * 历史消息数量限制（避免上下文过长）
@@ -275,6 +277,27 @@ public class AgentRunHandler implements RpcHandler {
                     messages.addAll(historyMessages);
                     messages.add(currentUserMessage);
 
+                    ContextBuilder.SkillAwareRequest entrySkillRequest = null;
+                    var entrySkillSelection = reactEntrySkillSelector.select(prompt, historyMessages, run.getAgentId(), modelSelection);
+                    if (entrySkillSelection.isPresent()) {
+                        String skillName = entrySkillSelection.get().getSkillName();
+                        var skillRequest = contextBuilder.handleSkillActivationByName(
+                                skillName,
+                                prompt,
+                                historyMessages,
+                                true,
+                                run.getAgentId()
+                        );
+                        if (skillRequest.isPresent()) {
+                            entrySkillRequest = skillRequest.get();
+                            messages = new ArrayList<>(entrySkillRequest.request().getMessages());
+                            log.info("React entry skill selected: runId={}, skill={}, reason={}",
+                                    runId, skillName, entrySkillSelection.get().getReason());
+                        } else {
+                            log.warn("React entry skill selection could not be activated: runId={}, skill={}", runId, skillName);
+                        }
+                    }
+
                     log.debug("Context built: strategy={}, history={} messages",
                             plan.getStrategyName(), historyMessages.size());
 
@@ -284,6 +307,10 @@ public class AgentRunHandler implements RpcHandler {
                     context = buildRoutedContext(run, connectionId, sessionId, plan.getExcludedMcpServers(),
                             effectiveConfig, modelSelection, routingDecision);
                     context.setStrategyAllowedTools(plan.getAllowedTools());
+                    if (entrySkillRequest != null) {
+                        context.setActiveSkill(entrySkillRequest);
+                        context.setSkillBasePath(entrySkillRequest.skillBasePath());
+                    }
                     yield agentRuntime.executeLoopWithContext(context, messages);
                 }
             };
