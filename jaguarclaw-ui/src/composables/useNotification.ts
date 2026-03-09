@@ -1,8 +1,9 @@
 import { useRouter } from 'vue-router'
 import { useWebSocket } from './useWebSocket'
-import type { ToolConfirmRequestPayload } from '@/types'
+import type { ToolConfirmRequestPayload, RunOutcomePayload } from '@/types'
 import type { RpcErrorEvent } from './useWebSocket'
 import { useToast } from './useToast'
+import { useI18n } from '@/i18n'
 
 let isSetup = false
 
@@ -13,11 +14,49 @@ export function useNotification() {
   const router = useRouter()
   const { onEvent, onRpcError } = useWebSocket()
   const { showToast } = useToast()
+  const { t } = useI18n()
 
   // Request notification permission
   if ('Notification' in window && Notification.permission === 'default') {
     Notification.requestPermission()
   }
+
+  onEvent('run.outcome', (event) => {
+    const payload = event.payload as RunOutcomePayload | undefined
+    if (!payload || (!payload.pendingQuestion && payload.planStatus !== 'BLOCKED')) {
+      return
+    }
+
+    const isOnWorkspace = router.currentRoute.value.path === '/'
+    const isHidden = document.visibilityState === 'hidden'
+    const title = payload.pendingQuestion ? t('workspace.runOutcome.toastTitle') : t('workspace.runOutcome.popupBlockedTitle')
+    const body = payload.pendingQuestion || payload.message || payload.detail || payload.reason
+
+    if (isOnWorkspace && !isHidden) {
+      return
+    }
+
+    if ('Notification' in window && Notification.permission === 'granted') {
+      const n = new Notification(`JaguarClaw - ${title}`, {
+        body,
+        tag: `run-outcome-${event.runId}`
+      })
+      n.onclick = () => {
+        window.focus()
+        router.push('/')
+        n.close()
+      }
+    } else {
+      showToast({
+        type: 'warning',
+        title,
+        message: body,
+        dedupeKey: `run-outcome-${event.runId}`,
+        dedupeWindowMs: 3000,
+        durationMs: 5000
+      })
+    }
+  })
 
   onEvent('tool.confirm_request', (event) => {
     const payload = event.payload as ToolConfirmRequestPayload | undefined

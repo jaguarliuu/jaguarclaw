@@ -283,29 +283,18 @@ public class ContextBuilder {
         return buildSmart(history, userPrompt, enableTools, "main");
     }
 
-    public SkillAwareRequest buildForPolicyDecision(List<LlmRequest.Message> history,
-                                                     String userPrompt,
-                                                     boolean enableTools,
-                                                     TaskComplexity complexity,
-                                                     String agentId) {
-        if (complexity == TaskComplexity.DIRECT) {
-            String system = systemPromptBuilder.build(SystemPromptBuilder.PromptMode.MINIMAL, null, null, agentId);
-            LlmRequest request = build(system, history, userPrompt);
-            return new SkillAwareRequest(request, null, null, null, null);
-        }
+    public SkillAwareRequest buildDirectResponse(List<LlmRequest.Message> history,
+                                                String userPrompt,
+                                                String agentId) {
+        String system = systemPromptBuilder.build(SystemPromptBuilder.PromptMode.MINIMAL, null, null, agentId);
+        LlmRequest request = build(system, history, userPrompt);
+        return new SkillAwareRequest(request, null, null, null, null);
+    }
 
-        if (complexity == TaskComplexity.LIGHT) {
-            String system = systemPromptBuilder.build(SystemPromptBuilder.PromptMode.MINIMAL, null, null, agentId);
-            LlmRequest request = build(system, history, userPrompt);
-            if (enableTools && toolRegistry.size() > 0) {
-                request.setTools(toolRegistry.toOpenAiTools(
-                        ToolVisibilityResolver.VisibilityRequest.builder().agentId(agentId).build()
-                ));
-                request.setToolChoice("auto");
-            }
-            return new SkillAwareRequest(request, null, null, null, null);
-        }
-
+    public SkillAwareRequest buildReactEntry(List<LlmRequest.Message> history,
+                                             String userPrompt,
+                                             boolean enableTools,
+                                             String agentId) {
         return buildSmart(history, userPrompt, enableTools, agentId);
     }
 
@@ -340,54 +329,6 @@ public class ContextBuilder {
         // 3. 普通请求
         LlmRequest request = buildWithTools(history, userPrompt, enableTools);
         return new SkillAwareRequest(request, null, null, null, null);
-    }
-
-    /**
-     * 处理 LLM 回复中的 [USE_SKILL:xxx]
-     * 如果检测到，返回新的请求用于重新调用 LLM
-     *
-     * @param llmResponse LLM 的回复
-     * @param originalInput 原始用户输入
-     * @param history 历史消息
-     * @param enableTools 是否启用工具
-     * @return 如果需要重新调用返回新请求，否则返回 empty
-     */
-    public Optional<SkillAwareRequest> handleAutoSkillSelection(
-            String llmResponse,
-            String originalInput,
-            List<LlmRequest.Message> history,
-            boolean enableTools) {
-        return handleAutoSkillSelection(llmResponse, originalInput, history, enableTools, "main");
-    }
-
-    public Optional<SkillAwareRequest> handleAutoSkillSelection(
-            String llmResponse,
-            String originalInput,
-            List<LlmRequest.Message> history,
-            boolean enableTools,
-            String agentId) {
-
-        SkillSelection selection = skillSelector.parseFromLlmResponse(llmResponse, originalInput, agentId);
-
-        if (!selection.isSelected()) {
-            return Optional.empty();
-        }
-
-        Optional<LoadedSkill> loaded = skillRegistry.activate(selection.getSkillName(), agentId);
-        if (loaded.isEmpty()) {
-            return Optional.empty();
-        }
-
-        log.info("Auto skill activation from LLM: {}", selection.getSkillName());
-
-        return Optional.of(buildWithActiveSkill(
-                loaded.get(),
-                selection.getArguments(),
-                history,
-                originalInput,
-                enableTools,
-                agentId
-        ));
     }
 
     /**

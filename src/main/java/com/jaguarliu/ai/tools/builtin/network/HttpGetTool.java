@@ -1,5 +1,6 @@
 package com.jaguarliu.ai.tools.builtin.network;
 
+import com.jaguarliu.ai.runtime.RuntimeFailureCategories;
 import com.jaguarliu.ai.tools.Tool;
 import com.jaguarliu.ai.tools.ToolConfigProperties;
 import com.jaguarliu.ai.tools.ToolDefinition;
@@ -73,7 +74,8 @@ public class HttpGetTool implements Tool {
             if (host == null || !toolConfigProperties.isDomainTrusted(host)) {
                 return Mono.just(ToolResult.error(
                         "Domain '" + host + "' is not in the trusted list. "
-                                + "Add it via Settings > Tools to allow access."));
+                                + "Add it via Settings > Tools to allow access.",
+                        RuntimeFailureCategories.USER_DECISION_REQUIRED));
             }
         } catch (Exception e) {
             return Mono.just(ToolResult.error("Invalid URL: " + url));
@@ -95,7 +97,7 @@ public class HttpGetTool implements Tool {
                 })
                 .onErrorResume(e -> {
                     log.error("HTTP GET failed: {}", url, e);
-                    return Mono.just(ToolResult.error("HTTP request failed: " + e.getMessage()));
+                    return Mono.just(ToolResult.error("HTTP request failed: " + e.getMessage(), RuntimeFailureCategories.TOOL_ERROR));
                 });
     }
 }

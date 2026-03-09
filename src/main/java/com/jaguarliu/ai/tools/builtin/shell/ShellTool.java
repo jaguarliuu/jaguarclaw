@@ -3,6 +3,7 @@ package com.jaguarliu.ai.tools.builtin.shell;
 import com.jaguarliu.ai.tools.Tool;
 import com.jaguarliu.ai.tools.ToolDefinition;
 import com.jaguarliu.ai.tools.ToolExecutionContext;
+import com.jaguarliu.ai.runtime.RuntimeFailureCategories;
 import com.jaguarliu.ai.tools.ToolResult;
 import com.jaguarliu.ai.tools.ToolsProperties;
 import com.jaguarliu.ai.tools.WorkspaceResolver;
@@ -123,7 +124,7 @@ public class ShellTool implements Tool {
                     if (scriptPath != null && !scriptPath.isBlank()) {
                         executableScriptPath = resolveScriptPath(scriptPath, workspacePath);
                         if (!Files.exists(executableScriptPath) || !Files.isRegularFile(executableScriptPath)) {
-                            return ToolResult.error("script_path does not exist or is not a file: " + scriptPath);
+                            return ToolResult.error("script_path does not exist or is not a file: " + scriptPath, RuntimeFailureCategories.REPAIRABLE_ENVIRONMENT);
                         }
                     } else {
                         executableScriptPath = writeTempScript(scriptContent, workspacePath, interpreter);
@@ -172,7 +173,13 @@ public class ShellTool implements Tool {
                 if (exitCode == 0) {
                     return ToolResult.success(output.isEmpty() ? "(no output)" : output);
                 } else {
-                    return ToolResult.error("Exit code: " + exitCode + "\n" + output);
+                    return switch (exitCode) {
+                    case 127, 9009 -> ToolResult.error("Exit code: " + exitCode + "\n" + output,
+                            RuntimeFailureCategories.REPAIRABLE_ENVIRONMENT);
+                    case 126 -> ToolResult.error("Exit code: " + exitCode + "\n" + output,
+                            RuntimeFailureCategories.HARD_ENVIRONMENT_BLOCK);
+                    default -> ToolResult.error("Exit code: " + exitCode + "\n" + output);
+                };
                 }
 
             } catch (Exception e) {
@@ -180,7 +187,7 @@ public class ShellTool implements Tool {
                 if (process != null) {
                     process.destroyForcibly();
                 }
-                return ToolResult.error("Command execution failed: " + e.getMessage());
+                return ToolResult.error("Command execution failed: " + e.getMessage(), RuntimeFailureCategories.HARD_ENVIRONMENT_BLOCK);
             } finally {
                 if (tempScriptPath != null) {
                     try {

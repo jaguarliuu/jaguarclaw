@@ -117,7 +117,7 @@
 在调研中，`ralph-loop-agent` 提供了非常重要的启发。其核心思想不是让 Agent 一直循环，而是：
 
 - 在普通工具循环之外再包一层**外部验证循环**；
-- 由外部 `TaskVerifier` / `VerificationResult` 判断任务是否真正完成；
+- 由外部 `RuntimeDecisionStage` / `VerificationResult` 判断任务是否真正完成；
 - 使用迭代次数、token、成本等预算控制外层循环；
 - 当验证失败时，将失败原因反馈给下一轮，而不是盲重试。
 
@@ -543,7 +543,7 @@ flowchart LR
 
 ### 12.3 关键职责调整
 
-> 结合当前实现，`RunOutcome`、`PolicySupervisor`、`TaskVerifier`、`StopDecision` 与 `run.outcome` 事件已具备落地点；`LoopState` 仍作为兼容层保留。
+> 结合当前实现，`RunOutcome`、`PolicySupervisor`、`RuntimeDecisionStage`、`StopDecision` 与 `run.outcome` 事件已具备落地点；`LoopState` 仍作为兼容层保留。
 
 - `AgentRuntime`
   - 从“直接驱动 ReAct 全循环”变成总编排入口。
@@ -560,7 +560,7 @@ flowchart LR
 - 新增 `PolicySupervisor`
   - 决定是否进入深执行、是否应改道、是否需用户确认。
 
-- 新增 `TaskVerifier`
+- 新增 `RuntimeDecisionStage`
   - 负责结构化完成判断。
 
 - 新增 `StopDecision` 与 `RUN_OUTCOME` 事件
@@ -623,7 +623,7 @@ flowchart LR
 
 目标：把停止从“靠感觉”变成“靠外部验证与预算”。
 
-- 引入 `TaskVerifier` / `VerificationResult`
+- 引入 `RuntimeDecisionStage` / `VerificationResult`
 - 增加 `maxTokens` / `maxCostUsd` / `maxRepeatedFailures` / `maxLowProgressRounds`
 - 通过 `StopDecision` 与失败分类反馈注入约束下一轮
 

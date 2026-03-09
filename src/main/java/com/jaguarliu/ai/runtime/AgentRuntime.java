@@ -7,18 +7,13 @@ import com.jaguarliu.ai.llm.model.LlmRequest;
 import com.jaguarliu.ai.llm.model.LlmResponse;
 import com.jaguarliu.ai.llm.model.ToolCall;
 import com.jaguarliu.ai.memory.flush.PreCompactionFlushHook;
-import com.jaguarliu.ai.session.SessionFileService;
-import com.jaguarliu.ai.subagent.SubagentCompletionTracker;
-import com.jaguarliu.ai.tools.ToolDispatcher;
 import com.jaguarliu.ai.tools.ToolRegistry;
-import com.jaguarliu.ai.tools.ToolResult;
 import com.jaguarliu.ai.tools.ToolVisibilityResolver;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
-import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -33,17 +28,16 @@ import java.util.concurrent.TimeoutException;
  * 职责：协调 ReAct 循环的主控制器
  * 
  * 组件化设计：
- * - LoopOrchestrator：循环控制（步数/超时/取消）
  * - ToolExecutor：工具执行（HITL/分发/结果）
  * - SkillActivator：Skill 激活（检测/激活/上下文）
  * - SubagentBarrier：子代理屏障（等待/结果格式化）
- * 
+ *
  * 流程：
  * 1. 调用 LLM（带 tools）
  * 2. 如果返回 tool_calls → ToolExecutor 执行
  * 3. 如果返回 use_skill tool call → SkillActivator 激活
  * 4. 将工具结果追加到上下文
- * 5. LoopOrchestrator 检查是否继续
+ * 5. 循环终止条件：无工具调用、超时、取消、达到最大步数
  */
 @Slf4j
 @Component
@@ -52,23 +46,15 @@ public class AgentRuntime {
 
     private final LlmClient llmClient;
     private final ToolRegistry toolRegistry;
-    private final ToolDispatcher toolDispatcher;
     private final EventBus eventBus;
     private final LoopConfig loopConfig;
     private final CancellationManager cancellationManager;
     private final HitlManager hitlManager;
     private final ContextBuilder contextBuilder;
     private final PreCompactionFlushHook flushHook;
-    private final SubagentCompletionTracker subagentCompletionTracker;
-    private final SessionFileService sessionFileService;
-
-    // 新组件
-    private final LoopOrchestrator loopOrchestrator;
     private final ToolExecutor toolExecutor;
     private final SkillActivator skillActivator;
     private final SubagentBarrier subagentBarrier;
-    private final TaskVerifier taskVerifier;
-    private final PolicySupervisor policySupervisor;
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
@@ -92,15 +78,6 @@ public class AgentRuntime {
                                           String originalInput) throws TimeoutException {
         if (originalInput != null) {
             context.setOriginalInput(originalInput);
-            if (context.getTaskContract() == null) {
-                PolicyDecision decision = policySupervisor.evaluate(originalInput, List.of());
-                context.setTaskContract(decision.contract());
-                if (decision.outcome() != null && !decision.enterHeavyLoop()) {
-                    context.setOutcome(decision.outcome());
-                    publishOutcomeEvent(context, decision.outcome(), "policy_gate");
-                    return renderOutcomeMessage(decision.outcome());
-                }
-            }
         }
         return executeLoopWithContext(context, messages);
     }
@@ -126,235 +103,135 @@ public class AgentRuntime {
                 context.getConfig().getRunTimeoutSeconds());
 
         List<String> pendingSubRunIds = new ArrayList<>();
+        int consecutiveFailedRounds = 0;
 
         while (true) {
-            StopDecision stopDecision = loopOrchestrator.checkStopDecision(context);
-            if (stopDecision.stop()) {
-                if (stopDecision.isCancelled()) {
-                    throw new CancellationException("Run cancelled by user");
-                }
-                if (stopDecision.isTimeout()) {
-                    throw new TimeoutException("ReAct loop timeout after " +
-                            context.getElapsedSeconds() + " seconds");
-                }
-                if (stopDecision.isMaxSteps()) {
-                    log.warn("Loop reached max steps: runId={}, maxSteps={}",
-                            context.getRunId(), context.getConfig().getMaxSteps());
-                    StepResult finalResult = executeSingleStep(context, messages);
-                    messages.add(LlmRequest.Message.assistant(finalResult.content()));
-                    VerificationResult verification = resolveVerifier(context)
-                            .verify(context, finalResult.content(), List.of());
-                    return resolveVerificationResult(context, verification, finalResult.content());
-                }
-                if (stopDecision.outcome() != null) {
-                    context.setOutcome(stopDecision.outcome());
-                    loopOrchestrator.publishStopDecision(context, stopDecision);
-                    return renderOutcomeMessage(stopDecision.outcome());
-                }
+            if (context.isAborted()) {
+                throw new CancellationException("Run cancelled by user");
+            }
+            if (context.isTimedOut()) {
+                throw new TimeoutException("ReAct loop timeout after " + context.getElapsedSeconds() + " seconds");
+            }
+            if (context.isMaxStepsReached()) {
+                log.warn("Loop reached max steps: runId={}, maxSteps={}",
+                        context.getRunId(), context.getConfig().getMaxSteps());
+                StepResult finalResult = executeSingleStep(context, messages);
+                return finalResult.content();
             }
 
-            // Pre-compaction flush
             flushHook.checkAndFlush(context.getRunId(), messages);
 
-            // 执行单步 LLM 调用
             StepResult result = executeSingleStep(context, messages);
 
-            // 没有 tool_calls
             if (!result.hasToolCalls()) {
-                // SubAgent 屏障等待
                 if (!pendingSubRunIds.isEmpty() && context.isMain()) {
                     log.info("Waiting for {} pending subagents: runId={}",
                             pendingSubRunIds.size(), context.getRunId());
-
                     messages.add(LlmRequest.Message.assistant(result.content()));
-
-                    String subagentResultsSummary = subagentBarrier.waitForCompletion(
-                            pendingSubRunIds, context);
+                    String subagentResultsSummary = subagentBarrier.waitForCompletion(pendingSubRunIds, context);
                     pendingSubRunIds.clear();
-
                     messages.add(LlmRequest.Message.user(subagentResultsSummary));
-                    log.info("Subagent results injected: runId={}", context.getRunId());
+                    log.info("Subagent results injected, continuing loop: runId={}", context.getRunId());
                     continue;
                 }
-
-                messages.add(LlmRequest.Message.assistant(result.content()));
-                VerificationResult verification = resolveVerifier(context)
-                        .verify(context, result.content(), List.of());
-                log.info("Loop completed normally: runId={}, steps={}",
+                log.info("Loop completed: model stopped calling tools, runId={}, steps={}",
                         context.getRunId(), context.getCurrentStep());
-                return resolveVerificationResult(context, verification, result.content());
+                return result.content();
             }
 
-            // 有 tool_calls，使用 ToolExecutor 执行
             log.info("Step {} has {} tool calls: runId={}",
                     context.getCurrentStep(), result.toolCalls().size(), context.getRunId());
 
-            // 前置 use_skill 激活：先激活 skill，再进入下一轮调用，避免同轮普通工具抢跑。
+            // use_skill tool activation (tool-driven, not an extra LLM call)
             Optional<SkillActivator.SkillActivation> toolActivation =
                     skillActivator.detectToolActivation(result.toolCalls(), context);
-            if (toolActivation.isPresent()
-                    && context.getActiveSkill() != null
-                    && context.getActiveSkill().hasActiveSkill()) {
-                log.info("skill.activation_skipped reason=already_active skill={} runId={}",
-                        toolActivation.get().skillName(), context.getRunId());
-            }
-            if (toolActivation.isPresent()
-                    && (context.getActiveSkill() == null || !context.getActiveSkill().hasActiveSkill())) {
-                String skillName = toolActivation.get().skillName();
-                List<LlmRequest.Message> cleanHistory = extractHistory(messages);
-
-                Optional<SkillActivator.SkillAwareRequest> skillRequest =
-                        skillActivator.applyActivation(toolActivation.get(), cleanHistory,
-                                context.getOriginalInput(), context.getAgentId());
-
-                if (skillRequest.isPresent()) {
-                    context.incrementSkillActivation(skillName);
-                    skillActivator.publishActivationEvent(context, toolActivation.get());
-
-                    List<LlmRequest.Message> historyForContext = extractHistory(messages);
-                    messages.clear();
-                    messages.addAll(skillRequest.get().messages());
-
-                    Optional<ContextBuilder.SkillAwareRequest> ctxRequest =
-                            contextBuilder.handleSkillActivationByName(skillName,
-                                    context.getOriginalInput(), historyForContext, true, context.getAgentId());
-                    if (ctxRequest.isPresent()) {
-                        context.setActiveSkill(ctxRequest.get());
-                        context.setSkillBasePath(ctxRequest.get().skillBasePath());
+            if (toolActivation.isPresent()) {
+                if (context.getActiveSkill() != null && context.getActiveSkill().hasActiveSkill()) {
+                    log.info("skill.activation_skipped reason=already_active skill={} runId={}",
+                            toolActivation.get().skillName(), context.getRunId());
+                } else {
+                    String skillName = toolActivation.get().skillName();
+                    List<LlmRequest.Message> cleanHistory = extractHistory(messages);
+                    Optional<SkillActivator.SkillAwareRequest> skillRequest =
+                            skillActivator.applyActivation(toolActivation.get(), cleanHistory,
+                                    context.getOriginalInput(), context.getAgentId());
+                    if (skillRequest.isPresent()) {
+                        context.incrementSkillActivation(skillName);
+                        skillActivator.publishActivationEvent(context, toolActivation.get());
+                        messages.clear();
+                        messages.addAll(skillRequest.get().messages());
+                        Optional<ContextBuilder.SkillAwareRequest> ctxRequest =
+                                contextBuilder.handleSkillActivationByName(skillName,
+                                        context.getOriginalInput(), cleanHistory, true, context.getAgentId());
+                        if (ctxRequest.isPresent()) {
+                            context.setActiveSkill(ctxRequest.get());
+                            context.setSkillBasePath(ctxRequest.get().skillBasePath());
+                        }
+                        context.incrementStep();
+                        eventBus.publish(AgentEvent.stepCompleted(context.getConnectionId(), context.getRunId(), context.getCurrentStep(), context.getConfig().getMaxSteps(), context.getElapsedSeconds()));
+                        log.info("Re-invoking with skill (via tool activation): {}, runId={}", skillName, context.getRunId());
+                        continue;
                     }
-
-                    long skippedCalls = result.toolCalls().stream()
-                            .filter(tc -> !"use_skill".equals(tc.getName()))
-                            .count();
-                    if (skippedCalls > 0) {
-                        log.info("skill.late_activation_prevented skill={} skippedCalls={} runId={}",
-                                skillName, skippedCalls, context.getRunId());
-                    }
-                    log.info("Re-invoking with skill (via pre-tool activation): {}, runId={}",
-                            skillName, context.getRunId());
-                    continue;
+                    log.warn("skill.activation_skipped reason=apply_failed skill={} runId={}", skillName, context.getRunId());
                 }
-                log.warn("skill.activation_skipped reason=apply_failed skill={} runId={}",
-                        skillName, context.getRunId());
             }
 
             messages.add(LlmRequest.Message.assistantWithToolCalls(result.toolCalls()));
 
-            // 使用 ToolExecutor 执行工具
             List<ToolExecutor.ToolExecutionResult> toolResults =
                     toolExecutor.executeToolCalls(context, result.toolCalls());
 
             boolean shouldStopOnHitlReject = false;
             String rejectedToolName = null;
+
             for (int i = 0; i < result.toolCalls().size(); i++) {
                 ToolCall toolCall = result.toolCalls().get(i);
                 ToolExecutor.ToolExecutionResult execResult = toolResults.get(i);
-                messages.add(LlmRequest.Message.toolResult(
-                        toolCall.getId(), execResult.result().getContent()));
+                messages.add(LlmRequest.Message.toolResult(toolCall.getId(), execResult.result().getContent()));
 
-                if (isHitlRejectedResult(execResult.result())) {
+                if (isHitlRejectedResult(execResult)) {
                     shouldStopOnHitlReject = true;
                     rejectedToolName = toolCall.getName();
                 }
 
-                // 跟踪 sessions_spawn 的 subRunId
                 if ("sessions_spawn".equals(toolCall.getName()) && execResult.result().isSuccess()) {
                     String subRunId = parseSubRunIdFromToolResult(execResult.result().getContent());
                     if (subRunId != null) {
                         pendingSubRunIds.add(subRunId);
-                        log.info("Tracked spawned subagent: subRunId={}, runId={}",
-                                subRunId, context.getRunId());
+                        log.info("Tracked spawned subagent: subRunId={}, runId={}", subRunId, context.getRunId());
                     }
                 }
             }
 
             if (shouldStopOnHitlReject) {
-                String stopMessage = "Tool call was rejected by user ("
-                        + (rejectedToolName != null ? rejectedToolName : "unknown")
-                        + "). Execution stopped to avoid automatic retry loop. "
-                        + "Please explicitly approve or adjust the command/instruction.";
+                String rejectedTool = rejectedToolName != null ? rejectedToolName : "unknown";
+                String stopMessage = "Tool call was rejected by user (" + rejectedTool + "). Execution stopped.";
                 messages.add(LlmRequest.Message.assistant(stopMessage));
-                log.info("Loop stopped due to HITL rejection: runId={}, tool={}",
-                        context.getRunId(), rejectedToolName);
+                log.info("Loop stopped due to HITL rejection: runId={}, tool={}", context.getRunId(), rejectedTool);
                 return stopMessage;
             }
 
-            recordToolRoundProgress(context, toolResults);
-            List<String> observations = toolResults.stream()
-                    .map(execResult -> execResult.result().getContent())
-                    .filter(content -> content != null && !content.isBlank())
-                    .toList();
-            VerificationResult verification = resolveVerifier(context)
-                    .verify(context, null, observations);
-            if (verification.terminal()) {
-                return resolveVerificationResult(context, verification, verification.feedback());
+            boolean roundHadSuccess = toolResults.stream()
+                    .anyMatch(r -> r.result() != null && r.result().isSuccess());
+            if (roundHadSuccess) {
+                consecutiveFailedRounds = 0;
+            } else {
+                consecutiveFailedRounds++;
+                if (consecutiveFailedRounds >= 3) {
+                    String stopMessage = "Stopped after " + consecutiveFailedRounds
+                            + " consecutive tool rounds with no successful results.";
+                    messages.add(LlmRequest.Message.assistant(stopMessage));
+                    log.warn("Loop stopped due to consecutive failures: runId={}, rounds={}",
+                            context.getRunId(), consecutiveFailedRounds);
+                    return stopMessage;
+                }
             }
-            if (verification.feedback() != null && !verification.feedback().isBlank()) {
-                messages.add(LlmRequest.Message.user(verification.feedback()));
-            }
 
-            loopOrchestrator.incrementStepAndPublish(context);
+            context.incrementStep();
+            eventBus.publish(AgentEvent.stepCompleted(context.getConnectionId(), context.getRunId(), context.getCurrentStep(), context.getConfig().getMaxSteps(), context.getElapsedSeconds()));
         }
     }
 
-    TaskVerifier resolveVerifier(RunContext context) {
-        return context.getTaskVerifier() != null ? context.getTaskVerifier() : taskVerifier;
-    }
-
-    String resolveVerificationResult(RunContext context, VerificationResult verification, String fallbackMessage) {
-        if (verification == null) {
-            return fallbackMessage;
-        }
-        if (verification.failureCategory() != null) {
-            context.recordFailure(verification.failureCategory());
-        } else if (verification.terminal()) {
-            context.recordMeaningfulProgress();
-        }
-        if (verification.outcome() != null) {
-            context.setOutcome(verification.outcome());
-            publishOutcomeEvent(context, verification.outcome(),
-                    verification.failureCategory() != null ? verification.failureCategory() : "verifier");
-            return renderOutcomeMessage(verification.outcome());
-        }
-        return fallbackMessage;
-    }
-
-    void recordToolRoundProgress(RunContext context, List<ToolExecutor.ToolExecutionResult> toolResults) {
-        boolean hasSuccess = toolResults.stream().anyMatch(result -> result.result() != null && result.result().isSuccess());
-        if (hasSuccess) {
-            context.recordMeaningfulProgress();
-            return;
-        }
-        context.recordLowProgressRound();
-        toolResults.stream()
-                .map(ToolExecutor.ToolExecutionResult::failureCategory)
-                .filter(category -> category != null && !category.isBlank())
-                .forEach(context::recordFailure);
-    }
-
-    private void publishOutcomeEvent(RunContext context, RunOutcome outcome, String reason) {
-        if (outcome == null) {
-            return;
-        }
-        eventBus.publish(AgentEvent.runOutcome(
-                context.getConnectionId(),
-                context.getRunId(),
-                outcome.status().name(),
-                reason,
-                context.getCurrentStep(),
-                context.getTotalTokens()
-        ));
-    }
-
-    private String renderOutcomeMessage(RunOutcome outcome) {
-        if (outcome == null) {
-            return null;
-        }
-        if (outcome.detail() != null && !outcome.detail().isBlank()) {
-            return outcome.detail();
-        }
-        return outcome.message();
-    }
 
     /**
      * 执行单步 LLM 调用
@@ -538,11 +415,8 @@ public class AgentRuntime {
         return null;
     }
 
-    static boolean isHitlRejectedResult(ToolResult result) {
-        if (result == null || result.isSuccess() || result.getContent() == null) {
-            return false;
-        }
-        return result.getContent().contains(ToolExecutor.HITL_REJECTED_MARKER);
+    static boolean isHitlRejectedResult(ToolExecutor.ToolExecutionResult result) {
+        return result != null && RuntimeFailureCategories.HITL_REJECTED.equals(result.failureCategory());
     }
 
     /**

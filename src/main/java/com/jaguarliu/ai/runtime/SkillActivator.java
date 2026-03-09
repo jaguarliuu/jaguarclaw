@@ -5,7 +5,6 @@ import com.jaguarliu.ai.gateway.events.EventBus;
 import com.jaguarliu.ai.llm.model.LlmRequest;
 import com.jaguarliu.ai.llm.model.ToolCall;
 import com.jaguarliu.ai.runtime.ContextBuilder;
-import com.jaguarliu.ai.skills.selector.SkillSelection;
 import com.jaguarliu.ai.skills.selector.SkillSelector;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -20,7 +19,6 @@ import java.util.Optional;
  * 负责检测和激活 Skill
  *
  * 从 AgentRuntime 迁移的逻辑：
- * - detectAutoSkillActivation() -> detectAutoActivation()
  * - detectUseSkillActivation() -> detectToolActivation()
  * - handleSkillActivationByName() -> applyActivation()
  */
@@ -32,49 +30,6 @@ public class SkillActivator {
     private final SkillSelector skillSelector;
     private final ContextBuilder contextBuilder;
     private final EventBus eventBus;
-
-    /**
-     * 检测自动 Skill 激活
-     * 从 LLM 响应中解析 [USE_SKILL:xxx] 标记
-     *
-     * @param llmResponse LLM 响应文本
-     * @param context     运行上下文
-     * @return 激活结果，如果没有检测到返回 empty
-     */
-    public Optional<SkillActivation> detectAutoActivation(
-            String llmResponse,
-            RunContext context
-    ) {
-        if (llmResponse == null || llmResponse.isBlank()) {
-            return Optional.empty();
-        }
-
-        // 使用 SkillSelector 解析
-        SkillSelection selection = skillSelector.parseFromLlmResponse(
-                llmResponse, context.getOriginalInput(), context.getAgentId());
-
-        if (!selection.isSelected()) {
-            return Optional.empty();
-        }
-
-        String skillName = selection.getSkillName();
-
-        // 检查激活限制（每个 skill 最多激活 3 次）
-        if (context.isSkillActivationLimitReached(skillName)) {
-            log.info("Skill activation limit reached: skill={}, runId={}",
-                    skillName, context.getRunId());
-            return Optional.empty();
-        }
-
-        log.info("Detected auto skill activation: skill={}, runId={}",
-                skillName, context.getRunId());
-
-        return Optional.of(new SkillActivation(
-                skillName,
-                "auto",
-                selection.getArguments() != null ? Map.of("args", selection.getArguments()) : null
-        ));
-    }
 
     /**
      * 检测 use_skill 工具激活

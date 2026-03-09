@@ -39,6 +39,18 @@ export default {
     emptyTitle: 'Ready',
     emptyHint: '输入消息开始对话',
   },
+  workspace: {
+    runOutcome: {
+      title: '执行状态',
+      currentItem: '当前任务项',
+      reason: '原因',
+      pendingQuestion: '待确认事项',
+      toastTitle: '需要处理',
+      popupTitle: '需要处理',
+      popupBlockedTitle: '执行已阻塞',
+      popupConfirm: '知道了',
+    },
+  },
   input: {
     placeholder: '输入消息...',
     hintSend: 'Enter 发送',

@@ -1,5 +1,6 @@
 package com.jaguarliu.ai.tools.builtin.filesystem;
 
+import com.jaguarliu.ai.runtime.RuntimeFailureCategories;
 import com.jaguarliu.ai.tools.ToolExecutionContext;
 import com.jaguarliu.ai.tools.ToolResult;
 import com.jaguarliu.ai.tools.ToolsProperties;
@@ -10,6 +11,7 @@ import org.junit.jupiter.api.io.TempDir;
 import java.nio.file.Path;
 import java.util.Map;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -43,6 +45,7 @@ class WriteFileToolTest {
 
             assertNotNull(result);
             assertFalse(result.isSuccess());
+            assertEquals(RuntimeFailureCategories.HARD_ENVIRONMENT_BLOCK, result.getFailureCategory());
             assertTrue(result.getContent().contains("Allowed workspace:"), result.getContent());
             assertTrue(result.getContent().contains(agentWorkspace.toString()), result.getContent());
         } finally {

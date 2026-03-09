@@ -1,5 +1,6 @@
 package com.jaguarliu.ai.tools.builtin.workflow;
 
+import com.jaguarliu.ai.runtime.RuntimeFailureCategories;
 import com.jaguarliu.ai.subagent.SubagentService;
 import com.jaguarliu.ai.subagent.model.SubagentSpawnRequest;
 import com.jaguarliu.ai.subagent.model.SubagentSpawnResult;
@@ -82,14 +83,15 @@ public class SessionsSpawnTool implements Tool {
         ToolExecutionContext context = ToolExecutionContext.current();
         if (context == null) {
             log.error("ToolExecutionContext is null, cannot execute sessions_spawn");
-            return Mono.just(ToolResult.error("Internal error: execution context not available"));
+            return Mono.just(ToolResult.error("Internal error: execution context not available", RuntimeFailureCategories.TOOL_ERROR));
         }
 
         // 2. 检查是否为 worker（禁止嵌套）
         if (context.isWorker()) {
             log.warn("Nested worker spawn rejected: runId={}, runKind={}", context.getRunId(), context.getRunKind());
             return Mono.just(ToolResult.error(
-                    "Nested spawn is not allowed. Worker task cannot spawn another worker task."
+                    "Nested spawn is not allowed. Worker task cannot spawn another worker task.",
+                    RuntimeFailureCategories.POLICY_BLOCK
             ));
         }
 
@@ -149,7 +151,7 @@ public class SessionsSpawnTool implements Tool {
             }
         } else {
             log.warn("Worker task spawn failed: parentRunId={}, error={}", context.getRunId(), result.getError());
-            return Mono.just(ToolResult.error("Spawn failed: " + result.getError()));
+            return Mono.just(ToolResult.error("Spawn failed: " + result.getError(), RuntimeFailureCategories.TOOL_ERROR));
         }
     }
 

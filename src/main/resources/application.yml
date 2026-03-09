@@ -85,7 +85,7 @@ agent:
   # context-window-limit: 80000
   # compaction-keep-recent: 10
   loop:
-    max-steps: 50
+    max-steps: 150
     run-timeout-seconds: 1200
     step-timeout-seconds: 300
   hitl:

@@ -12,7 +12,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * ReAct 循环运行上下文
@@ -110,18 +109,6 @@ public class RunContext {
     @Builder.Default
     private final AtomicInteger totalCacheReadTokens = new AtomicInteger(0);
 
-    @Builder.Default
-    private final AtomicInteger repeatedFailureCount = new AtomicInteger(0);
-
-    @Builder.Default
-    private final AtomicInteger lowProgressRounds = new AtomicInteger(0);
-
-    @Builder.Default
-    private final AtomicInteger environmentRepairAttempts = new AtomicInteger(0);
-
-    @Builder.Default
-    private final AtomicReference<String> lastFailureCategory = new AtomicReference<>();
-
     /**
      * 原始用户输入（用于 skill 激活）
      */
@@ -187,12 +174,6 @@ public class RunContext {
      */
     @Setter
     private RunOutcome outcome;
-
-    @Setter
-    private TaskVerifier taskVerifier;
-
-    @Setter
-    private TaskContract taskContract;
 
     /**
      * Skill 激活计数器（skillName -> count）（线程安全）
@@ -293,55 +274,6 @@ public class RunContext {
 
     public boolean hasOutcome() {
         return outcome != null;
-    }
-
-    public void recordFailure(String category) {
-        String normalized = (category == null || category.isBlank()) ? "unknown" : category;
-        String previous = lastFailureCategory.get();
-        if (normalized.equals(previous)) {
-            repeatedFailureCount.incrementAndGet();
-        } else {
-            lastFailureCategory.set(normalized);
-            repeatedFailureCount.set(1);
-        }
-    }
-
-    public void recordLowProgressRound() {
-        lowProgressRounds.incrementAndGet();
-    }
-
-    public void recordMeaningfulProgress() {
-        lowProgressRounds.set(0);
-        repeatedFailureCount.set(0);
-        lastFailureCategory.set(null);
-    }
-
-    public void recordEnvironmentRepairAttempt() {
-        environmentRepairAttempts.incrementAndGet();
-    }
-
-    public boolean isRepeatedFailureLimitReached() {
-        return config.getMaxRepeatedFailures() > 0
-                && repeatedFailureCount.get() >= config.getMaxRepeatedFailures();
-    }
-
-    public boolean isLowProgressLimitReached() {
-        return config.getMaxLowProgressRounds() > 0
-                && lowProgressRounds.get() >= config.getMaxLowProgressRounds();
-    }
-
-    public boolean isTokenBudgetReached() {
-        return config.getMaxTokens() > 0 && getTotalTokens() >= config.getMaxTokens();
-    }
-
-    public ProgressSnapshot snapshotProgress() {
-        return new ProgressSnapshot(
-                repeatedFailureCount.get(),
-                lastFailureCategory.get(),
-                lowProgressRounds.get(),
-                environmentRepairAttempts.get(),
-                getTotalTokens()
-        );
     }
 
     /**

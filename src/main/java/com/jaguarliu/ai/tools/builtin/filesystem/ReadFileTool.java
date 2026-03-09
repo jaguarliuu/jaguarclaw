@@ -1,5 +1,6 @@
 package com.jaguarliu.ai.tools.builtin.filesystem;
 
+import com.jaguarliu.ai.runtime.RuntimeFailureCategories;
 import com.jaguarliu.ai.tools.Tool;
 import com.jaguarliu.ai.tools.ToolDefinition;
 import com.jaguarliu.ai.tools.ToolExecutionContext;
@@ -93,20 +94,20 @@ public class ReadFileTool implements Tool {
                 Path filePath = resolvePath(pathStr);
                 if (filePath == null) {
                     log.warn("Path access denied: {}", pathStr);
-                    return ToolResult.error("Access denied: path outside workspace");
+                    return ToolResult.error("Access denied: path outside workspace", RuntimeFailureCategories.HARD_ENVIRONMENT_BLOCK);
                 }
 
                 if (!Files.exists(filePath)) {
-                    return ToolResult.error("File not found: " + pathStr);
+                    return ToolResult.error("File not found: " + pathStr, RuntimeFailureCategories.REPAIRABLE_ENVIRONMENT);
                 }
 
                 if (!Files.isRegularFile(filePath)) {
-                    return ToolResult.error("Not a file: " + pathStr);
+                    return ToolResult.error("Not a file: " + pathStr, RuntimeFailureCategories.REPAIRABLE_ENVIRONMENT);
                 }
 
                 long size = Files.size(filePath);
                 if (size > properties.getMaxFileSize()) {
-                    return ToolResult.error("File too large: " + size + " bytes (max: " + properties.getMaxFileSize() + ")");
+                    return ToolResult.error("File too large: " + size + " bytes (max: " + properties.getMaxFileSize() + ")", RuntimeFailureCategories.HARD_ENVIRONMENT_BLOCK);
                 }
 
                 // 判断文件类型

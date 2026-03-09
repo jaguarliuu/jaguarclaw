@@ -272,11 +272,21 @@ public class AgentEvent {
     public static AgentEvent runOutcome(String connectionId, String runId,
                                         String status, String reason,
                                         int step, int totalTokens) {
+        return runOutcome(connectionId, runId, status, reason, null, null, null, null, null, step, totalTokens);
+    }
+
+    public static AgentEvent runOutcome(String connectionId, String runId,
+                                        String status, String reason,
+                                        String message, String detail,
+                                        String pendingQuestion,
+                                        String planStatus,
+                                        String currentItemId,
+                                        int step, int totalTokens) {
         return AgentEvent.builder()
                 .type(EventType.RUN_OUTCOME)
                 .connectionId(connectionId)
                 .runId(runId)
-                .data(new RunOutcomeData(status, reason, step, totalTokens))
+                .data(new RunOutcomeData(status, reason, message, detail, pendingQuestion, planStatus, currentItemId, step, totalTokens))
                 .build();
     }
 
@@ -485,6 +495,11 @@ public class AgentEvent {
     public static class RunOutcomeData {
         private String status;
         private String reason;
+        private String message;
+        private String detail;
+        private String pendingQuestion;
+        private String planStatus;
+        private String currentItemId;
         private int step;
         private int totalTokens;
     }

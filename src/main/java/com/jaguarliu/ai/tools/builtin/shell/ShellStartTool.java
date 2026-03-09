@@ -1,5 +1,6 @@
 package com.jaguarliu.ai.tools.builtin.shell;
 
+import com.jaguarliu.ai.runtime.RuntimeFailureCategories;
 import com.jaguarliu.ai.tools.Tool;
 import com.jaguarliu.ai.tools.ToolDefinition;
 import com.jaguarliu.ai.tools.ToolResult;
@@ -84,7 +85,7 @@ public class ShellStartTool implements Tool {
 
             } catch (Exception e) {
                 log.error("Failed to start process: {}", command, e);
-                return ToolResult.error("Failed to start process: " + e.getMessage());
+                return ToolResult.error("Failed to start process: " + e.getMessage(), RuntimeFailureCategories.HARD_ENVIRONMENT_BLOCK);
             }
         });
     }

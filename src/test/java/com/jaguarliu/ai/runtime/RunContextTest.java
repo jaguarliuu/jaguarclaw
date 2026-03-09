@@ -155,13 +155,35 @@ class RunContextTest {
                 new CancellationManager()
         );
 
-        ctx.recordFailure("environment_missing");
-        ctx.recordFailure("environment_missing");
+        ctx.recordFailure(RuntimeFailureCategories.TOOL_ERROR);
+        ctx.recordFailure(RuntimeFailureCategories.TOOL_ERROR);
         ctx.recordLowProgressRound();
         ctx.recordLowProgressRound();
 
         assertTrue(ctx.isRepeatedFailureLimitReached());
         assertTrue(ctx.isLowProgressLimitReached());
+    }
+
+    @Test
+    @DisplayName("Should expose runtime failure categories for the current round")
+    void shouldExposeRuntimeFailureCategoriesForTheCurrentRound() {
+        RunContext ctx = RunContext.create(
+                "r1", "c1", "s1",
+                LoopConfig.builder().build(),
+                new CancellationManager()
+        );
+
+        ctx.replaceRuntimeFailureCategories(java.util.List.of(
+                RuntimeFailureCategories.REPAIRABLE_ENVIRONMENT,
+                RuntimeFailureCategories.USER_DECISION_REQUIRED
+        ));
+
+        assertTrue(ctx.hasRuntimeFailureCategory(RuntimeFailureCategories.REPAIRABLE_ENVIRONMENT));
+        assertTrue(ctx.hasRuntimeFailureCategory(RuntimeFailureCategories.USER_DECISION_REQUIRED));
+        assertEquals(2, ctx.getRuntimeFailureCategories().size());
+
+        ctx.clearRuntimeFailureCategories();
+        assertTrue(ctx.getRuntimeFailureCategories().isEmpty());
     }
 
     @Test
@@ -180,4 +202,32 @@ class RunContextTest {
 
         assertTrue(ctx.isTokenBudgetReached());
     }
+
+    @Test
+    @DisplayName("Should store execution plan in RunContext")
+    void shouldStoreExecutionPlanInRunContext() {
+        RunContext ctx = RunContext.create(
+                "r1", "c1", "s1",
+                LoopConfig.builder().build(),
+                new CancellationManager()
+        );
+
+        ExecutionPlan plan = ExecutionPlan.builder()
+                .goal("open zhihu")
+                .status(ExecutionPlanStatus.ACTIVE)
+                .currentItemId("item-1")
+                .items(new java.util.ArrayList<>(java.util.List.of(
+                        PlanItem.builder().id("item-1").title("open zhihu").status(PlanItemStatus.IN_PROGRESS).executionMode(PlanExecutionMode.MAIN_AGENT).build()
+                )))
+                .revision(1)
+                .build();
+
+        ctx.setExecutionPlan(plan);
+        ctx.setPlanInitialized(true);
+
+        assertTrue(ctx.hasExecutionPlan());
+        assertTrue(ctx.isPlanInitialized());
+        assertEquals("item-1", ctx.currentPlanItem().orElseThrow().getId());
+    }
+
 }

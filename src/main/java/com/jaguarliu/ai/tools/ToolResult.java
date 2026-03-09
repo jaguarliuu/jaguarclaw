@@ -25,6 +25,11 @@ public class ToolResult {
     private String content;
 
     /**
+     * 结构化失败类别（可空）
+     */
+    private String failureCategory;
+
+    /**
      * 创建成功结果
      */
     public static ToolResult success(String content) {
@@ -38,9 +43,17 @@ public class ToolResult {
      * 创建失败结果
      */
     public static ToolResult error(String message) {
+        return error(message, null);
+    }
+
+    /**
+     * 创建带结构化失败类别的失败结果
+     */
+    public static ToolResult error(String message, String failureCategory) {
         return ToolResult.builder()
                 .success(false)
                 .content("Error: " + message)
+                .failureCategory(failureCategory)
                 .build();
     }
 }

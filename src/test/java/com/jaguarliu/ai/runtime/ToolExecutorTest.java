@@ -6,6 +6,7 @@ import com.jaguarliu.ai.llm.model.ToolCall;
 import com.jaguarliu.ai.session.SessionFileService;
 import com.jaguarliu.ai.tools.ToolDispatcher;
 import com.jaguarliu.ai.tools.ToolRegistry;
+import com.jaguarliu.ai.tools.ToolResult;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -53,8 +54,8 @@ class ToolExecutorTest {
     private ToolExecutor toolExecutor;
 
     @Test
-    @DisplayName("HITL rejected tool call should return explicit rejection marker and skip dispatch")
-    void hitlRejectedShouldReturnMarkerAndSkipDispatch() {
+    @DisplayName("HITL rejected tool call should return structured rejection and skip dispatch")
+    void hitlRejectedShouldReturnStructuredRejectionAndSkipDispatch() {
         RunContext context = RunContext.create(
                 "run-1",
                 "conn-1",
@@ -78,14 +79,14 @@ class ToolExecutorTest {
         List<ToolExecutor.ToolExecutionResult> results = toolExecutor.executeToolCalls(context, List.of(call));
 
         assertFalse(results.get(0).result().isSuccess());
-        assertTrue(results.get(0).result().getContent().contains(ToolExecutor.HITL_REJECTED_MARKER));
-        assertEquals("hitl_rejected", results.get(0).failureCategory());
+        assertEquals(RuntimeFailureCategories.HITL_REJECTED, results.get(0).result().getFailureCategory());
+        assertEquals(RuntimeFailureCategories.HITL_REJECTED, results.get(0).failureCategory());
         verify(toolDispatcher, never()).dispatch(anyString(), anyMap(), any());
     }
 
     @Test
-    @DisplayName("tool errors should be tagged with machine readable failure category")
-    void toolErrorsShouldBeTaggedWithFailureCategory() {
+    @DisplayName("tool errors should prefer structured failure category")
+    void toolErrorsShouldPreferStructuredFailureCategory() {
         RunContext context = RunContext.create(
                 "run-1",
                 "conn-1",
@@ -105,16 +106,19 @@ class ToolExecutorTest {
         when(agentWorkspaceResolver.resolveAgentWorkspace(anyString())).thenReturn(Path.of("."));
         when(toolDispatcher.requiresHitl(anyString(), any(), anyMap())).thenReturn(false);
         when(toolDispatcher.dispatch(anyString(), anyMap(), any()))
-                .thenReturn(Mono.just(com.jaguarliu.ai.tools.ToolResult.error("wkhtmltopdf: command not found")));
+                .thenReturn(Mono.just(ToolResult.error(
+                        "wkhtmltopdf: command not found",
+                        RuntimeFailureCategories.REPAIRABLE_ENVIRONMENT
+                )));
 
         List<ToolExecutor.ToolExecutionResult> results = toolExecutor.executeToolCalls(context, List.of(call));
 
-        assertEquals("environment_missing", results.get(0).failureCategory());
+        assertEquals(RuntimeFailureCategories.REPAIRABLE_ENVIRONMENT, results.get(0).failureCategory());
     }
 
     @Test
-    @DisplayName("localized windows tool errors should be tagged as environment missing")
-    void localizedWindowsToolErrorsShouldBeTaggedAsEnvironmentMissing() {
+    @DisplayName("unstructured tool errors should degrade to generic tool error")
+    void unstructuredToolErrorsShouldDegradeToGenericToolError() {
         RunContext context = RunContext.create(
                 "run-1",
                 "conn-1",
@@ -127,19 +131,17 @@ class ToolExecutorTest {
                 .id("call-3")
                 .function(ToolCall.FunctionCall.builder()
                         .name("bash")
-                        .arguments("{\"command\":\"wkhtmltopdf --version\"}")
+                        .arguments("{\"command\":\"unknown\"}")
                         .build())
                 .build();
 
         when(agentWorkspaceResolver.resolveAgentWorkspace(anyString())).thenReturn(Path.of("."));
         when(toolDispatcher.requiresHitl(anyString(), any(), anyMap())).thenReturn(false);
         when(toolDispatcher.dispatch(anyString(), anyMap(), any()))
-                .thenReturn(Mono.just(com.jaguarliu.ai.tools.ToolResult.error(
-                        "'wkhtmltopdf' 不是内部或外部命令，也不是可运行的程序或批处理文件。"
-                )));
+                .thenReturn(Mono.just(ToolResult.error("arbitrary failure")));
 
         List<ToolExecutor.ToolExecutionResult> results = toolExecutor.executeToolCalls(context, List.of(call));
 
-        assertEquals("environment_missing", results.get(0).failureCategory());
+        assertEquals(RuntimeFailureCategories.TOOL_ERROR, results.get(0).failureCategory());
     }
 }

@@ -1,6 +1,7 @@
 package com.jaguarliu.ai.tools.builtin.node;
 
 import com.jaguarliu.ai.nodeconsole.AuditLogService;
+import com.jaguarliu.ai.runtime.RuntimeFailureCategories;
 import com.jaguarliu.ai.nodeconsole.NodeEntity;
 import com.jaguarliu.ai.nodeconsole.NodeService;
 import com.jaguarliu.ai.nodeconsole.RemoteCommandClassifier;
@@ -103,7 +104,7 @@ public class RemoteExecTool implements Tool {
             try {
                 payload = resolveCommandPayload(command, scriptPath, scriptContent, interpreter, scriptArgs);
             } catch (Exception e) {
-                return ToolResult.error("Invalid script input: " + e.getMessage());
+                return ToolResult.error("Invalid script input: " + e.getMessage(), RuntimeFailureCategories.REPAIRABLE_ENVIRONMENT);
             }
 
             // 获取节点信息
@@ -128,7 +129,7 @@ public class RemoteExecTool implements Tool {
                         "remote_exec", payload.auditCommand(), safetyLevel, policy,
                         false, null,
                         "blocked", classification.reason(), 0);
-                return ToolResult.error("Command blocked: " + classification.reason());
+                return ToolResult.error("Command blocked: " + classification.reason(), RuntimeFailureCategories.POLICY_BLOCK);
             }
 
             // 检查是否需要 HITL（此时应该已经通过 HITL 确认了）
@@ -155,7 +156,7 @@ public class RemoteExecTool implements Tool {
                         hitlRequired, hitlRequired ? "approve" : null,
                         "error", e.getMessage(), durationMs);
 
-                return ToolResult.error(e.getMessage());
+                return ToolResult.error(e.getMessage(), RuntimeFailureCategories.TOOL_ERROR);
             }
         });
     }

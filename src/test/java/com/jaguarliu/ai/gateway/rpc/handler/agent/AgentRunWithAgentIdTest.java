@@ -22,6 +22,10 @@ import com.jaguarliu.ai.runtime.ChatRouter;
 import com.jaguarliu.ai.runtime.ContextBuilder;
 import com.jaguarliu.ai.runtime.LoopConfig;
 import com.jaguarliu.ai.runtime.RunContext;
+import com.jaguarliu.ai.runtime.RunOutcome;
+import com.jaguarliu.ai.runtime.RunOutcomeStatus;
+import com.jaguarliu.ai.runtime.ReactEntrySkillSelector;
+import com.jaguarliu.ai.runtime.ReactEntrySkillSelection;
 import com.jaguarliu.ai.runtime.SessionLaneManager;
 import com.jaguarliu.ai.runtime.TaskComplexity;
 import com.jaguarliu.ai.runtime.TaskRouteMode;
@@ -116,6 +120,8 @@ class AgentRunWithAgentIdTest {
     private TokenBudgetService tokenBudgetService;
     @Mock
     private AuditLogService auditLogService;
+    @Mock
+    private ReactEntrySkillSelector reactEntrySkillSelector;
 
     private ConnectionPrincipal principal;
     private LoopConfig loopConfig;
@@ -406,7 +412,7 @@ class AgentRunWithAgentIdTest {
         }
 
         @Test
-        void chatRouteShouldBypassStrategyAndRuntime() throws Exception {
+        void directRouteShouldBypassStrategyAndRuntime() throws Exception {
             AgentRunHandler handler = newAgentRunHandler();
             mockCommonRunPrerequisites();
 
@@ -419,13 +425,11 @@ class AgentRunWithAgentIdTest {
                     .thenReturn(List.of());
             when(taskRouter.route(eq("hi"), anyList(), eq(false), nullable(String.class)))
                     .thenReturn(TaskRoutingDecision.builder()
-                            .routeMode(TaskRouteMode.CHAT)
+                            .routeMode(TaskRouteMode.DIRECT)
                             .complexity(TaskComplexity.DIRECT)
-                            .shouldUseTools(false)
-                            .shouldUseStrategy(false)
                             .reason("greeting")
                             .build());
-            when(contextBuilder.buildForPolicyDecision(anyList(), eq("hi"), eq(false), eq(TaskComplexity.DIRECT), eq("coder")))
+            when(contextBuilder.buildDirectResponse(anyList(), eq("hi"), eq("coder")))
                     .thenReturn(new ContextBuilder.SkillAwareRequest(
                             LlmRequest.builder().messages(List.of(LlmRequest.Message.system("minimal"), LlmRequest.Message.user("hi"))).build(),
                             null, null, null, null
@@ -474,7 +478,7 @@ class AgentRunWithAgentIdTest {
         }
 
         @Test
-        void lightRouteShouldUseLightRuntimePathWithoutStrategyPlan() throws Exception {
+        void reactRouteShouldUseReactRuntimePath() throws Exception {
             AgentRunHandler handler = newAgentRunHandler();
             mockCommonRunPrerequisites();
 
@@ -487,17 +491,16 @@ class AgentRunWithAgentIdTest {
                     .thenReturn(List.of());
             when(taskRouter.route(eq("read this file"), anyList(), eq(false), nullable(String.class)))
                     .thenReturn(TaskRoutingDecision.builder()
-                            .routeMode(TaskRouteMode.LIGHT)
-                            .complexity(TaskComplexity.LIGHT)
-                            .shouldUseTools(true)
-                            .shouldUseStrategy(false)
+                            .routeMode(TaskRouteMode.REACT)
+                            .complexity(TaskComplexity.HEAVY)
                             .reason("small task")
                             .build());
-            when(contextBuilder.buildForPolicyDecision(anyList(), eq("read this file"), eq(true), eq(TaskComplexity.LIGHT), eq("coder")))
-                    .thenReturn(new ContextBuilder.SkillAwareRequest(
-                            LlmRequest.builder().messages(List.of(LlmRequest.Message.system("minimal"), LlmRequest.Message.user("read this file"))).build(),
-                            null, null, null, null
-                    ));
+            AgentStrategy strategy = org.mockito.Mockito.mock(AgentStrategy.class);
+            when(strategyResolver.resolve(any())).thenReturn(strategy);
+            when(strategy.prepare(any())).thenReturn(AgentExecutionPlan.builder()
+                    .systemPrompt("system prompt")
+                    .strategyName("default")
+                    .build());
             when(agentRuntime.executeLoopWithContext(any(RunContext.class), anyList()))
                     .thenReturn("light result");
             when(sessionLaneManager.submit(eq("session-light"), eq("run-light"), eq(13L), any(Supplier.class)))
@@ -516,8 +519,77 @@ class AgentRunWithAgentIdTest {
 
             assertNotNull(response);
             assertNull(response.getError());
-            verify(strategyResolver, org.mockito.Mockito.never()).resolve(any());
+            verify(strategyResolver).resolve(any());
             verify(agentRuntime).executeLoopWithContext(any(RunContext.class), anyList());
+        }
+
+        @Test
+        void reactRouteShouldSelectEntrySkillBeforeRuntime() throws Exception {
+            AgentRunHandler handler = newAgentRunHandler();
+            mockCommonRunPrerequisites();
+
+            when(sessionService.get("session-skill", PRINCIPAL_ID))
+                    .thenReturn(Optional.of(sessionEntity("session-skill", "Skill Chat", "coder")));
+            when(sessionLaneManager.nextSequence("session-skill")).thenReturn(16L);
+            when(runService.create("session-skill", "打开浏览器访问知乎", "coder", PRINCIPAL_ID))
+                    .thenReturn(runEntity("run-skill", "session-skill", "coder", "打开浏览器访问知乎"));
+            when(messageService.getSessionHistory(eq("session-skill"), anyInt(), eq(PRINCIPAL_ID)))
+                    .thenReturn(List.of());
+            when(taskRouter.route(eq("打开浏览器访问知乎"), anyList(), eq(false), nullable(String.class)))
+                    .thenReturn(TaskRoutingDecision.builder()
+                            .routeMode(TaskRouteMode.REACT)
+                            .complexity(TaskComplexity.HEAVY)
+                            .reason("browser task")
+                            .build());
+            AgentStrategy strategy = org.mockito.Mockito.mock(AgentStrategy.class);
+            when(strategyResolver.resolve(any())).thenReturn(strategy);
+            when(strategy.prepare(any())).thenReturn(AgentExecutionPlan.builder()
+                    .systemPrompt("system prompt")
+                    .strategyName("default")
+                    .build());
+            when(reactEntrySkillSelector.select(eq("打开浏览器访问知乎"), anyList(), eq("coder"), nullable(String.class)))
+                    .thenReturn(Optional.of(ReactEntrySkillSelection.builder()
+                            .skillName("agent-browser")
+                            .reason("browser automation skill fits best")
+                            .confidence(0.96)
+                            .build()));
+
+            LlmRequest skillRequest = LlmRequest.builder()
+                    .messages(List.of(
+                            LlmRequest.Message.system("skill system"),
+                            LlmRequest.Message.user("打开浏览器访问知乎")
+                    ))
+                    .build();
+            when(contextBuilder.handleSkillActivationByName(eq("agent-browser"), eq("打开浏览器访问知乎"), anyList(), eq(true), eq("coder")))
+                    .thenReturn(Optional.of(new ContextBuilder.SkillAwareRequest(
+                            skillRequest,
+                            "agent-browser",
+                            java.util.Set.of("shell"),
+                            java.util.Set.of(),
+                            java.nio.file.Path.of("/tmp/agent-browser")
+                    )));
+            when(agentRuntime.executeLoopWithContext(any(RunContext.class), anyList()))
+                    .thenReturn("skill result");
+            when(sessionLaneManager.submit(eq("session-skill"), eq("run-skill"), eq(16L), any(Supplier.class)))
+                    .thenAnswer(invocation -> {
+                        @SuppressWarnings("unchecked")
+                        Supplier<Object> task = (Supplier<Object>) invocation.getArgument(3);
+                        task.get();
+                        return Mono.empty();
+                    });
+
+            RpcResponse response = handler.handle(CONNECTION_ID, RpcRequest.builder()
+                    .id("skill-1")
+                    .method("agent.run")
+                    .payload(Map.of("sessionId", "session-skill", "prompt", "打开浏览器访问知乎"))
+                    .build()).block();
+
+            assertNotNull(response);
+            ArgumentCaptor<RunContext> contextCaptor = ArgumentCaptor.forClass(RunContext.class);
+            ArgumentCaptor<List<LlmRequest.Message>> messagesCaptor = ArgumentCaptor.forClass(List.class);
+            verify(agentRuntime).executeLoopWithContext(contextCaptor.capture(), messagesCaptor.capture());
+            assertEquals("agent-browser", contextCaptor.getValue().getActiveSkill().activeSkillName());
+            assertEquals("skill system", messagesCaptor.getValue().get(0).getContent());
         }
 
         @Test
@@ -571,6 +643,112 @@ class AgentRunWithAgentIdTest {
                     "run-heavy",
                     "Full streamed answer about today's AI news",
                     PRINCIPAL_ID
+            );
+        }
+
+        @Test
+        void heavyRouteShouldPublishTerminalResponseWhenNoDraftWasStreamed() throws Exception {
+            AgentRunHandler handler = newAgentRunHandler();
+            mockCommonRunPrerequisites();
+
+            when(sessionService.get("session-env", PRINCIPAL_ID))
+                    .thenReturn(Optional.of(sessionEntity("session-env", "Env Chat", "coder")));
+            when(sessionLaneManager.nextSequence("session-env")).thenReturn(15L);
+            when(runService.create("session-env", "open website", "coder", PRINCIPAL_ID))
+                    .thenReturn(runEntity("run-env", "session-env", "coder", "open website"));
+
+            AgentStrategy strategy = org.mockito.Mockito.mock(AgentStrategy.class);
+            when(strategyResolver.resolve(any())).thenReturn(strategy);
+            when(strategy.prepare(any())).thenReturn(AgentExecutionPlan.builder()
+                    .systemPrompt("system prompt")
+                    .strategyName("default")
+                    .build());
+            when(messageService.getSessionHistory(eq("session-env"), anyInt(), eq(PRINCIPAL_ID)))
+                    .thenReturn(List.of());
+
+            String terminalResponse = "'.\\agent-browser.cmd' 不是内部或外部命令，也不是可运行的程序或批处理文件。";
+            when(agentRuntime.executeLoopWithContext(any(RunContext.class), anyList()))
+                    .thenAnswer(invocation -> {
+                        RunContext context = invocation.getArgument(0);
+                        context.setOutcome(new RunOutcome(
+                                RunOutcomeStatus.BLOCKED_BY_ENVIRONMENT,
+                                "Task blocked by environment",
+                                terminalResponse
+                        ));
+                        return terminalResponse;
+                    });
+            when(sessionLaneManager.submit(eq("session-env"), eq("run-env"), eq(15L), any(Supplier.class)))
+                    .thenAnswer(invocation -> {
+                        @SuppressWarnings("unchecked")
+                        Supplier<Object> task = (Supplier<Object>) invocation.getArgument(3);
+                        task.get();
+                        return Mono.empty();
+                    });
+
+            RpcResponse response = handler.handle(CONNECTION_ID, RpcRequest.builder()
+                    .id("10")
+                    .method("agent.run")
+                    .payload(Map.of("sessionId", "session-env", "prompt", "open website"))
+                    .build()).block();
+
+            assertNotNull(response);
+            assertNull(response.getError());
+            verify(messageService).saveAssistantMessage("session-env", "run-env", "I couldn\'t continue because the current environment blocked this action. Details: " + terminalResponse, PRINCIPAL_ID);
+
+            ArgumentCaptor<AgentEvent> eventCaptor = ArgumentCaptor.forClass(AgentEvent.class);
+            verify(eventBus, org.mockito.Mockito.atLeastOnce()).publish(eventCaptor.capture());
+            List<AgentEvent> assistantDeltas = eventCaptor.getAllValues().stream()
+                    .filter(event -> event.getType() == AgentEvent.EventType.ASSISTANT_DELTA)
+                    .toList();
+
+            assertEquals(1, assistantDeltas.size());
+            assertTrue(assistantDeltas.get(0).getData() instanceof AgentEvent.DeltaData delta
+                    && ("I couldn\'t continue because the current environment blocked this action. Details: " + terminalResponse).equals(delta.getContent()));
+        }
+
+        @Test
+        void timedOutRunShouldPersistAssistantTimeoutMessage() throws Exception {
+            AgentRunHandler handler = newAgentRunHandler();
+            mockCommonRunPrerequisites();
+
+            when(sessionService.get("session-timeout", PRINCIPAL_ID))
+                    .thenReturn(Optional.of(sessionEntity("session-timeout", "Timeout Chat", "coder")));
+            when(sessionLaneManager.nextSequence("session-timeout")).thenReturn(12L);
+            when(runService.create("session-timeout", "hello", "coder", PRINCIPAL_ID))
+                    .thenReturn(runEntity("run-timeout", "session-timeout", "coder", "hello"));
+
+            AgentStrategy strategy = org.mockito.Mockito.mock(AgentStrategy.class);
+            when(strategyResolver.resolve(any())).thenReturn(strategy);
+            when(strategy.prepare(any())).thenReturn(AgentExecutionPlan.builder()
+                    .systemPrompt("system prompt")
+                    .strategyName("default")
+                    .build());
+            when(messageService.getSessionHistory(eq("session-timeout"), anyInt(), eq(PRINCIPAL_ID)))
+                    .thenReturn(List.of());
+            when(agentRuntime.executeLoopWithContext(any(RunContext.class), anyList()))
+                    .thenThrow(new java.util.concurrent.TimeoutException("ReAct loop timeout after 30 seconds"));
+            when(sessionLaneManager.submit(eq("session-timeout"), eq("run-timeout"), eq(12L), any(Supplier.class)))
+                    .thenAnswer(invocation -> {
+                        @SuppressWarnings("unchecked")
+                        Supplier<Object> task = (Supplier<Object>) invocation.getArgument(3);
+                        task.get();
+                        return Mono.empty();
+                    });
+
+            RpcRequest request = RpcRequest.builder()
+                    .id("6b")
+                    .method("agent.run")
+                    .payload(Map.of("sessionId", "session-timeout", "prompt", "hello"))
+                    .build();
+            RpcResponse response = handler.handle(CONNECTION_ID, request).block();
+
+            assertNotNull(response);
+            assertNull(response.getError());
+            verify(messageService).saveAssistantMessage(
+                    eq("session-timeout"),
+                    eq("run-timeout"),
+                    contains("timed out before I could finish"),
+                    eq(PRINCIPAL_ID)
             );
         }
 
@@ -642,7 +820,8 @@ class AgentRunWithAgentIdTest {
                 taskRouter,
                 connectionManager,
                 tokenBudgetService,
-                auditLogService
+                auditLogService,
+                reactEntrySkillSelector
         );
     }
 
@@ -665,12 +844,12 @@ class AgentRunWithAgentIdTest {
                 });
         lenient().when(taskRouter.route(anyString(), anyList(), anyBoolean(), nullable(String.class)))
                 .thenReturn(TaskRoutingDecision.builder()
-                        .routeMode(TaskRouteMode.HEAVY)
+                        .routeMode(TaskRouteMode.REACT)
                         .complexity(TaskComplexity.HEAVY)
-                        .shouldUseTools(true)
-                        .shouldUseStrategy(true)
                         .reason("default")
                         .build());
+        lenient().when(reactEntrySkillSelector.select(anyString(), anyList(), anyString(), nullable(String.class)))
+                .thenReturn(Optional.empty());
     }
 
     private SessionEntity sessionEntity(String id, String name, String agentId) {
