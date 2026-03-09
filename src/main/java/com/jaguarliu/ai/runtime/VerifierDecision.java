@@ -26,5 +26,9 @@ public class VerifierDecision {
 
     private String userMessage;
 
+    private String action;
+
+    private String targetItemId;
+
     private Double confidence;
 }

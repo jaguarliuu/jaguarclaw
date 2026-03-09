@@ -14,6 +14,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * 基于 LLM 的任务验证器。
@@ -40,7 +41,7 @@ public class LlmRuntimeDecisionStage implements RuntimeDecisionStage {
                     buildVerifierRequest(context, assistantReply, observations),
                     VerifierDecision.class
             );
-            return mapDecision(result != null ? result.getValue() : null, assistantReply);
+            return mapDecision(context, result != null ? result.getValue() : null, assistantReply);
         } catch (Exception e) {
             log.warn("LLM verifier degraded to safe continue: runId={}, error={}",
                     context.getRunId(), e.getMessage());
@@ -52,13 +53,11 @@ public class LlmRuntimeDecisionStage implements RuntimeDecisionStage {
         List<LlmRequest.Message> messages = new ArrayList<>();
         messages.add(LlmRequest.Message.system("""
                 You are a runtime verifier for an autonomous agent.
-                Decide whether the task is completed, blocked by environment, blocked pending user decision,
-                not worth continuing, failed unexpectedly, or should continue.
-                Do not mark completed only because the assistant produced a reply.
+                Supervise execution item-by-item for a long-running task.
+                Decide whether the current plan item should continue, be marked done, ask the user,
+                be blocked, be delegated, complete the whole task, or stop.
+                Do not mark the whole task done unless the execution plan is effectively complete.
                 Use structured runtime failure categories as the primary signal when they are available.
-                If the failure is repairable and repair attempts remain, prefer shouldContinue=true with a concise next action.
-                Use BLOCKED_BY_ENVIRONMENT only when the environment issue is not realistically recoverable within the current run.
-                Use BLOCKED_PENDING_USER_DECISION only for genuine user-choice blockers such as approval, login, payment, or subscription.
                 Return only the structured decision.
                 """.trim()));
         messages.add(LlmRequest.Message.user(buildVerificationPrompt(context, assistantReply, observations)));
@@ -66,7 +65,7 @@ public class LlmRuntimeDecisionStage implements RuntimeDecisionStage {
         LlmRequest.LlmRequestBuilder builder = LlmRequest.builder()
                 .messages(messages)
                 .temperature(0.0)
-                .maxTokens(400)
+                .maxTokens(500)
                 .structuredOutput(StructuredOutputSpec.builder()
                         .name("verifier_decision")
                         .jsonSchema(VERIFIER_DECISION_SCHEMA)
@@ -83,6 +82,26 @@ public class LlmRuntimeDecisionStage implements RuntimeDecisionStage {
         prompt.append("Original task:\n")
                 .append(context.getOriginalInput() != null ? context.getOriginalInput() : "")
                 .append("\n\n");
+
+        if (context.hasExecutionPlan()) {
+            ExecutionPlan plan = context.getExecutionPlan();
+            prompt.append("Execution plan status:\n")
+                    .append("- planStatus: ").append(plan.getStatus()).append("\n")
+                    .append("- currentItemId: ").append(plan.getCurrentItemId()).append("\n")
+                    .append("- remainingItems: ").append(plan.remainingItemsCount()).append("\n")
+                    .append("- blockedItems: ").append(plan.blockedItemsCount()).append("\n");
+            context.currentPlanItem().ifPresent(item -> prompt.append("- currentItemTitle: ").append(item.getTitle()).append("\n"));
+            String completed = plan.getItems().stream()
+                    .filter(item -> item.getStatus() == PlanItemStatus.DONE)
+                    .map(PlanItem::getTitle)
+                    .collect(Collectors.joining(", "));
+            String remaining = plan.getItems().stream()
+                    .filter(item -> item.getStatus() != PlanItemStatus.DONE && item.getStatus() != PlanItemStatus.CANCELLED)
+                    .map(item -> item.getId() + ":" + item.getTitle() + "(" + item.getStatus() + ")")
+                    .collect(Collectors.joining(", "));
+            prompt.append("- completedItems: ").append(completed.isBlank() ? "none" : completed).append("\n")
+                    .append("- remainingItemSummary: ").append(remaining.isBlank() ? "none" : remaining).append("\n\n");
+        }
 
         if (assistantReply != null && !assistantReply.isBlank()) {
             prompt.append("Assistant reply:\n")
@@ -115,7 +134,8 @@ public class LlmRuntimeDecisionStage implements RuntimeDecisionStage {
                     .forEach(category -> prompt.append("- ").append(category).append("\n"));
         }
 
-        prompt.append("\nRespond with the structured decision fields only.");
+        prompt.append("\nPrefer ITEM_DONE over TASK_DONE when the current item is done but plan work remains.\n");
+        prompt.append("Respond with the structured decision fields only.");
         return prompt.toString();
     }
 
@@ -130,9 +150,22 @@ public class LlmRuntimeDecisionStage implements RuntimeDecisionStage {
         }
     }
 
-    private Decision mapDecision(VerifierDecision decision, String assistantReply) {
+    private Decision mapDecision(RunContext context, VerifierDecision decision, String assistantReply) {
         if (decision == null) {
             return Decision.continueSilently();
+        }
+
+        DecisionAction action = parseAction(decision.getAction());
+        if (action != null) {
+            return switch (action) {
+                case CONTINUE_ITEM -> Decision.continueWithFeedback(decision.getUserMessage(), decision.getFailureCategory(), decision.getReason());
+                case ITEM_DONE -> Decision.itemDone(decision.getReason(), decision.getTargetItemId());
+                case ASK_USER -> Decision.askUser(decision.getUserMessage(), decision.getFailureCategory(), decision.getReason(), decision.getTargetItemId());
+                case BLOCK_ITEM -> Decision.blockItem(decision.getUserMessage(), decision.getFailureCategory(), decision.getReason(), decision.getTargetItemId());
+                case DELEGATE_ITEM -> Decision.delegateItem(decision.getUserMessage(), decision.getReason(), decision.getTargetItemId());
+                case TASK_DONE -> Decision.taskDone(buildOutcome(RunOutcomeStatus.COMPLETED, decision, assistantReply), decision.getReason(), decision.getTargetItemId());
+                case STOP -> Decision.terminal(buildOutcome(parseOutcomeStatus(decision.getOutcome()) != null ? parseOutcomeStatus(decision.getOutcome()) : RunOutcomeStatus.NOT_WORTH_CONTINUING, decision, assistantReply), decision.getFailureCategory(), decision.getReason());
+            };
         }
 
         RunOutcomeStatus status = parseOutcomeStatus(decision.getOutcome());
@@ -148,7 +181,22 @@ public class LlmRuntimeDecisionStage implements RuntimeDecisionStage {
             return Decision.continueWithFeedback(decision.getUserMessage(), decision.getFailureCategory(), decision.getReason());
         }
 
+        if (context.hasExecutionPlan() && context.getExecutionPlan().allItemsDone()) {
+            return Decision.taskDone(RunOutcome.completed(defaultMessage(RunOutcomeStatus.COMPLETED, assistantReply)), decision.getReason(), decision.getTargetItemId());
+        }
         return Decision.continueSilently();
+    }
+
+    private DecisionAction parseAction(String action) {
+        if (action == null || action.isBlank()) {
+            return null;
+        }
+        try {
+            return DecisionAction.valueOf(action.trim().toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException e) {
+            log.warn("Unknown verifier action: {}", action);
+            return null;
+        }
     }
 
     private RunOutcome buildOutcome(RunOutcomeStatus status, VerifierDecision decision, String assistantReply) {
@@ -187,6 +235,10 @@ public class LlmRuntimeDecisionStage implements RuntimeDecisionStage {
         Map<String, Object> properties = new LinkedHashMap<>();
         properties.put("terminal", Map.of("type", "boolean"));
         properties.put("shouldContinue", Map.of("type", "boolean"));
+        properties.put("action", Map.of(
+                "type", "string",
+                "enum", Arrays.stream(DecisionAction.values()).map(Enum::name).toList()
+        ));
         properties.put("outcome", Map.of(
                 "type", "string",
                 "enum", Arrays.stream(RunOutcomeStatus.values()).map(Enum::name).toList()
@@ -194,6 +246,7 @@ public class LlmRuntimeDecisionStage implements RuntimeDecisionStage {
         properties.put("failureCategory", Map.of("type", "string"));
         properties.put("reason", Map.of("type", "string"));
         properties.put("userMessage", Map.of("type", "string"));
+        properties.put("targetItemId", Map.of("type", "string"));
         properties.put("confidence", Map.of("type", "number"));
 
         Map<String, Object> schema = new LinkedHashMap<>();

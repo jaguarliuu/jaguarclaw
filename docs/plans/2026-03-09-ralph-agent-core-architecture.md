@@ -1,496 +1,264 @@
 # Ralph Agent Core Architecture
 
-**Status:** Current as of 2026-03-09 after the main-flow refactor batches were completed.
-
-**Goal:** Document the current Ralph agent core execution path, decision boundaries, responsibilities, and health status so future work continues from the refactored architecture instead of the older mixed runtime flow.
-
-**Scope:** This document focuses on the heavy-loop / ReAct runtime path and the components that decide whether the agent continues, stops, asks the user, or terminates with an outcome.
+**Status:** implemented state on 2026-03-09  
+**Scope:** current top-level routing, ReAct runtime, verifier chain, HITL position, and in-memory long-task plan kernel
 
 ---
 
-## 1. Executive Summary
+## 1. 设计目标
 
-当前这条 agent 主路径**整体是 ok 的**，而且已经明显比重构前更清晰：
+当前版本的核心目标已经收敛成 4 条：
 
-- 运行时输入已经统一收口到 `DecisionInput`
-- 语义决策已经统一收口到 `DecisionEngine`
-- 决策副作用已经统一收口到 `OutcomeApplier`
-- 循环预算控制已经基本收口到 `ProgressSnapshot` + `LoopOrchestrator`
-- 工具失败语义已经优先走结构化 `failureCategory`，不再靠文本猜
+1. **顶层只做一次简单分流：`DIRECT` / `REACT`**
+2. **凡是“需要执行”的任务，一律进入 `REACT`**
+3. **HITL 是前端确认机制，不是聊天问答机制**
+4. **长任务在 `REACT` 内部靠内存态 plan 按 item 推进，而不是频繁提前停机**
 
-换句话说，主路径已经从“多处边判断边副作用”的模式，变成了：
-
-**收集输入 → 统一决策 → 统一落地 → 循环推进**
-
-这正是当前最重要的架构收益。
+这意味着现在的系统不再试图在路由层做过多能力裁剪，也不再依赖命令名、正则或关键词做主流程判断。
 
 ---
 
-## 2. Current Health Assessment
+## 2. 当前主架构
 
-### 2.1 Overall Judgment
+### 2.1 顶层分流
 
-**结论：当前 agent 主路径可以认为是健康的，可以继续作为后续工作的基础。**
+顶层分流现在只有两种：
 
-理由：
+- `DIRECT`
+  - 仅回答问题
+  - 不进入执行循环
+  - 使用更轻的上下文构造
+- `REACT`
+  - 只要任务带有执行性质，就进入运行时循环
+  - 保留工具调用能力
+  - 保留 HITL、subagent、verifier、plan kernel 能力
 
-- 关键职责边界已经建立，不再严重耦合
-- 关键 stop / continue 逻辑已经从文本判断迁出
-- 关键 outcome / progress side effects 已有单一出口
-- 关键回归测试已经覆盖 runtime / verifier / handler / tool executor 相关主链路
+这层的职责很小：**只决定“纯回答”还是“进入执行态”**。
 
-### 2.2 What Is Good Now
+### 2.2 ReAct 运行时
 
-- `AgentRuntime` 主要负责循环编排，而不是直接做语义判断
-- `DecisionEngine` 成为唯一语义决策入口
-- `HardGuardVerifier` 与 `LlmRuntimeDecisionStage` 的职责已经分层
-- `OutcomeApplier` 成为 outcome 与 progress accounting 的统一落点
-- `LoopOrchestrator` 不再直接承担大部分运行时语义判断
-- HITL 拒绝已经不再依赖 marker 文本判断主路径语义，而是依赖结构化 `failureCategory`
+`REACT` 是系统的执行主路径，负责：
 
-### 2.3 Remaining Non-Blocking Debt
+- 多步 LLM 推理
+- 工具调用
+- skill 激活
+- subagent 派发与等待
+- verifier 监管
+- plan item 推进
+- 最终 outcome 落地
 
-下面这些问题仍然存在，但它们**不构成当前主路径不可用**：
+### 2.3 Verifier 链
 
-1. **接口命名仍带历史语义**
-   - `RuntimeDecisionStage` 现在已经直接返回 `Decision`
-   - 但名字仍保留 stage / verifier 过渡语义
-   - 这是命名层面的余留，不影响主路径正确性
+运行时决策已经收敛为一条清晰的链：
 
-2. **`AgentRuntime` 里仍有少量历史命名**
-   - 例如 `applyDecision(...)` 这类方法名仍偏“兼容迁移期”
-   - 语义已经正确，但可以继续收口命名
+- `DecisionEngine`
+  - 默认注入到 `AgentRuntime`
+  - 作为统一运行时决策入口
+- `HardGuardVerifier`
+  - 只处理硬阻断信号
+  - 例如明确的环境阻断、用户决策等待
+- `LlmRuntimeDecisionStage`
+  - 基于当前执行结果做更细粒度判断
+  - 输出 item 级 action，而不是旧式“只给 terminal/continue”
 
-3. **README 级说明还没补齐**
-   - 当前架构文档已经补充
-   - 但仓库顶层说明还没有同步这套运行时职责划分
+这里最重要的结构变化是：
 
-### 2.4 Bottom Line
+**`AgentRuntime` 依赖的是默认决策引擎 `DecisionEngine`，不是泛化地注入任意 `RuntimeDecisionStage` Bean。**
 
-如果问题是：
+这样做有两个收益：
 
-> “目前的 agent 路径是不是 ok？”
+1. 避免 Spring 在 `DecisionEngine` / `HardGuardVerifier` / `LlmRuntimeDecisionStage` 之间产生歧义注入
+2. 明确表达默认主链语义：运行时默认使用“组合后的决策引擎”，而不是任意一个 stage
 
-我的判断是：
-
-**是，ok。**
-
-更准确地说：
-
-**主路径已经达到“结构清晰、责任分层、可继续演进”的状态；剩下的是收尾型优化，不是架构性阻塞。**
+同时，`RunContext` 仍然保留 `runtimeDecisionStage` 覆盖能力，因此**测试或特殊运行态仍可替换默认决策逻辑**。
 
 ---
 
-## 3. End-to-End Main Flow
+## 3. 长任务 plan kernel
 
-下面是当前主路径的 Mermaid 流程图。
+### 3.1 为什么需要它
+
+过去的问题不是 agent 不会执行，而是：
+
+- 做到一半就停
+- 遇到中间态不会把任务拆成连续步骤
+- 对“当前做到了哪一步”没有稳定内存态表示
+
+现在已经引入了最小可用的内存态 plan kernel。
+
+### 3.2 当前数据结构
+
+当前 plan 结构包括：
+
+- `ExecutionPlan`
+- `ExecutionPlanStatus`
+- `PlanItem`
+- `PlanItemStatus`
+- `PlanExecutionMode`
+- `PlanEngine`
+
+`RunContext` 中已经持有：
+
+- `executionPlan`
+- `planInitialized`
+- `pendingQuestion`
+
+### 3.3 当前能力
+
+当前 plan kernel 已经具备：
+
+- 在 `REACT` 入口初始化 plan
+- 维护一个当前 item
+- 支持 `PENDING / IN_PROGRESS / DONE / BLOCKED / DELEGATED`
+- 支持 item 完成后推进到下一个 item
+- 支持全部 item 完成后结束整个任务
+- 支持 HITL 拒绝时阻塞当前 item
+- 支持 subagent 派发时把当前 item 标记为 delegated
+
+### 3.4 当前边界
+
+当前版本仍然是**内存态**：
+
+- 不做跨重启持久化
+- 不做复杂 DAG 调度
+- 不引入额外工作流引擎
+
+这是有意保持轻量。
+
+---
+
+## 4. 决策模型
+
+当前运行时不再只输出“继续 / 终止”，而是输出更贴近任务推进的 action：
+
+- `CONTINUE_ITEM`
+- `ITEM_DONE`
+- `ASK_USER`
+- `BLOCK_ITEM`
+- `DELEGATE_ITEM`
+- `TASK_DONE`
+- `STOP`
+
+这使得 verifier 不只是一个 stop-loss 装置，而是一个**任务推进监督器**。
+
+---
+
+## 5. HITL 的位置
+
+HITL 的定位已经明确：
+
+- 它属于工具执行链路的一部分
+- 它应该触发前端确认弹窗
+- 它不应该退化成“让 agent 在聊天里问用户一个问题，然后停在那里”等用户回复
+
+所以现在的合理链路是：
+
+1. `REACT` 决定调用某个高风险工具
+2. `ToolExecutor` 进入 HITL
+3. 前端弹窗确认
+4. 用户同意则继续执行
+5. 用户拒绝则当前 item 被标记为 `BLOCKED`
+
+这与顶层路由无关。
+
+---
+
+## 6. 当前核心流程图
 
 ```mermaid
 flowchart TD
-    A[用户输入 / agent.run] --> B[AgentRunHandler / 路由层]
-    B --> C[AgentRuntime.executeLoopWithContext]
+    A[用户输入 + 完整历史] --> B[TaskRouter]
+    B -->|DIRECT| C[ContextBuilder.buildDirectResponse]
+    C --> D[单次 LLM 回答]
+    D --> Z[返回前端]
 
-    C --> D[PolicySupervisor.evaluate]
-    D -->|直接阻断 / 不进 heavy loop| E[OutcomeApplier.apply]
-    E --> Z[返回最终结果]
+    B -->|REACT| E[ContextBuilder.buildReactEntry]
+    E --> F[AgentRuntime.executeLoopWithContext]
+    F --> G[初始化 ExecutionPlan]
+    G --> H[LoopOrchestrator.checkStopDecision]
 
-    D -->|进入主循环| F[LoopOrchestrator.checkStopDecision]
+    H -->|继续| I[执行单步 LLM]
+    I --> J{是否有 tool calls}
 
-    F -->|cancel / timeout| Z
-    F -->|maxSteps / budget stop with outcome| H[OutcomeApplier.apply]
-    H --> Z
-    F -->|continue| I[AgentRuntime.executeSingleStep]
-
-    I --> J[LLM 返回 StepResult]
-
-    J -->|无 tool calls| K[DecisionInputFactory.fromAssistantStep]
-    K --> L[resolveDecisionStage(context).verify]
-    L --> L1[DecisionEngine]
-    L1 --> M[DecisionEngine.decide]
-    M --> M1[HardGuardVerifier.verify]
-    M --> M2[LlmRuntimeDecisionStage.verify]
+    J -->|否| K[DecisionInputFactory.fromAssistantStep]
+    K --> L[resolveDecisionStage]
+    L --> M[DecisionEngine]
+    M --> M1[HardGuardVerifier]
+    M --> M2[LlmRuntimeDecisionStage]
     M1 --> N[Decision]
     M2 --> N
-    N --> O[OutcomeApplier.apply]
-    O -->|terminal| Z
-    O -->|continue| F
-
-    J -->|有 tool calls| P[ToolExecutor.executeToolCalls]
-    P --> P1[HITL / dispatch / tool.result]
-    P1 --> P2[ToolExecutionResult + failureCategory]
-
-    P2 --> Q[AgentRuntime 追加 tool 消息]
-    Q --> R{HITL_REJECTED?}
-    R -->|是| S[停止自动重试并提示用户]
+    N --> O{action}
+    O -->|CONTINUE_ITEM| H
+    O -->|ITEM_DONE| P[PlanEngine.markDone + advance]
+    P --> H
+    O -->|ASK_USER| Q[产生 pendingQuestion / 等待前端交互]
+    O -->|BLOCK_ITEM| R[PlanEngine.markBlocked]
+    O -->|TASK_DONE| S[OutcomeApplier.apply]
+    O -->|STOP| S
+    R --> S
+    Q --> S
     S --> Z
-    R -->|否| T[recordToolRoundProgress]
 
-    T --> U[DecisionInputFactory.fromToolRound]
-    U --> V[resolveDecisionStage(context).verify]
-    V --> V1[DecisionEngine]
-    V1 --> W[DecisionEngine.decide]
-    W --> W1[HardGuardVerifier.verify]
-    W --> W2[LlmRuntimeDecisionStage.verify]
-    W1 --> X[Decision]
-    W2 --> X
+    J -->|是| T[ToolExecutor.executeToolCalls]
+    T --> U{需要 HITL?}
+    U -->|是| V[前端弹窗确认]
+    V -->|拒绝| W[标记当前 item BLOCKED]
+    W --> S
+    V -->|同意| X[执行工具]
+    U -->|否| X
+    X --> Y[记录工具结果 + failureCategory]
+    Y --> Y1[DecisionInputFactory.fromToolRound]
+    Y1 --> L
 
-    X --> Y[OutcomeApplier.apply]
-    Y -->|terminal| Z
-    Y -->|continue + feedback| F
+    T --> T1{sessions_spawn 成功?}
+    T1 -->|是| T2[PlanEngine.markDelegated]
+    T2 --> H
 ```
 
 ---
 
-## 4. Responsibility-Oriented Architecture
+## 7. 职责边界
 
-下面这张图按职责分层，而不是按调用顺序分层。
+### `TaskRouter`
 
-```mermaid
-flowchart LR
-    subgraph InputLayer[Input Collection Layer]
-        A1[DecisionInputFactory]
-        A2[DecisionInput]
-    end
+只回答一个问题：
 
-    subgraph DecisionLayer[Decision Layer]
-        B1[DecisionEngine]
-        B2[HardGuardVerifier]
-        B3[LlmRuntimeDecisionStage]
-        B4[Decision]
-    end
+- 这是纯回答任务，还是执行任务？
 
-    subgraph OutcomeLayer[Outcome Layer]
-        C1[OutcomeApplier]
-    end
+### `ContextBuilder`
 
-    subgraph BudgetLayer[Budget Layer]
-        D1[ProgressSnapshot]
-        D2[LoopOrchestrator]
-    end
+只负责把不同入口组织成合适的 LLM 请求：
 
-    subgraph ToolLayer[Tool Layer]
-        E1[ToolExecutor]
-        E2[Built-in Tools]
-        E3[ToolResult.failureCategory]
-    end
+- `buildDirectResponse(...)`
+- `buildReactEntry(...)`
 
-    subgraph RuntimeLayer[Runtime Orchestration]
-        F1[AgentRuntime]
-    end
+### `AgentRuntime`
 
-    E1 --> E3
-    E2 --> E3
-    E3 --> A1
-    F1 --> A1
-    A1 --> A2
-    A2 --> B1
-    B2 --> B1
-    B3 --> B1
-    B1 --> B4
-    B4 --> C1
-    D1 --> D2
-    D2 --> F1
-    C1 --> F1
-```
+只做执行循环编排，不自己承担过多语义策略。
+
+### `DecisionEngine`
+
+统一运行时决策入口。
+
+### `PlanEngine`
+
+统一 plan 状态迁移入口。
+
+### `OutcomeApplier`
+
+统一终局结果与副作用落点。
 
 ---
 
-## 5. Component-by-Component Responsibilities
+## 8. 当前状态评估
 
-### 5.1 `AgentRuntime`
+当前主路径可以认为是 **ok** 的，原因是：
 
-职责：
-- 负责主循环编排
-- 负责触发单步 LLM 调用
-- 负责触发工具执行
-- 负责串联 `DecisionInputFactory`、`DecisionEngine`、`OutcomeApplier`
-- 负责维护 loop 内消息推进和 subagent barrier 等流程控制
+- 顶层分流已经收敛到 `DIRECT` / `REACT`
+- 长任务已经具备最小 plan kernel
+- runtime verifier 已经从 stop-only 升级为 item-action 模型
+- HITL 的位置已经回到工具执行链路
+- 默认决策装配已明确为 `DecisionEngine`
 
-不应该承担的职责：
-- 不应该自己决定 repairable failure 是继续还是终止
-- 不应该自己拼复杂语义决策
-- 不应该分散落地 outcome side effects
+这套结构仍然有后续收尾空间，但已经不是“流程混乱、无法演进”的状态。
 
-当前结论：
-- 这部分已经大体合格
-
-关键代码：
-- `src/main/java/com/jaguarliu/ai/runtime/AgentRuntime.java:123`
-
-### 5.2 `DecisionInputFactory`
-
-职责：
-- 从 assistant-only round 构造 `DecisionInput`
-- 从 tool round 构造 `DecisionInput`
-- 从 verifier 兼容入口构造 `DecisionInput`
-- 保证决策层消费的是快照，而不是散乱现场状态
-
-当前结论：
-- 这部分已经清晰，是当前架构的关键收口点之一
-
-关键代码：
-- `src/main/java/com/jaguarliu/ai/runtime/DecisionInputFactory.java:13`
-
-### 5.3 `DecisionEngine`
-
-职责：
-- 作为统一语义决策入口
-- 先运行 `HardGuardVerifier`
-- 再运行 `LlmRuntimeDecisionStage`
-- 返回统一 `Decision`
-
-当前结论：
-- 这是当前最重要的架构中枢，方向正确
-
-关键代码：
-- `src/main/java/com/jaguarliu/ai/runtime/DecisionEngine.java:11`
-
-### 5.4 `HardGuardVerifier`
-
-职责：
-- 只处理真正的硬阻断
-- 目前主要是：
-  - `hard_environment_block`
-  - `user_decision_required`
-
-明确不做：
-- 不负责 repair strategy
-- 不负责“是否值得继续尝试修复”
-
-当前结论：
-- 命名和职责已经基本一致
-
-关键代码：
-- `src/main/java/com/jaguarliu/ai/runtime/HardGuardVerifier.java:12`
-
-### 5.5 `LlmRuntimeDecisionStage`
-
-职责：
-- 处理语义层判断
-- 综合 assistant reply、tool observations、runtime failure categories、progress snapshot
-- 决定：
-  - completed
-  - blocked by environment
-  - blocked pending user decision
-  - continue with feedback
-  - not worth continuing
-
-当前结论：
-- 这是“LLM-led runtime decision”的核心执行器
-- 目前设计目标已经落地
-
-关键代码：
-- `src/main/java/com/jaguarliu/ai/runtime/LlmRuntimeDecisionStage.java:21`
-
-### 5.6 `OutcomeApplier`
-
-职责：
-- 应用 `Decision` 的副作用
-- 更新 `RunContext`
-- 记录 failure / repair attempt / meaningful progress
-- 处理 terminal outcome state
-- 发布 runtime outcome event
-- 选择最终可见消息
-
-当前结论：
-- 这部分已经是明确的单一出口，收益非常大
-
-关键代码：
-- `src/main/java/com/jaguarliu/ai/runtime/OutcomeApplier.java:13`
-
-### 5.7 `ProgressSnapshot`
-
-职责：
-- 封装 repeated-failure / repair-budget / low-progress 的聚合判断素材
-- 让预算判断不再散落在 orchestrator 或 runtime 中
-
-当前结论：
-- 这是把“值班判断”从循环控制器里拆出去的关键一步
-
-关键代码：
-- `src/main/java/com/jaguarliu/ai/runtime/ProgressSnapshot.java:6`
-
-### 5.8 `LoopOrchestrator`
-
-职责：
-- 只处理预算类停止条件：
-  - cancelled
-  - timed out
-  - max steps
-  - repeated failures
-  - low progress
-  - token budget
-
-当前结论：
-- 已比重构前干净很多
-- 仍保留 stop decision event 发布职责，但已不再主导复杂语义决策
-
-关键代码：
-- `src/main/java/com/jaguarliu/ai/runtime/LoopOrchestrator.java:24`
-
-### 5.9 `ToolExecutor`
-
-职责：
-- 执行工具调用
-- 执行 HITL 流程
-- 构造 `ToolExecutionResult`
-- 优先从 `ToolResult.failureCategory` 推导失败语义
-
-当前结论：
-- 主路径已经摆脱了基于文本 marker 的 failure 归类依赖
-- 这是当前“别再靠字符串猜”的关键防线之一
-
-关键代码：
-- `src/main/java/com/jaguarliu/ai/runtime/ToolExecutor.java:279`
-
----
-
-## 6. Core Data Objects
-
-### 6.1 `DecisionInput`
-
-作用：
-- 表达一轮决策时可见的统一输入
-
-主要内容：
-- `assistantReply`
-- `observations`
-- `runtimeFailureCategories`
-- `progressSnapshot`
-- `currentStep`
-- `environmentRepairAttempts`
-- `hasToolCalls`
-- `hasPendingSubagents`
-
-关键代码：
-- `src/main/java/com/jaguarliu/ai/runtime/DecisionInput.java:9`
-
-### 6.2 `Decision`
-
-作用：
-- 表达统一决策结果
-
-主要内容：
-- `terminal`
-- `continueLoop`
-- `outcome`
-- `failureCategory`
-- `feedback`
-- `reason`
-
-关键代码：
-- `src/main/java/com/jaguarliu/ai/runtime/Decision.java:6`
-
-### 6.3 `ToolResult.failureCategory`
-
-作用：
-- 表达工具层能稳定知道的结构化失败语义
-
-关键代码：
-- `src/main/java/com/jaguarliu/ai/tools/ToolResult.java:15`
-
----
-
-## 7. Decision Boundaries
-
-### 7.1 Tool Layer Boundary
-
-原则：
-- 工具层负责说清楚“发生了什么”
-- 例如：命令不存在、权限阻断、需要用户决策、策略拒绝、工具内部错误
-- 工具层不负责说“循环该不该继续”
-
-### 7.2 Decision Layer Boundary
-
-原则：
-- `DecisionEngine` 负责说“接下来怎么办”
-- `HardGuardVerifier` 负责硬守卫
-- `LlmRuntimeDecisionStage` 负责语义判断
-
-### 7.3 Outcome Layer Boundary
-
-原则：
-- 只要涉及 outcome state、progress accounting、final visible message，就应该通过 `OutcomeApplier`
-
-### 7.4 Budget Layer Boundary
-
-原则：
-- 只要是“剩余预算是否允许继续”的问题，就应该落在 `ProgressSnapshot` / `LoopOrchestrator`
-- 预算层不应该靠文本理解工具报错内容
-
----
-
-## 8. What Was Explicitly Removed
-
-本次重构最重要的，不只是“加了什么”，还有“明确去掉了什么”：
-
-- 去掉了 runtime 主路径对文本型 failure classifier 的依赖
-- 去掉了通过 marker 文本判断 HITL 主路径语义的做法
-- 去掉了把 repair strategy 放在默认 verifier 里的做法
-- 去掉了 `VerificationResult` 在主链路中的存在
-
-这几点共同保证：
-
-**不要再把 stop/continue 的决定建立在字符串解析之上。**
-
----
-
-## 9. Current Path Validation Evidence
-
-本次文档编写前，再次做了相关回归验证。
-
-已通过测试：
-
-```bash
-mvn -q -Dtest='DecisionTest,DecisionEngineTest,HardGuardVerifierTest,DecisionEngineTest,LlmRuntimeDecisionStageTest,DecisionInputFactoryTest,OutcomeApplierTest,ProgressSnapshotTest,LoopOrchestratorTest,RunContextTest,ToolExecutorTest,AgentRuntimeTest,AgentRunWithAgentIdTest' test
-```
-
-覆盖面包括：
-- runtime 主循环
-- verifier / decision 路径
-- outcome 应用
-- loop budget
-- tool executor
-- handler 前端可见性路径
-
-因此，关于：
-
-> 目前的 agent 路径是不是 ok？
-
-当前证据支持的结论是：
-
-**是，ok。**
-
-而且不是“勉强能跑”的 ok，而是：
-
-**主路径已经具备比较明确的职责边界，可以继续在这个基础上安全演进。**
-
----
-
-## 10. Recommended Next Steps
-
-如果还要继续收尾，我建议优先级如下：
-
-1. **统一命名语义**
-   - 评估是否将 `RuntimeDecisionStage` / `applyDecision(...)` 等历史命名进一步收口
-   - 目标是让“decision”语义在接口与调用点上一致
-
-2. **统一 stop path 的 outcome event 语义**
-   - 当前 stop decision path 与普通 terminal path 的 event 发布来源仍是两段式
-   - 这不是 bug，但可以继续统一
-
-3. **补 README 级说明**
-   - 在 `README.md` / `README.zh-CN.md` 里补充这套运行时架构原则
-
-4. **继续保持 guardrails**
-   - 不要引入新的 regex runtime stop logic
-   - 不要引入新的 command-name special case
-   - 不要让 `RuntimeFailureClassifier` 回流到主路径
-
----
-
-## 11. One-Sentence Summary
-
-当前 Ralph agent 的核心架构，已经稳定收口为：
-
-**`AgentRuntime` 编排、`DecisionInputFactory` 收集输入、`DecisionEngine` 决策、`OutcomeApplier` 落地、`LoopOrchestrator` 控预算。**

@@ -247,10 +247,8 @@ public class AgentRunHandler implements RpcHandler {
             );
             if (routingDecision == null || routingDecision.getRouteMode() == null) {
                 routingDecision = TaskRoutingDecision.builder()
-                        .routeMode(TaskRouteMode.HEAVY)
+                        .routeMode(TaskRouteMode.REACT)
                         .complexity(TaskComplexity.HEAVY)
-                        .shouldUseTools(true)
-                        .shouldUseStrategy(true)
                         .reason("router_default")
                         .build();
             }
@@ -258,25 +256,8 @@ public class AgentRunHandler implements RpcHandler {
                     routingDecision.getRouteMode(), routingDecision.getComplexity(), runId, routingDecision.getReason());
 
             String response = switch (routingDecision.getRouteMode()) {
-                case CHAT, DIRECT -> executeDirectRoute(connectionId, runId, historyMessages, prompt, run.getAgentId(), modelSelection);
-                case LIGHT -> {
-                    ContextBuilder.SkillAwareRequest request = contextBuilder.buildForPolicyDecision(
-                            historyMessages, prompt, true, TaskComplexity.LIGHT, run.getAgentId());
-                    context = buildRoutedContext(run, connectionId, sessionId, excludedMcpServers,
-                            LoopConfig.withMaxSteps(3, loopConfig), modelSelection, routingDecision);
-                    yield agentRuntime.executeLoopWithContext(context, new ArrayList<>(request.request().getMessages()));
-                }
-                case BLOCKED -> {
-                    context = buildRoutedContext(run, connectionId, sessionId, excludedMcpServers,
-                            loopConfig, modelSelection, routingDecision);
-                    RunOutcome outcome = routingDecision.toOutcome();
-                    if (outcome != null) {
-                        context.setOutcome(outcome);
-                        publishRoutedOutcome(context, outcome, routingDecision.getReason());
-                    }
-                    yield renderOutcomeMessage(outcome);
-                }
-                case HEAVY -> {
+                case DIRECT -> executeDirectRoute(connectionId, runId, historyMessages, prompt, run.getAgentId(), modelSelection);
+                case REACT -> {
                     AgentContext agentCtx = AgentContext.builder()
                             .sessionId(sessionId)
                             .runId(runId)
@@ -356,8 +337,8 @@ public class AgentRunHandler implements RpcHandler {
                                       String prompt,
                                       String agentId,
                                       String modelSelection) {
-        ContextBuilder.SkillAwareRequest request = contextBuilder.buildForPolicyDecision(
-                historyMessages, prompt, false, TaskComplexity.DIRECT, agentId);
+        ContextBuilder.SkillAwareRequest request = contextBuilder.buildDirectResponse(
+                historyMessages, prompt, agentId);
         applyConversationModelSelection(request.request(), modelSelection);
 
         StringBuilder content = new StringBuilder();

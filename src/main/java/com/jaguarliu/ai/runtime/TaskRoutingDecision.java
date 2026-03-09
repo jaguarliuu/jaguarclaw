@@ -18,29 +18,16 @@ public class TaskRoutingDecision {
 
     private TaskComplexity complexity;
 
-    private Boolean shouldUseTools;
-
-    private Boolean shouldUseStrategy;
-
-    private RunOutcomeStatus outcomeStatus;
-
-    private String outcomeMessage;
-
-    private String outcomeDetail;
-
     private String reason;
 
     private Double confidence;
 
     public boolean blocked() {
-        return routeMode == TaskRouteMode.BLOCKED || outcomeStatus != null;
+        return false;
     }
 
     public RunOutcome toOutcome() {
-        if (outcomeStatus == null) {
-            return null;
-        }
-        return new RunOutcome(outcomeStatus, outcomeMessage, outcomeDetail);
+        return null;
     }
 
     public TaskContract toTaskContract(String goal) {
@@ -48,8 +35,8 @@ public class TaskRoutingDecision {
         return new TaskContract(
                 goal,
                 resolvedComplexity,
-                routeMode == TaskRouteMode.HEAVY || resolvedComplexity == TaskComplexity.EXTERNAL_DEPENDENCY,
-                outcomeStatus == RunOutcomeStatus.BLOCKED_PENDING_USER_DECISION
+                routeMode == TaskRouteMode.REACT,
+                false
         );
     }
 
@@ -58,10 +45,8 @@ public class TaskRoutingDecision {
             return TaskComplexity.HEAVY;
         }
         return switch (mode) {
-            case CHAT, DIRECT -> TaskComplexity.DIRECT;
-            case LIGHT -> TaskComplexity.LIGHT;
-            case HEAVY -> TaskComplexity.HEAVY;
-            case BLOCKED -> TaskComplexity.EXTERNAL_DEPENDENCY;
+            case DIRECT -> TaskComplexity.DIRECT;
+            case REACT -> TaskComplexity.HEAVY;
         };
     }
 }

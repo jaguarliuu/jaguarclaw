@@ -52,6 +52,7 @@ public class AgentRuntime {
 
     private final DecisionInputFactory decisionInputFactory;
     private final OutcomeApplier outcomeApplier;
+    private final PlanEngine planEngine;
     private final LlmClient llmClient;
     private final ToolRegistry toolRegistry;
     private final ToolDispatcher toolDispatcher;
@@ -69,7 +70,7 @@ public class AgentRuntime {
     private final ToolExecutor toolExecutor;
     private final SkillActivator skillActivator;
     private final SubagentBarrier subagentBarrier;
-    private final RuntimeDecisionStage runtimeDecisionStage;
+    private final DecisionEngine defaultDecisionEngine;
     private final PolicySupervisor policySupervisor;
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
@@ -126,6 +127,7 @@ public class AgentRuntime {
                 context.getConfig().getRunTimeoutSeconds());
 
         List<String> pendingSubRunIds = new ArrayList<>();
+        initializeExecutionPlanIfNeeded(context, messages);
 
         while (true) {
             StopDecision stopDecision = loopOrchestrator.checkStopDecision(context);
@@ -145,6 +147,9 @@ public class AgentRuntime {
                     DecisionInput decisionInput = decisionInputFactory.fromAssistantStep(context, finalResult.content());
                     Decision decision = resolveDecisionStage(context)
                             .verify(context, decisionInput.assistantReply(), decisionInput.observations());
+                    if (decision.action() == DecisionAction.ITEM_DONE) {
+                        return applyDecision(context, Decision.taskDone(RunOutcome.completed(finalResult.content()), decision.reason(), decision.targetItemId()), finalResult.content());
+                    }
                     return applyDecision(context, decision, finalResult.content());
                 }
                 if (stopDecision.outcome() != null) {
@@ -181,6 +186,14 @@ public class AgentRuntime {
                 DecisionInput decisionInput = decisionInputFactory.fromAssistantStep(context, result.content());
                 Decision decision = resolveDecisionStage(context)
                         .verify(context, decisionInput.assistantReply(), decisionInput.observations());
+                DecisionResolution resolution = handleDecision(context, decision, result.content(), pendingSubRunIds);
+                if (resolution.finalResponse() != null) {
+                    return resolution.finalResponse();
+                }
+                if (resolution.continueLoop()) {
+                    loopOrchestrator.incrementStepAndPublish(context);
+                    continue;
+                }
                 log.info("Loop completed normally: runId={}, steps={}",
                         context.getRunId(), context.getCurrentStep());
                 return applyDecision(context, decision, result.content());
@@ -263,6 +276,7 @@ public class AgentRuntime {
                     String subRunId = parseSubRunIdFromToolResult(execResult.result().getContent());
                     if (subRunId != null) {
                         pendingSubRunIds.add(subRunId);
+                        context.currentPlanItem().ifPresent(item -> planEngine.markDelegated(context.getExecutionPlan(), item.getId(), subRunId));
                         log.info("Tracked spawned subagent: subRunId={}, runId={}",
                                 subRunId, context.getRunId());
                     }
@@ -270,13 +284,20 @@ public class AgentRuntime {
             }
 
             if (shouldStopOnHitlReject) {
+                String rejectedTool = rejectedToolName != null ? rejectedToolName : "unknown";
                 String stopMessage = "Tool call was rejected by user ("
-                        + (rejectedToolName != null ? rejectedToolName : "unknown")
-                        + "). Execution stopped to avoid automatic retry loop. "
-                        + "Please explicitly approve or adjust the command/instruction.";
+                        + rejectedTool
+                        + "). Execution stopped to avoid automatic retry loop.";
+                if (context.hasExecutionPlan() && context.currentPlanItem().isPresent()) {
+                    planEngine.markBlocked(
+                            context.getExecutionPlan(),
+                            context.currentPlanItem().get().getId(),
+                            "HITL rejected tool: " + rejectedTool
+                    );
+                }
                 messages.add(LlmRequest.Message.assistant(stopMessage));
                 log.info("Loop stopped due to HITL rejection: runId={}, tool={}",
-                        context.getRunId(), rejectedToolName);
+                        context.getRunId(), rejectedTool);
                 return stopMessage;
             }
 
@@ -285,10 +306,12 @@ public class AgentRuntime {
             context.replaceRuntimeFailureCategories(decisionInput.runtimeFailureCategories());
             Decision decision = resolveDecisionStage(context)
                     .verify(context, decisionInput.assistantReply(), decisionInput.observations());
-            if (decision.terminal()) {
-                return applyDecision(context, decision, decision.feedback());
+            DecisionResolution resolution = handleDecision(context, decision, decision.feedback(), pendingSubRunIds);
+            if (resolution.finalResponse() != null) {
+                return resolution.finalResponse();
             }
-            if (decision.feedback() != null && !decision.feedback().isBlank()) {
+            if (decision.feedback() != null && !decision.feedback().isBlank()
+                    && decision.action() == DecisionAction.CONTINUE_ITEM) {
                 messages.add(LlmRequest.Message.user(decision.feedback()));
             }
 
@@ -296,8 +319,108 @@ public class AgentRuntime {
         }
     }
 
+    void initializeExecutionPlanIfNeeded(RunContext context, List<LlmRequest.Message> messages) {
+        if (context == null || context.isPlanInitialized() || context.getOriginalInput() == null || context.getOriginalInput().isBlank()) {
+            return;
+        }
+        ExecutionPlan plan = planEngine.createInitialPlan(context, extractHistory(messages));
+        context.setExecutionPlan(plan);
+        context.setPlanInitialized(true);
+    }
+
+    private List<LlmRequest.Message> enrichMessagesWithPlan(RunContext context, List<LlmRequest.Message> messages) {
+        if (context == null || !context.hasExecutionPlan()) {
+            return messages;
+        }
+        List<LlmRequest.Message> enriched = new ArrayList<>(messages);
+        String reminder = buildPlanReminder(context);
+        if (reminder != null && !reminder.isBlank()) {
+            enriched.add(LlmRequest.Message.system(reminder));
+        }
+        return enriched;
+    }
+
+    private String buildPlanReminder(RunContext context) {
+        if (!context.hasExecutionPlan()) {
+            return null;
+        }
+        ExecutionPlan plan = context.getExecutionPlan();
+        StringBuilder builder = new StringBuilder();
+        builder.append("Execution plan reminder:\n")
+                .append("- goal: ").append(plan.getGoal()).append("\n")
+                .append("- planStatus: ").append(plan.getStatus()).append("\n");
+        context.currentPlanItem().ifPresent(item -> builder.append("- currentItem: ")
+                .append(item.getId())
+                .append(": ")
+                .append(item.getTitle())
+                .append("\n"));
+        String remaining = plan.getItems().stream()
+                .filter(item -> item.getStatus() != PlanItemStatus.DONE && item.getStatus() != PlanItemStatus.CANCELLED)
+                .map(item -> item.getId() + ":" + item.getTitle() + "(" + item.getStatus() + ")")
+                .collect(java.util.stream.Collectors.joining(", "));
+        builder.append("- remainingItems: ").append(remaining.isBlank() ? "none" : remaining).append("\n")
+                .append("Prefer finishing or advancing the current item before claiming the whole task is done.");
+        return builder.toString();
+    }
+
+    private DecisionResolution handleDecision(
+            RunContext context,
+            Decision decision,
+            String fallbackMessage,
+            List<String> pendingSubRunIds
+    ) {
+        if (decision == null) {
+            return DecisionResolution.keepGoing();
+        }
+        String targetItemId = decision.targetItemId();
+        if (targetItemId == null && context.currentPlanItem().isPresent()) {
+            targetItemId = context.currentPlanItem().get().getId();
+        }
+
+        return switch (decision.action()) {
+            case CONTINUE_ITEM -> DecisionResolution.keepGoing();
+            case ITEM_DONE -> {
+                if (context.hasExecutionPlan() && targetItemId != null) {
+                    planEngine.markDone(context.getExecutionPlan(), targetItemId, decision.reason());
+                    planEngine.advance(context.getExecutionPlan());
+                    if (context.getExecutionPlan().allItemsDone()) {
+                        yield DecisionResolution.finish(applyDecision(
+                                context,
+                                Decision.taskDone(RunOutcome.completed(fallbackMessage), decision.reason(), targetItemId),
+                                fallbackMessage
+                        ));
+                    }
+                }
+                yield DecisionResolution.keepGoing();
+            }
+            case ASK_USER -> {
+                context.setPendingQuestion(decision.feedback());
+                yield DecisionResolution.finish(decision.feedback() != null ? decision.feedback() : fallbackMessage);
+            }
+            case BLOCK_ITEM -> {
+                if (context.hasExecutionPlan() && targetItemId != null) {
+                    planEngine.markBlocked(context.getExecutionPlan(), targetItemId, decision.reason());
+                }
+                context.setPendingQuestion(decision.feedback());
+                yield DecisionResolution.finish(decision.feedback() != null ? decision.feedback() : fallbackMessage);
+            }
+            case DELEGATE_ITEM -> DecisionResolution.keepGoing();
+            case TASK_DONE, STOP -> DecisionResolution.finish(applyDecision(context, decision, fallbackMessage));
+        };
+    }
+
+    private record DecisionResolution(boolean continueLoop, String finalResponse) {
+        static DecisionResolution keepGoing() {
+            return new DecisionResolution(true, null);
+        }
+
+        static DecisionResolution finish(String response) {
+            return new DecisionResolution(false, response);
+        }
+    }
+
     RuntimeDecisionStage resolveDecisionStage(RunContext context) {
-        return context.getRuntimeDecisionStage() != null ? context.getRuntimeDecisionStage() : runtimeDecisionStage;
+        return context.getRuntimeDecisionStage() != null ? context.getRuntimeDecisionStage() : defaultDecisionEngine;
     }
 
     String applyDecision(RunContext context, Decision decision, String fallbackMessage) {
@@ -323,7 +446,7 @@ public class AgentRuntime {
      */
     private StepResult executeSingleStep(RunContext context, List<LlmRequest.Message> messages) {
         LlmRequest.LlmRequestBuilder requestBuilder = LlmRequest.builder()
-                .messages(messages)
+                .messages(enrichMessagesWithPlan(context, messages))
                 .toolChoice("auto");
 
         Set<String> excluded = context.getExcludedMcpServers();

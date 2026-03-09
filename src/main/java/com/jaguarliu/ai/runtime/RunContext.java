@@ -197,6 +197,15 @@ public class RunContext {
     @Setter
     private TaskContract taskContract;
 
+    @Setter
+    private ExecutionPlan executionPlan;
+
+    @Setter
+    private boolean planInitialized;
+
+    @Setter
+    private String pendingQuestion;
+
     /**
      * Skill 激活计数器（skillName -> count）（线程安全）
      */
@@ -373,6 +382,14 @@ public class RunContext {
                 environmentRepairAttempts.get(),
                 getTotalTokens()
         );
+    }
+
+    public boolean hasExecutionPlan() {
+        return executionPlan != null;
+    }
+
+    public java.util.Optional<PlanItem> currentPlanItem() {
+        return executionPlan == null ? java.util.Optional.empty() : executionPlan.currentItem();
     }
 
     /**

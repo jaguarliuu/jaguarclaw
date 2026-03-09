@@ -408,7 +408,7 @@ class AgentRunWithAgentIdTest {
         }
 
         @Test
-        void chatRouteShouldBypassStrategyAndRuntime() throws Exception {
+        void directRouteShouldBypassStrategyAndRuntime() throws Exception {
             AgentRunHandler handler = newAgentRunHandler();
             mockCommonRunPrerequisites();
 
@@ -421,13 +421,11 @@ class AgentRunWithAgentIdTest {
                     .thenReturn(List.of());
             when(taskRouter.route(eq("hi"), anyList(), eq(false), nullable(String.class)))
                     .thenReturn(TaskRoutingDecision.builder()
-                            .routeMode(TaskRouteMode.CHAT)
+                            .routeMode(TaskRouteMode.DIRECT)
                             .complexity(TaskComplexity.DIRECT)
-                            .shouldUseTools(false)
-                            .shouldUseStrategy(false)
                             .reason("greeting")
                             .build());
-            when(contextBuilder.buildForPolicyDecision(anyList(), eq("hi"), eq(false), eq(TaskComplexity.DIRECT), eq("coder")))
+            when(contextBuilder.buildDirectResponse(anyList(), eq("hi"), eq("coder")))
                     .thenReturn(new ContextBuilder.SkillAwareRequest(
                             LlmRequest.builder().messages(List.of(LlmRequest.Message.system("minimal"), LlmRequest.Message.user("hi"))).build(),
                             null, null, null, null
@@ -476,7 +474,7 @@ class AgentRunWithAgentIdTest {
         }
 
         @Test
-        void lightRouteShouldUseLightRuntimePathWithoutStrategyPlan() throws Exception {
+        void reactRouteShouldUseReactRuntimePath() throws Exception {
             AgentRunHandler handler = newAgentRunHandler();
             mockCommonRunPrerequisites();
 
@@ -489,17 +487,16 @@ class AgentRunWithAgentIdTest {
                     .thenReturn(List.of());
             when(taskRouter.route(eq("read this file"), anyList(), eq(false), nullable(String.class)))
                     .thenReturn(TaskRoutingDecision.builder()
-                            .routeMode(TaskRouteMode.LIGHT)
-                            .complexity(TaskComplexity.LIGHT)
-                            .shouldUseTools(true)
-                            .shouldUseStrategy(false)
+                            .routeMode(TaskRouteMode.REACT)
+                            .complexity(TaskComplexity.HEAVY)
                             .reason("small task")
                             .build());
-            when(contextBuilder.buildForPolicyDecision(anyList(), eq("read this file"), eq(true), eq(TaskComplexity.LIGHT), eq("coder")))
-                    .thenReturn(new ContextBuilder.SkillAwareRequest(
-                            LlmRequest.builder().messages(List.of(LlmRequest.Message.system("minimal"), LlmRequest.Message.user("read this file"))).build(),
-                            null, null, null, null
-                    ));
+            AgentStrategy strategy = org.mockito.Mockito.mock(AgentStrategy.class);
+            when(strategyResolver.resolve(any())).thenReturn(strategy);
+            when(strategy.prepare(any())).thenReturn(AgentExecutionPlan.builder()
+                    .systemPrompt("system prompt")
+                    .strategyName("default")
+                    .build());
             when(agentRuntime.executeLoopWithContext(any(RunContext.class), anyList()))
                     .thenReturn("light result");
             when(sessionLaneManager.submit(eq("session-light"), eq("run-light"), eq(13L), any(Supplier.class)))
@@ -518,7 +515,7 @@ class AgentRunWithAgentIdTest {
 
             assertNotNull(response);
             assertNull(response.getError());
-            verify(strategyResolver, org.mockito.Mockito.never()).resolve(any());
+            verify(strategyResolver).resolve(any());
             verify(agentRuntime).executeLoopWithContext(any(RunContext.class), anyList());
         }
 
@@ -727,10 +724,8 @@ class AgentRunWithAgentIdTest {
                 });
         lenient().when(taskRouter.route(anyString(), anyList(), anyBoolean(), nullable(String.class)))
                 .thenReturn(TaskRoutingDecision.builder()
-                        .routeMode(TaskRouteMode.HEAVY)
+                        .routeMode(TaskRouteMode.REACT)
                         .complexity(TaskComplexity.HEAVY)
-                        .shouldUseTools(true)
-                        .shouldUseStrategy(true)
                         .reason("default")
                         .build());
     }

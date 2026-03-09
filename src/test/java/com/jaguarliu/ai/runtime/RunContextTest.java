@@ -202,4 +202,32 @@ class RunContextTest {
 
         assertTrue(ctx.isTokenBudgetReached());
     }
+
+    @Test
+    @DisplayName("Should store execution plan in RunContext")
+    void shouldStoreExecutionPlanInRunContext() {
+        RunContext ctx = RunContext.create(
+                "r1", "c1", "s1",
+                LoopConfig.builder().build(),
+                new CancellationManager()
+        );
+
+        ExecutionPlan plan = ExecutionPlan.builder()
+                .goal("open zhihu")
+                .status(ExecutionPlanStatus.ACTIVE)
+                .currentItemId("item-1")
+                .items(new java.util.ArrayList<>(java.util.List.of(
+                        PlanItem.builder().id("item-1").title("open zhihu").status(PlanItemStatus.IN_PROGRESS).executionMode(PlanExecutionMode.MAIN_AGENT).build()
+                )))
+                .revision(1)
+                .build();
+
+        ctx.setExecutionPlan(plan);
+        ctx.setPlanInitialized(true);
+
+        assertTrue(ctx.hasExecutionPlan());
+        assertTrue(ctx.isPlanInitialized());
+        assertEquals("item-1", ctx.currentPlanItem().orElseThrow().getId());
+    }
+
 }

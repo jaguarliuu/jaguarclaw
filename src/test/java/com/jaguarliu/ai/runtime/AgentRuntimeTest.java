@@ -40,6 +40,68 @@ import static org.mockito.Mockito.when;
 @DisplayName("AgentRuntime Tests")
 class AgentRuntimeTest {
 
+    @org.junit.jupiter.api.BeforeEach
+    void setUp() {
+        org.mockito.Mockito.lenient().when(planEngine.createInitialPlan(any(), any())).thenAnswer(invocation -> {
+            RunContext context = invocation.getArgument(0);
+            String goal = context.getOriginalInput();
+            return ExecutionPlan.builder()
+                    .goal(goal)
+                    .status(ExecutionPlanStatus.ACTIVE)
+                    .currentItemId("item-1")
+                    .items(new java.util.ArrayList<>(java.util.List.of(
+                            PlanItem.builder().id("item-1").title(goal != null ? goal : "task").status(PlanItemStatus.IN_PROGRESS).executionMode(PlanExecutionMode.MAIN_AGENT).build()
+                    )))
+                    .revision(1)
+                    .build();
+        });
+        org.mockito.Mockito.lenient().when(planEngine.markDone(any(), any(), any())).thenAnswer(invocation -> {
+            ExecutionPlan plan = invocation.getArgument(0);
+            String itemId = invocation.getArgument(1);
+            String note = invocation.getArgument(2);
+            for (PlanItem item : plan.getItems()) {
+                if (itemId.equals(item.getId())) {
+                    item.setStatus(PlanItemStatus.DONE);
+                    item.setNotes(note);
+                }
+            }
+            if (plan.allItemsDone()) {
+                plan.setStatus(ExecutionPlanStatus.COMPLETED);
+                plan.setCurrentItemId(null);
+            }
+            return plan;
+        });
+        org.mockito.Mockito.lenient().when(planEngine.advance(any())).thenAnswer(invocation -> {
+            ExecutionPlan plan = invocation.getArgument(0);
+            for (PlanItem item : plan.getItems()) {
+                if (item.getStatus() == PlanItemStatus.PENDING) {
+                    item.setStatus(PlanItemStatus.IN_PROGRESS);
+                    plan.setCurrentItemId(item.getId());
+                    plan.setStatus(ExecutionPlanStatus.ACTIVE);
+                    return plan;
+                }
+            }
+            if (plan.allItemsDone()) {
+                plan.setStatus(ExecutionPlanStatus.COMPLETED);
+                plan.setCurrentItemId(null);
+            }
+            return plan;
+        });
+        org.mockito.Mockito.lenient().when(planEngine.markBlocked(any(), any(), any())).thenAnswer(invocation -> {
+            ExecutionPlan plan = invocation.getArgument(0);
+            String itemId = invocation.getArgument(1);
+            String reason = invocation.getArgument(2);
+            for (PlanItem item : plan.getItems()) {
+                if (itemId.equals(item.getId())) {
+                    item.setStatus(PlanItemStatus.BLOCKED);
+                    item.setNotes(reason);
+                }
+            }
+            plan.setStatus(ExecutionPlanStatus.BLOCKED);
+            return plan;
+        });
+    }
+
     @Mock private LlmClient llmClient;
     @Mock private ToolRegistry toolRegistry;
     @Mock private ToolDispatcher toolDispatcher;
@@ -52,8 +114,9 @@ class AgentRuntimeTest {
     @Mock private LoopOrchestrator loopOrchestrator;
     @Mock private ToolExecutor toolExecutor;
     @Mock private SkillActivator skillActivator;
+    @Mock private PlanEngine planEngine;
     @Mock private SubagentBarrier subagentBarrier;
-    @Mock private RuntimeDecisionStage runtimeDecisionStage;
+    @Mock private DecisionEngine defaultDecisionEngine;
     @Mock private PolicySupervisor policySupervisor;
     @Mock private LlmRuntimeDecisionStage llmRuntimeDecisionStage;
 
@@ -106,7 +169,7 @@ class AgentRuntimeTest {
                         RuntimeFailureCategories.REPAIRABLE_ENVIRONMENT
                 )
         ));
-        when(runtimeDecisionStage.verify(any(), any(), any())).thenReturn(
+        when(defaultDecisionEngine.verify(any(), any(), any())).thenReturn(
                 Decision.terminal(
                         RunOutcome.blockedByEnvironment("wkhtmltopdf: command not found"),
                         RuntimeFailureCategories.REPAIRABLE_ENVIRONMENT,
@@ -135,7 +198,7 @@ class AgentRuntimeTest {
     @DisplayName("should allow llm verifier to decide README missing through decision engine")
     void shouldAllowLlmVerifierToDecideReadmeMissingThroughDecisionEngine() throws Exception {
         RuntimeDecisionStage decisionEngine = new DecisionEngine(new DecisionInputFactory(), new HardGuardVerifier(), llmRuntimeDecisionStage);
-        AgentRuntime runtime = createRuntime(decisionEngine);
+        AgentRuntime runtime = createRuntime((DecisionEngine) decisionEngine);
         RunContext context = RunContext.create(
                 "run-3", "conn-3", "session-3",
                 LoopConfig.builder().build(),
@@ -234,7 +297,7 @@ class AgentRuntimeTest {
     @DisplayName("should publish stop reason when budget is exceeded")
     void shouldPublishStopReasonWhenBudgetIsExceeded() throws Exception {
         LoopOrchestrator realLoopOrchestrator = new LoopOrchestrator(eventBus);
-        AgentRuntime runtime = createRuntime(runtimeDecisionStage, realLoopOrchestrator);
+        AgentRuntime runtime = createRuntime(defaultDecisionEngine, realLoopOrchestrator);
         RunContext context = RunContext.create(
                 "run-2", "conn-2", "session-2",
                 LoopConfig.builder().maxRepeatedFailures(2).build(),
@@ -259,18 +322,145 @@ class AgentRuntimeTest {
         assertEquals("repeated_failures", data.getReason());
     }
 
-    private AgentRuntime createRuntime() {
-        return createRuntime(runtimeDecisionStage, loopOrchestrator);
+
+    @Test
+    @DisplayName("should initialize execution plan when entering react loop")
+    void shouldInitializeExecutionPlanWhenEnteringReactLoop() throws Exception {
+        AgentRuntime runtime = createRuntime();
+        RunContext context = RunContext.create(
+                "run-plan", "conn-plan", "session-plan",
+                LoopConfig.builder().build(),
+                new CancellationManager()
+        );
+        context.setOriginalInput("打开浏览器访问知乎");
+
+        when(loopOrchestrator.checkStopDecision(any())).thenReturn(StopDecision.continueLoop());
+        when(toolRegistry.toOpenAiTools(any(ToolVisibilityResolver.VisibilityRequest.class))).thenReturn(List.of());
+        when(toolRegistry.listVisibleToolNames(any())).thenReturn(Set.of());
+        when(llmClient.stream(any())).thenReturn(Flux.just(LlmChunk.builder()
+                .delta("done")
+                .usage(LlmResponse.Usage.builder().promptTokens(1).completionTokens(1).build())
+                .done(true)
+                .build()));
+        when(flushHook.checkAndFlush(any(), any())).thenReturn(false);
+        when(defaultDecisionEngine.verify(any(), any(), any())).thenReturn(
+                Decision.taskDone(RunOutcome.completed("done"), "completed", "item-1")
+        );
+
+        runtime.executeLoopWithContext(context, new ArrayList<>(List.of(LlmRequest.Message.user("打开浏览器访问知乎"))));
+
+        assertTrue(context.hasExecutionPlan());
+        assertTrue(context.isPlanInitialized());
+        verify(planEngine).createInitialPlan(any(), any());
     }
 
-    private AgentRuntime createRuntime(RuntimeDecisionStage verifier) {
+    @Test
+    @DisplayName("should advance plan when decision marks current item done")
+    void shouldAdvancePlanWhenDecisionMarksCurrentItemDone() throws Exception {
+        AgentRuntime runtime = createRuntime();
+        RunContext context = RunContext.create(
+                "run-plan-2", "conn-plan-2", "session-plan-2",
+                LoopConfig.builder().build(),
+                new CancellationManager()
+        );
+        context.setOriginalInput("完成两个步骤");
+        context.setExecutionPlan(ExecutionPlan.builder()
+                .goal("完成两个步骤")
+                .status(ExecutionPlanStatus.ACTIVE)
+                .currentItemId("item-1")
+                .items(new java.util.ArrayList<>(List.of(
+                        PlanItem.builder().id("item-1").title("step 1").status(PlanItemStatus.IN_PROGRESS).executionMode(PlanExecutionMode.MAIN_AGENT).build(),
+                        PlanItem.builder().id("item-2").title("step 2").status(PlanItemStatus.PENDING).executionMode(PlanExecutionMode.MAIN_AGENT).build()
+                )))
+                .revision(1)
+                .build());
+        context.setPlanInitialized(true);
+
+        when(loopOrchestrator.checkStopDecision(any())).thenReturn(StopDecision.continueLoop());
+        when(toolRegistry.toOpenAiTools(any(ToolVisibilityResolver.VisibilityRequest.class))).thenReturn(List.of());
+        when(toolRegistry.listVisibleToolNames(any())).thenReturn(Set.of());
+        when(llmClient.stream(any())).thenReturn(Flux.just(LlmChunk.builder()
+                .delta("step 1 finished")
+                .usage(LlmResponse.Usage.builder().promptTokens(1).completionTokens(1).build())
+                .done(true)
+                .build()));
+        when(flushHook.checkAndFlush(any(), any())).thenReturn(false);
+        when(defaultDecisionEngine.verify(any(), any(), any())).thenReturn(Decision.itemDone("step 1 done", "item-1"), Decision.taskDone(RunOutcome.completed("all done"), "finished", "item-2"));
+
+        String result = runtime.executeLoopWithContext(context, new ArrayList<>(List.of(LlmRequest.Message.user("完成两个步骤"))));
+
+        assertEquals("all done", result);
+        assertEquals(PlanItemStatus.DONE, context.getExecutionPlan().getItems().get(0).getStatus());
+        assertEquals("item-2", context.getExecutionPlan().getCurrentItemId());
+    }
+
+
+    @Test
+    @DisplayName("should mark current plan item blocked when HITL rejects tool")
+    void shouldMarkCurrentPlanItemBlockedWhenHitlRejectsTool() throws Exception {
+        AgentRuntime runtime = createRuntime();
+        RunContext context = RunContext.create(
+                "run-hitl", "conn-hitl", "session-hitl",
+                LoopConfig.builder().build(),
+                new CancellationManager()
+        );
+        context.setOriginalInput("执行高风险命令");
+        context.setExecutionPlan(ExecutionPlan.builder()
+                .goal("执行高风险命令")
+                .status(ExecutionPlanStatus.ACTIVE)
+                .currentItemId("item-1")
+                .items(new java.util.ArrayList<>(List.of(
+                        PlanItem.builder().id("item-1").title("执行命令").status(PlanItemStatus.IN_PROGRESS).executionMode(PlanExecutionMode.MAIN_AGENT).build()
+                )))
+                .revision(1)
+                .build());
+        context.setPlanInitialized(true);
+
+        ToolCall toolCall = ToolCall.builder()
+                .id("call-hitl")
+                .function(ToolCall.FunctionCall.builder()
+                        .name("remote_exec")
+                        .arguments("{\"node\":\"prod\",\"command\":\"rm -rf /tmp/x\"}")
+                        .build())
+                .build();
+
+        when(loopOrchestrator.checkStopDecision(any())).thenReturn(StopDecision.continueLoop());
+        when(toolRegistry.toOpenAiTools(any(ToolVisibilityResolver.VisibilityRequest.class))).thenReturn(List.of());
+        when(toolRegistry.listVisibleToolNames(any())).thenReturn(Set.of("remote_exec"));
+        when(llmClient.stream(any())).thenReturn(Flux.just(LlmChunk.builder()
+                .toolCalls(List.of(toolCall))
+                .usage(LlmResponse.Usage.builder().promptTokens(1).completionTokens(1).build())
+                .done(true)
+                .build()));
+        when(skillActivator.detectToolActivation(any(), any())).thenReturn(Optional.empty());
+        when(toolExecutor.executeToolCalls(any(), any())).thenReturn(List.of(
+                new ToolExecutor.ToolExecutionResult(
+                        "call-hitl",
+                        ToolResult.error("rejected", RuntimeFailureCategories.HITL_REJECTED),
+                        RuntimeFailureCategories.HITL_REJECTED
+                )
+        ));
+        when(flushHook.checkAndFlush(any(), any())).thenReturn(false);
+
+        String result = runtime.executeLoopWithContext(context, new ArrayList<>(List.of(LlmRequest.Message.user("执行高风险命令"))));
+
+        assertTrue(result.contains("rejected by user"));
+        assertEquals(PlanItemStatus.BLOCKED, context.currentPlanItem().orElseThrow().getStatus());
+    }
+
+    private AgentRuntime createRuntime() {
+        return createRuntime(defaultDecisionEngine, loopOrchestrator);
+    }
+
+    private AgentRuntime createRuntime(DecisionEngine verifier) {
         return createRuntime(verifier, loopOrchestrator);
     }
 
-    private AgentRuntime createRuntime(RuntimeDecisionStage verifier, LoopOrchestrator orchestrator) {
+    private AgentRuntime createRuntime(DecisionEngine verifier, LoopOrchestrator orchestrator) {
         return new AgentRuntime(
                 new DecisionInputFactory(),
                 new OutcomeApplier(eventBus),
+                planEngine,
                 llmClient,
                 toolRegistry,
                 toolDispatcher,

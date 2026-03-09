@@ -283,30 +283,30 @@ public class ContextBuilder {
         return buildSmart(history, userPrompt, enableTools, "main");
     }
 
+    public SkillAwareRequest buildDirectResponse(List<LlmRequest.Message> history,
+                                                String userPrompt,
+                                                String agentId) {
+        String system = systemPromptBuilder.build(SystemPromptBuilder.PromptMode.MINIMAL, null, null, agentId);
+        LlmRequest request = build(system, history, userPrompt);
+        return new SkillAwareRequest(request, null, null, null, null);
+    }
+
+    public SkillAwareRequest buildReactEntry(List<LlmRequest.Message> history,
+                                             String userPrompt,
+                                             boolean enableTools,
+                                             String agentId) {
+        return buildSmart(history, userPrompt, enableTools, agentId);
+    }
+
     public SkillAwareRequest buildForPolicyDecision(List<LlmRequest.Message> history,
                                                      String userPrompt,
                                                      boolean enableTools,
                                                      TaskComplexity complexity,
                                                      String agentId) {
         if (complexity == TaskComplexity.DIRECT) {
-            String system = systemPromptBuilder.build(SystemPromptBuilder.PromptMode.MINIMAL, null, null, agentId);
-            LlmRequest request = build(system, history, userPrompt);
-            return new SkillAwareRequest(request, null, null, null, null);
+            return buildDirectResponse(history, userPrompt, agentId);
         }
-
-        if (complexity == TaskComplexity.LIGHT) {
-            String system = systemPromptBuilder.build(SystemPromptBuilder.PromptMode.MINIMAL, null, null, agentId);
-            LlmRequest request = build(system, history, userPrompt);
-            if (enableTools && toolRegistry.size() > 0) {
-                request.setTools(toolRegistry.toOpenAiTools(
-                        ToolVisibilityResolver.VisibilityRequest.builder().agentId(agentId).build()
-                ));
-                request.setToolChoice("auto");
-            }
-            return new SkillAwareRequest(request, null, null, null, null);
-        }
-
-        return buildSmart(history, userPrompt, enableTools, agentId);
+        return buildReactEntry(history, userPrompt, enableTools, agentId);
     }
 
     public SkillAwareRequest buildSmart(List<LlmRequest.Message> history,
