@@ -99,4 +99,33 @@ class DecisionEngineTest {
         assertEquals(RuntimeFailureCategories.REPAIRABLE_ENVIRONMENT, decision.failureCategory());
         verify(llmRuntimeDecisionStage).verify(any(), any(), any());
     }
+
+    @Test
+    @DisplayName("should downgrade terminal stop after single tool failure")
+    void shouldDowngradeTerminalStopAfterSingleToolFailure() {
+        when(hardGuardVerifier.verify(any(), any(), any()))
+                .thenReturn(Decision.continueSilently());
+        when(llmRuntimeDecisionStage.verify(any(), any(), any()))
+                .thenReturn(Decision.terminal(
+                        new RunOutcome(RunOutcomeStatus.NOT_WORTH_CONTINUING, "agent-browser daemon failed", "agent-browser daemon failed"),
+                        RuntimeFailureCategories.TOOL_ERROR,
+                        "agent-browser daemon failed"
+                ));
+
+        Decision decision = decisionEngine.decide(context, new DecisionInput(
+                null,
+                List.of("Daemon failed to start"),
+                Set.of(RuntimeFailureCategories.TOOL_ERROR),
+                context.snapshotProgress(),
+                context.getCurrentStep(),
+                0,
+                true,
+                false
+        ));
+
+        assertFalse(decision.terminal());
+        assertEquals(DecisionAction.CONTINUE_ITEM, decision.action());
+        assertEquals(RuntimeFailureCategories.TOOL_ERROR, decision.failureCategory());
+        assertTrue(decision.feedback().contains("Do not end the task after a single tool failure"));
+    }
 }

@@ -205,6 +205,7 @@ class AgentRuntimeTest {
                 new CancellationManager()
         );
         context.setOriginalInput("请用 wkhtmltopdf 把 README.md 导出成 PDF");
+        context.recordEnvironmentRepairAttempt();
 
         ToolCall toolCall = ToolCall.builder()
                 .id("call-3")
@@ -447,6 +448,71 @@ class AgentRuntimeTest {
         assertTrue(result.contains("rejected by user"));
         assertEquals(PlanItemStatus.BLOCKED, context.currentPlanItem().orElseThrow().getStatus());
     }
+
+    @Test
+    @DisplayName("should continue loop after single tool failure instead of stopping")
+    void shouldContinueLoopAfterSingleToolFailureInsteadOfStopping() throws Exception {
+        DecisionEngine decisionEngine = new DecisionEngine(new DecisionInputFactory(), new HardGuardVerifier(), llmRuntimeDecisionStage);
+        AgentRuntime runtime = createRuntime(decisionEngine);
+        RunContext context = RunContext.create(
+                "run-recover", "conn-recover", "session-recover",
+                LoopConfig.builder().maxRepeatedFailures(2).build(),
+                new CancellationManager()
+        );
+        context.setOriginalInput("打开浏览器访问知乎");
+
+        ToolCall toolCall = ToolCall.builder()
+                .id("call-browser")
+                .function(ToolCall.FunctionCall.builder()
+                        .name("shell")
+                        .arguments("{\"command\":\"agent-browser open https://www.zhihu.com\"}")
+                        .build())
+                .build();
+
+        when(loopOrchestrator.checkStopDecision(any())).thenReturn(
+                StopDecision.continueLoop(),
+                StopDecision.continueLoop(),
+                StopDecision.continueLoop()
+        );
+        when(toolRegistry.toOpenAiTools(any(ToolVisibilityResolver.VisibilityRequest.class))).thenReturn(List.of());
+        when(toolRegistry.listVisibleToolNames(any())).thenReturn(Set.of("shell"));
+        when(llmClient.stream(any())).thenReturn(
+                Flux.just(LlmChunk.builder()
+                        .toolCalls(List.of(toolCall))
+                        .usage(LlmResponse.Usage.builder().promptTokens(10).completionTokens(5).build())
+                        .done(true)
+                        .build()),
+                Flux.just(LlmChunk.builder()
+                        .delta("已完成")
+                        .usage(LlmResponse.Usage.builder().promptTokens(5).completionTokens(5).build())
+                        .done(true)
+                        .build())
+        );
+        when(skillActivator.detectToolActivation(any(), any())).thenReturn(Optional.empty());
+        when(toolExecutor.executeToolCalls(any(), any())).thenReturn(List.of(
+                new ToolExecutor.ToolExecutionResult(
+                        "call-browser",
+                        ToolResult.error("Daemon failed to start", RuntimeFailureCategories.TOOL_ERROR),
+                        RuntimeFailureCategories.TOOL_ERROR
+                )
+        ));
+        when(llmRuntimeDecisionStage.verify(any(), any(), any())).thenReturn(
+                Decision.terminal(
+                        new RunOutcome(RunOutcomeStatus.NOT_WORTH_CONTINUING, "agent-browser daemon failed", "agent-browser daemon failed"),
+                        RuntimeFailureCategories.TOOL_ERROR,
+                        "agent-browser daemon failed"
+                ),
+                Decision.taskDone(RunOutcome.completed("已完成"), "done", "item-1")
+        );
+        when(flushHook.checkAndFlush(any(), any())).thenReturn(false);
+
+        String result = runtime.executeLoopWithContext(context,
+                new ArrayList<>(List.of(LlmRequest.Message.user("打开浏览器访问知乎"))));
+
+        assertEquals("已完成", result);
+        verify(llmClient, org.mockito.Mockito.times(2)).stream(any());
+    }
+
 
     private AgentRuntime createRuntime() {
         return createRuntime(defaultDecisionEngine, loopOrchestrator);
