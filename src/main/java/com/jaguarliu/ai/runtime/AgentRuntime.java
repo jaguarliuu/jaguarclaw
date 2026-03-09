@@ -103,6 +103,7 @@ public class AgentRuntime {
                 context.getConfig().getRunTimeoutSeconds());
 
         List<String> pendingSubRunIds = new ArrayList<>();
+        int consecutiveFailedRounds = 0;
 
         while (true) {
             if (context.isAborted()) {
@@ -208,6 +209,22 @@ public class AgentRuntime {
                 messages.add(LlmRequest.Message.assistant(stopMessage));
                 log.info("Loop stopped due to HITL rejection: runId={}, tool={}", context.getRunId(), rejectedTool);
                 return stopMessage;
+            }
+
+            boolean roundHadSuccess = toolResults.stream()
+                    .anyMatch(r -> r.result() != null && r.result().isSuccess());
+            if (roundHadSuccess) {
+                consecutiveFailedRounds = 0;
+            } else {
+                consecutiveFailedRounds++;
+                if (consecutiveFailedRounds >= 3) {
+                    String stopMessage = "Stopped after " + consecutiveFailedRounds
+                            + " consecutive tool rounds with no successful results.";
+                    messages.add(LlmRequest.Message.assistant(stopMessage));
+                    log.warn("Loop stopped due to consecutive failures: runId={}, rounds={}",
+                            context.getRunId(), consecutiveFailedRounds);
+                    return stopMessage;
+                }
             }
 
             context.incrementStep();
