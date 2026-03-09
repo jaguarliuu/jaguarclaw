@@ -111,6 +111,18 @@ export interface TokenUsagePayload {
   step: number
 }
 
+export interface RunOutcomePayload {
+  status: string
+  reason: string
+  message?: string | null
+  detail?: string | null
+  pendingQuestion?: string | null
+  planStatus?: string | null
+  currentItemId?: string | null
+  step: number
+  totalTokens: number
+}
+
 // WebSocket Connection State
 export type ConnectionState = 'disconnected' | 'connecting' | 'connected' | 'error'
 
@@ -147,6 +159,7 @@ export interface RpcEventPayloadMap {
   'skill.activated': SkillActivatedPayload
   'file.created': FileCreatedPayload
   'token.usage': TokenUsagePayload
+  'run.outcome': RunOutcomePayload
 
   'subagent.spawned': SubagentSpawnedPayload
   'subagent.started': SubagentStartedPayload
@@ -190,6 +203,7 @@ export type AgentEventType =
   | 'subagent.failed'
   | 'heartbeat.notify'
   | 'token.usage'
+  | 'run.outcome'
   | 'context.compacted'
 
 // Tool Event Payloads

@@ -40,6 +40,18 @@ export default {
     emptyTitle: 'Ready',
     emptyHint: 'Type a message to begin',
   },
+  workspace: {
+    runOutcome: {
+      title: 'Execution Status',
+      currentItem: 'Current item',
+      reason: 'Reason',
+      pendingQuestion: 'Action needed',
+      toastTitle: 'Action Required',
+      popupTitle: 'Action Required',
+      popupBlockedTitle: 'Run Blocked',
+      popupConfirm: 'OK',
+    },
+  },
   input: {
     placeholder: 'Type a message...',
     hintSend: 'Enter to send',

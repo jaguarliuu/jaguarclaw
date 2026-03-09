@@ -3,6 +3,8 @@ import { useWebSocket } from './useWebSocket'
 import { useArtifact } from './useArtifact'
 import { useHeartbeat } from './useHeartbeat'
 import { useAgents } from './useAgents'
+import { useConfirm } from './useConfirm'
+import { useToast } from './useToast'
 import type {
   Session,
   Message,
@@ -25,7 +27,9 @@ import type {
   SessionFile,
   FileCreatedPayload,
   TokenUsagePayload,
+  RunOutcomePayload,
 } from '@/types'
+import { useI18n } from '@/i18n'
 
 const FALLBACK_AGENT_ID = 'main'
 
@@ -60,15 +64,27 @@ const sessionFiles = ref<SessionFile[]>([])
 // 当前选中的 Agent（用于新会话创建和 agent.run）
 const selectedAgentId = ref<string>(FALLBACK_AGENT_ID)
 
+export interface RunOutcomeState extends RunOutcomePayload {
+  runId: string
+  sessionId: string
+  visible: boolean
+}
+
+const runOutcomeBySession = ref<Record<string, RunOutcomeState>>({})
+const promptedOutcomeKeys = new Set<string>()
+
 // 事件监听器清理函数
 let eventCleanups: (() => void)[] = []
 let isSetup = false
 
 const { request, onEvent } = useWebSocket()
+const { confirm } = useConfirm()
+const { showToast } = useToast()
 const { artifact, openArtifact, closeArtifact, startStreaming, appendContent, finishStreaming } =
   useArtifact()
 const { addNotification } = useHeartbeat()
 const { agents, enabledAgents, defaultAgent, loadAgents, resolveAgentId, findAgent } = useAgents()
+const { t } = useI18n()
 
 // Computed
 const currentSession = computed(
@@ -76,6 +92,12 @@ const currentSession = computed(
 )
 
 const selectedAgent = computed(() => findAgent(selectedAgentId.value) ?? defaultAgent.value ?? null)
+
+const currentRunOutcome = computed<RunOutcomeState | null>(() => {
+  const sessionId = currentSessionId.value
+  if (!sessionId) return null
+  return runOutcomeBySession.value[sessionId] ?? null
+})
 
 // 当前选中的 subagent（从 subagentIndex 或已保存 messages 的 blocks 中查找）
 const activeSubagent = computed<SubagentInfo | null>(() => {
@@ -246,6 +268,7 @@ async function deleteSession(sessionId: string) {
       currentRun.value = null
       currentRunUsage.value = null
       closeArtifact()
+      dismissRunOutcome(sessionId)
     }
     console.log('[Chat] Deleted session:', sessionId)
   } catch (e) {
@@ -452,6 +475,8 @@ async function sendMessage(
     attachedFiles: attachedFiles && attachedFiles.length > 0 ? [...attachedFiles] : undefined, // 向后兼容
   }
   messages.value.push(userMessage)
+
+  dismissRunOutcome(sessionId)
 
   // Start streaming
   isStreaming.value = true
@@ -711,6 +736,50 @@ function findSubagentByRunId(runId: string): SubagentInfo | undefined {
 
 function isCurrentMainRun(runId: string): boolean {
   return !!currentRun.value && runId === currentRun.value.id
+}
+
+function dismissRunOutcome(sessionId?: string | null) {
+  if (!sessionId) return
+  const next = { ...runOutcomeBySession.value }
+  delete next[sessionId]
+  runOutcomeBySession.value = next
+}
+
+function hideCurrentRunOutcome() {
+  const sessionId = currentSessionId.value
+  if (!sessionId) return
+  const outcome = runOutcomeBySession.value[sessionId]
+  if (!outcome) return
+  runOutcomeBySession.value = {
+    ...runOutcomeBySession.value,
+    [sessionId]: {
+      ...outcome,
+      visible: false,
+    },
+  }
+}
+
+async function promptRunOutcomeIfNeeded(outcome: RunOutcomeState) {
+  if (!outcome.pendingQuestion) return
+  const popupKey = `${outcome.runId}:${outcome.status}:${outcome.pendingQuestion}`
+  if (promptedOutcomeKeys.has(popupKey)) return
+  promptedOutcomeKeys.add(popupKey)
+
+  showToast({
+    type: 'warning',
+    title: t('workspace.runOutcome.toastTitle'),
+    message: outcome.pendingQuestion,
+    dedupeKey: `run-outcome-${outcome.runId}` ,
+    dedupeWindowMs: 3000,
+    durationMs: 5000,
+  })
+
+  await confirm({
+    title: outcome.planStatus === 'BLOCKED' ? t('workspace.runOutcome.popupBlockedTitle') : t('workspace.runOutcome.popupTitle'),
+    message: outcome.pendingQuestion,
+    confirmText: t('workspace.runOutcome.popupConfirm'),
+    cancelText: 'Close',
+  })
 }
 
 // Setup event listeners
@@ -1038,6 +1107,32 @@ function setupEventListeners() {
     }),
   )
 
+  eventCleanups.push(
+    onEvent('run.outcome', (event: RpcEvent) => {
+      const payload = event.payload as RunOutcomePayload | undefined
+      if (!payload || !currentRun.value || event.runId !== currentRun.value.id) {
+        return
+      }
+
+      const sessionId = currentRun.value.sessionId
+      const outcome: RunOutcomeState = {
+        ...payload,
+        runId: event.runId,
+        sessionId,
+        visible: payload.planStatus === 'BLOCKED' || !!payload.pendingQuestion,
+      }
+
+      runOutcomeBySession.value = {
+        ...runOutcomeBySession.value,
+        [sessionId]: outcome,
+      }
+
+      if (outcome.pendingQuestion) {
+        void promptRunOutcomeIfNeeded(outcome)
+      }
+    }),
+  )
+
   // Handle lifecycle end - 保存到消息
   eventCleanups.push(
     onEvent('lifecycle.end', (event: RpcEvent) => {
@@ -1111,6 +1206,7 @@ export function useChat() {
     currentSessionId,
     currentRun,
     currentRunUsage,
+    currentRunOutcome,
     messages,
     streamBlocks,
     isStreaming,
@@ -1144,6 +1240,7 @@ export function useChat() {
     sendMessage,
     confirmToolCall,
     cancelRun,
+    hideCurrentRunOutcome,
     setupEventListeners,
   }
 }

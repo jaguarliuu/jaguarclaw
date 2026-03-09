@@ -16,6 +16,7 @@ import MessageInput from '@/components/MessageInput.vue'
 import SubagentPanel from '@/components/SubagentPanel.vue'
 import ArtifactPanel from '@/components/ArtifactPanel.vue'
 import HeartbeatDetailPanel from '@/components/HeartbeatDetailPanel.vue'
+import RunOutcomeBanner from '@/components/RunOutcomeBanner.vue'
 import ContextInputModal from '@/components/ContextInputModal.vue'
 import { useArtifact } from '@/composables/useArtifact'
 import { useHeartbeat } from '@/composables/useHeartbeat'
@@ -46,6 +47,7 @@ const {
   currentSession,
   currentSessionId,
   currentRunUsage,
+  currentRunOutcome,
   messages,
   streamBlocks,
   isStreaming,
@@ -66,6 +68,7 @@ const {
   sendMessage,
   confirmToolCall,
   cancelRun,
+  hideCurrentRunOutcome,
 } = useChat()
 
 const assistantDisplayName = computed(() => {
@@ -267,6 +270,12 @@ async function handleInstallAction() {
         :current-session-id="currentSessionId"
         @confirm="handleConfirmToolCall"
         @select-subagent="handleSelectSubagent"
+      />
+
+      <RunOutcomeBanner
+        v-if="currentRunOutcome?.visible"
+        :outcome="currentRunOutcome"
+        @dismiss="hideCurrentRunOutcome"
       />
 
       <MessageInput
