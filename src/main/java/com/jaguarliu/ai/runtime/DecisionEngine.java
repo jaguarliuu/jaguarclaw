@@ -1,6 +1,7 @@
 package com.jaguarliu.ai.runtime;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -9,6 +10,7 @@ import java.util.List;
  * 统一运行时决策引擎。
  */
 @Component
+@Primary
 @RequiredArgsConstructor
 public class DecisionEngine implements RuntimeDecisionStage {
 
