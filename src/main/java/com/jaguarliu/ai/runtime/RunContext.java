@@ -125,6 +125,9 @@ public class RunContext {
     @Builder.Default
     private final AtomicReference<String> lastFailureCategory = new AtomicReference<>();
 
+    @Builder.Default
+    private final AtomicReference<String> lastFailureDetail = new AtomicReference<>();
+
     /**
      * 原始用户输入（用于 skill 激活）
      */
@@ -314,6 +317,10 @@ public class RunContext {
     }
 
     public void recordFailure(String category) {
+        recordFailure(category, null);
+    }
+
+    public void recordFailure(String category, String detail) {
         String normalized = (category == null || category.isBlank()) ? "unknown" : category;
         String previous = lastFailureCategory.get();
         if (normalized.equals(previous)) {
@@ -321,6 +328,9 @@ public class RunContext {
         } else {
             lastFailureCategory.set(normalized);
             repeatedFailureCount.set(1);
+        }
+        if (detail != null && !detail.isBlank()) {
+            lastFailureDetail.set(detail.trim());
         }
     }
 
@@ -332,6 +342,7 @@ public class RunContext {
         lowProgressRounds.set(0);
         repeatedFailureCount.set(0);
         lastFailureCategory.set(null);
+        lastFailureDetail.set(null);
     }
 
     public void recordEnvironmentRepairAttempt() {
@@ -378,6 +389,7 @@ public class RunContext {
         return new ProgressSnapshot(
                 repeatedFailureCount.get(),
                 lastFailureCategory.get(),
+                lastFailureDetail.get(),
                 lowProgressRounds.get(),
                 environmentRepairAttempts.get(),
                 getTotalTokens()

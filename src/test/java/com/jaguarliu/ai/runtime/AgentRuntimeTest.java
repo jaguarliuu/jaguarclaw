@@ -326,7 +326,7 @@ class AgentRuntimeTest {
         String result = runtime.executeLoopWithContext(context,
                 new ArrayList<>(List.of(LlmRequest.Message.user("导出 PDF"))));
 
-        assertTrue(result.contains("Repeated failure") || result.contains("environment"));
+        assertTrue(result.contains("continuing automatically is unlikely to help"));
 
         ArgumentCaptor<AgentEvent> captor = ArgumentCaptor.forClass(AgentEvent.class);
         verify(eventBus, atLeastOnce()).publish(captor.capture());
@@ -339,6 +339,27 @@ class AgentRuntimeTest {
         assertEquals("repeated_failures", data.getReason());
     }
 
+
+    @Test
+    @DisplayName("should include latest failure detail when repeated failures stop the run")
+    void shouldIncludeLatestFailureDetailWhenRepeatedFailuresStopTheRun() throws Exception {
+        LoopOrchestrator realLoopOrchestrator = new LoopOrchestrator(eventBus);
+        AgentRuntime runtime = createRuntime(defaultDecisionEngine, realLoopOrchestrator);
+        RunContext context = RunContext.create(
+                "run-2b", "conn-2b", "session-2b",
+                LoopConfig.builder().maxRepeatedFailures(2).build(),
+                new CancellationManager()
+        );
+        String detail = "Domain 'www.zhihu.com' is not in the trusted list. Add it via Settings > Tools to allow access.";
+        context.recordFailure(RuntimeFailureCategories.TOOL_ERROR, detail);
+        context.recordFailure(RuntimeFailureCategories.TOOL_ERROR, detail);
+
+        String result = runtime.executeLoopWithContext(context,
+                new ArrayList<>(List.of(LlmRequest.Message.user("打开浏览器访问知乎"))));
+
+        assertTrue(result.contains("continuing automatically is unlikely to help"));
+        assertTrue(result.contains("trusted list"));
+    }
 
     @Test
     @DisplayName("should initialize execution plan when entering react loop")

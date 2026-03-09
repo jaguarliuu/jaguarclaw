@@ -15,6 +15,7 @@ class ProgressSnapshotTest {
         ProgressSnapshot snapshot = new ProgressSnapshot(
                 2,
                 RuntimeFailureCategories.REPAIRABLE_ENVIRONMENT,
+                null,
                 0,
                 1,
                 0
@@ -30,6 +31,7 @@ class ProgressSnapshotTest {
         ProgressSnapshot snapshot = new ProgressSnapshot(
                 2,
                 RuntimeFailureCategories.TOOL_ERROR,
+                null,
                 0,
                 0,
                 0

@@ -23,6 +23,7 @@ import com.jaguarliu.ai.runtime.ContextBuilder;
 import com.jaguarliu.ai.runtime.LoopConfig;
 import com.jaguarliu.ai.runtime.RunContext;
 import com.jaguarliu.ai.runtime.RunOutcome;
+import com.jaguarliu.ai.runtime.RunOutcomeMessageFormatter;
 import com.jaguarliu.ai.runtime.ReactEntrySkillSelector;
 import com.jaguarliu.ai.runtime.SessionLaneManager;
 import com.jaguarliu.ai.runtime.TaskComplexity;
@@ -332,7 +333,7 @@ public class AgentRunHandler implements RpcHandler {
             log.info("Run cancelled: id={}", runId);
             try {
                 String persisted = buildCancellationAssistantMessage(context);
-                messageService.saveAssistantMessage(sessionId, runId, persisted, principalId);
+                persistTerminalAssistantMessage(sessionId, runId, principalId, connectionId, persisted);
             } catch (Exception ex) {
                 log.warn("Failed to persist cancellation assistant message: runId={}, error={}",
                         runId, ex.getMessage());
@@ -344,11 +345,25 @@ public class AgentRunHandler implements RpcHandler {
         } catch (java.util.concurrent.TimeoutException e) {
             log.warn("Run timed out: id={}", runId);
             try {
+                String persisted = RunOutcomeMessageFormatter.renderTimeout(e.getMessage());
+                persistTerminalAssistantMessage(sessionId, runId, principalId, connectionId, persisted);
+            } catch (Exception ex) {
+                log.warn("Failed to persist timeout assistant message: runId={}, error={}",
+                        runId, ex.getMessage());
+            }
+            try {
                 runService.updateStatus(runId, RunStatus.ERROR);
             } catch (Exception ignored) {}
             eventBus.publish(AgentEvent.lifecycleError(connectionId, runId, e.getMessage()));
         } catch (Exception e) {
             log.error("Run failed: id={}", runId, e);
+            try {
+                String persisted = RunOutcomeMessageFormatter.renderUnexpectedFailure(e.getMessage());
+                persistTerminalAssistantMessage(sessionId, runId, principalId, connectionId, persisted);
+            } catch (Exception ex) {
+                log.warn("Failed to persist failure assistant message: runId={}, error={}",
+                        runId, ex.getMessage());
+            }
             try {
                 runService.updateStatus(runId, RunStatus.ERROR);
             } catch (Exception ignored) {}
@@ -442,16 +457,6 @@ public class AgentRunHandler implements RpcHandler {
         ));
     }
 
-    private String renderOutcomeMessage(RunOutcome outcome) {
-        if (outcome == null) {
-            return null;
-        }
-        if (outcome.detail() != null && !outcome.detail().isBlank()) {
-            return outcome.detail();
-        }
-        return outcome.message();
-    }
-
     private String buildPersistedAssistantMessage(RunContext context, String response) {
         if (response == null) {
             response = "";
@@ -462,6 +467,10 @@ public class AgentRunHandler implements RpcHandler {
         String draft = context.getLatestAssistantDraft();
         if (draft != null && !draft.isBlank()) {
             return draft;
+        }
+        String formatted = RunOutcomeMessageFormatter.render(context.getOutcome());
+        if (formatted != null && !formatted.isBlank()) {
+            return formatted;
         }
         return response;
     }
@@ -480,6 +489,19 @@ public class AgentRunHandler implements RpcHandler {
         if (content == null || content.isBlank()) {
             return;
         }
+        eventBus.publish(AgentEvent.assistantDelta(connectionId, runId, content));
+    }
+
+    private void persistTerminalAssistantMessage(String sessionId,
+                                                String runId,
+                                                String principalId,
+                                                String connectionId,
+                                                String content) {
+        if (content == null || content.isBlank()) {
+            return;
+        }
+        messageService.saveAssistantMessage(sessionId, runId, content, principalId);
+        tokenBudgetService.tryConsume(principalId, tokenBudgetService.estimateTokens(content));
         eventBus.publish(AgentEvent.assistantDelta(connectionId, runId, content));
     }
 

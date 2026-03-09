@@ -693,7 +693,7 @@ class AgentRunWithAgentIdTest {
 
             assertNotNull(response);
             assertNull(response.getError());
-            verify(messageService).saveAssistantMessage("session-env", "run-env", terminalResponse, PRINCIPAL_ID);
+            verify(messageService).saveAssistantMessage("session-env", "run-env", "I couldn\'t continue because the current environment blocked this action. Details: " + terminalResponse, PRINCIPAL_ID);
 
             ArgumentCaptor<AgentEvent> eventCaptor = ArgumentCaptor.forClass(AgentEvent.class);
             verify(eventBus, org.mockito.Mockito.atLeastOnce()).publish(eventCaptor.capture());
@@ -703,7 +703,53 @@ class AgentRunWithAgentIdTest {
 
             assertEquals(1, assistantDeltas.size());
             assertTrue(assistantDeltas.get(0).getData() instanceof AgentEvent.DeltaData delta
-                    && terminalResponse.equals(delta.getContent()));
+                    && ("I couldn\'t continue because the current environment blocked this action. Details: " + terminalResponse).equals(delta.getContent()));
+        }
+
+        @Test
+        void timedOutRunShouldPersistAssistantTimeoutMessage() throws Exception {
+            AgentRunHandler handler = newAgentRunHandler();
+            mockCommonRunPrerequisites();
+
+            when(sessionService.get("session-timeout", PRINCIPAL_ID))
+                    .thenReturn(Optional.of(sessionEntity("session-timeout", "Timeout Chat", "coder")));
+            when(sessionLaneManager.nextSequence("session-timeout")).thenReturn(12L);
+            when(runService.create("session-timeout", "hello", "coder", PRINCIPAL_ID))
+                    .thenReturn(runEntity("run-timeout", "session-timeout", "coder", "hello"));
+
+            AgentStrategy strategy = org.mockito.Mockito.mock(AgentStrategy.class);
+            when(strategyResolver.resolve(any())).thenReturn(strategy);
+            when(strategy.prepare(any())).thenReturn(AgentExecutionPlan.builder()
+                    .systemPrompt("system prompt")
+                    .strategyName("default")
+                    .build());
+            when(messageService.getSessionHistory(eq("session-timeout"), anyInt(), eq(PRINCIPAL_ID)))
+                    .thenReturn(List.of());
+            when(agentRuntime.executeLoopWithContext(any(RunContext.class), anyList()))
+                    .thenThrow(new java.util.concurrent.TimeoutException("ReAct loop timeout after 30 seconds"));
+            when(sessionLaneManager.submit(eq("session-timeout"), eq("run-timeout"), eq(12L), any(Supplier.class)))
+                    .thenAnswer(invocation -> {
+                        @SuppressWarnings("unchecked")
+                        Supplier<Object> task = (Supplier<Object>) invocation.getArgument(3);
+                        task.get();
+                        return Mono.empty();
+                    });
+
+            RpcRequest request = RpcRequest.builder()
+                    .id("6b")
+                    .method("agent.run")
+                    .payload(Map.of("sessionId", "session-timeout", "prompt", "hello"))
+                    .build();
+            RpcResponse response = handler.handle(CONNECTION_ID, request).block();
+
+            assertNotNull(response);
+            assertNull(response.getError());
+            verify(messageService).saveAssistantMessage(
+                    eq("session-timeout"),
+                    eq("run-timeout"),
+                    contains("timed out before I could finish"),
+                    eq(PRINCIPAL_ID)
+            );
         }
 
         @Test

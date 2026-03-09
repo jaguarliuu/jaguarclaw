@@ -67,7 +67,7 @@ class OutcomeApplierTest {
                 "fallback"
         );
 
-        assertEquals("workspace access denied", result);
+        assertEquals("I couldn't continue because the current environment blocked this action. Details: workspace access denied", result);
         assertEquals(outcome, context.getOutcome());
 
         ArgumentCaptor<AgentEvent> captor = ArgumentCaptor.forClass(AgentEvent.class);
@@ -91,7 +91,7 @@ class OutcomeApplierTest {
                 "Repeated failure category: tool_error"
         );
 
-        applier.apply(
+        String result = applier.apply(
                 context,
                 Decision.terminal(outcome, null, "repeated_failures"),
                 outcome.detail()
@@ -99,6 +99,8 @@ class OutcomeApplierTest {
 
         ArgumentCaptor<AgentEvent> captor = ArgumentCaptor.forClass(AgentEvent.class);
         verify(eventBus, atLeastOnce()).publish(captor.capture());
+        assertEquals("I stopped here because continuing automatically is unlikely to help. Details: Repeated failure category: tool_error", result);
+
         AgentEvent outcomeEvent = captor.getAllValues().stream()
                 .filter(event -> event.getType() == AgentEvent.EventType.RUN_OUTCOME)
                 .findFirst()

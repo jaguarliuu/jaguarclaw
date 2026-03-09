@@ -572,9 +572,11 @@ public class AgentRuntime {
         }
         context.recordLowProgressRound();
         toolResults.stream()
-                .map(ToolExecutor.ToolExecutionResult::failureCategory)
-                .filter(category -> category != null && !category.isBlank())
-                .forEach(context::recordFailure);
+                .filter(result -> result.failureCategory() != null && !result.failureCategory().isBlank())
+                .forEach(result -> context.recordFailure(
+                        result.failureCategory(),
+                        result.result() != null ? result.result().getContent() : null
+                ));
     }
 
 

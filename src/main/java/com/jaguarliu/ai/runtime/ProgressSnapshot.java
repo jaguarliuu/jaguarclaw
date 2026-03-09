@@ -6,6 +6,7 @@ package com.jaguarliu.ai.runtime;
 public record ProgressSnapshot(
         int repeatedFailureCount,
         String lastFailureCategory,
+        String lastFailureDetail,
         int lowProgressRounds,
         int environmentRepairAttempts,
         int totalTokens

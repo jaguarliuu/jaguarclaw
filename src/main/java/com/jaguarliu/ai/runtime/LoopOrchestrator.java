@@ -50,7 +50,7 @@ public class LoopOrchestrator {
             log.warn("Loop stopped by repeated failures: runId={}, category={}, count={}",
                     context.getRunId(), snapshot.lastFailureCategory(), snapshot.repeatedFailureCount());
             return StopDecision.notWorthContinuing(
-                    "Repeated failure category: " + snapshot.lastFailureCategory(),
+                    buildRepeatedFailureDetail(snapshot),
                     "repeated_failures"
             );
         }
@@ -66,7 +66,7 @@ public class LoopOrchestrator {
             log.warn("Loop stopped by low progress: runId={}, rounds={}",
                     context.getRunId(), snapshot.lowProgressRounds());
             return StopDecision.notWorthContinuing(
-                    "Low progress rounds: " + snapshot.lowProgressRounds(),
+                    buildLowProgressDetail(snapshot),
                     "low_progress"
             );
         }
@@ -75,12 +75,37 @@ public class LoopOrchestrator {
             log.warn("Loop stopped by token budget: runId={}, totalTokens={}, budget={}",
                     context.getRunId(), context.getTotalTokens(), context.getConfig().getMaxTokens());
             return StopDecision.notWorthContinuing(
-                    "Token budget exceeded: " + context.getTotalTokens(),
+                    "Token budget exceeded after using " + context.getTotalTokens() + " tokens.",
                     "token_budget"
             );
         }
 
         return StopDecision.continueLoop();
+    }
+
+    private String buildRepeatedFailureDetail(ProgressSnapshot snapshot) {
+        String category = snapshot.lastFailureCategory();
+        String detail = snapshot.lastFailureDetail();
+        if (detail != null && !detail.isBlank()) {
+            if (category != null && !category.isBlank()) {
+                return "Repeated failures in category '" + category + "'. Latest error: " + detail;
+            }
+            return "Repeated failures. Latest error: " + detail;
+        }
+        if (category != null && !category.isBlank()) {
+            return "Repeated failures in category '" + category + "'.";
+        }
+        return "The task kept failing repeatedly.";
+    }
+
+    private String buildLowProgressDetail(ProgressSnapshot snapshot) {
+        String detail = snapshot.lastFailureDetail();
+        if (detail != null && !detail.isBlank()) {
+            return "The task made too little progress for " + snapshot.lowProgressRounds()
+                    + " consecutive rounds. Latest result: " + detail;
+        }
+        return "The task made too little progress for " + snapshot.lowProgressRounds()
+                + " consecutive rounds.";
     }
 
     /**

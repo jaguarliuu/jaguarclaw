@@ -23,7 +23,7 @@ public class OutcomeApplier {
             return fallbackMessage;
         }
         if (decision.failureCategory() != null) {
-            context.recordFailure(decision.failureCategory());
+            context.recordFailure(decision.failureCategory(), extractFailureDetail(decision, fallbackMessage));
             if (RuntimeFailureCategories.REPAIRABLE_ENVIRONMENT.equals(decision.failureCategory())
                     && decision.continueLoop()) {
                 context.recordEnvironmentRepairAttempt();
@@ -60,12 +60,22 @@ public class OutcomeApplier {
     }
 
     private String renderOutcomeMessage(RunOutcome outcome) {
-        if (outcome == null) {
-            return null;
+        return RunOutcomeMessageFormatter.render(outcome);
+    }
+
+    private String extractFailureDetail(Decision decision, String fallbackMessage) {
+        if (decision == null) {
+            return fallbackMessage;
         }
-        if (outcome.detail() != null && !outcome.detail().isBlank()) {
-            return outcome.detail();
+        if (decision.outcome() != null && decision.outcome().detail() != null && !decision.outcome().detail().isBlank()) {
+            return decision.outcome().detail();
         }
-        return outcome.message();
+        if (decision.feedback() != null && !decision.feedback().isBlank()) {
+            return decision.feedback();
+        }
+        if (decision.reason() != null && !decision.reason().isBlank()) {
+            return decision.reason();
+        }
+        return fallbackMessage;
     }
 }
