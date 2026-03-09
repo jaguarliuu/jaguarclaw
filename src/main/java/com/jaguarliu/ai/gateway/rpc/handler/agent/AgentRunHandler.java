@@ -452,6 +452,13 @@ public class AgentRunHandler implements RpcHandler {
                 context.getRunId(),
                 outcome.status().name(),
                 reason != null ? reason : "router",
+                RunOutcomeMessageFormatter.render(outcome),
+                outcome.detail(),
+                context.getPendingQuestion(),
+                context.hasExecutionPlan() && context.getExecutionPlan() != null && context.getExecutionPlan().getStatus() != null
+                        ? context.getExecutionPlan().getStatus().name()
+                        : null,
+                context.currentPlanItem().map(com.jaguarliu.ai.runtime.PlanItem::getId).orElse(null),
                 context.getCurrentStep(),
                 context.getTotalTokens()
         ));

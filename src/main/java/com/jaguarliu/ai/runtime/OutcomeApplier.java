@@ -54,6 +54,13 @@ public class OutcomeApplier {
                 context.getRunId(),
                 outcome.status().name(),
                 reason,
+                RunOutcomeMessageFormatter.render(outcome),
+                outcome.detail(),
+                context.getPendingQuestion(),
+                context.hasExecutionPlan() && context.getExecutionPlan() != null && context.getExecutionPlan().getStatus() != null
+                        ? context.getExecutionPlan().getStatus().name()
+                        : null,
+                context.currentPlanItem().map(PlanItem::getId).orElse(null),
                 context.getCurrentStep(),
                 context.getTotalTokens()
         ));

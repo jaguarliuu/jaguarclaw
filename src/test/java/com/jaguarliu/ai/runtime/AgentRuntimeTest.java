@@ -438,6 +438,56 @@ class AgentRuntimeTest {
     }
 
     @Test
+    @DisplayName("should publish pending question and plan status in outcome event")
+    void shouldPublishPendingQuestionAndPlanStatusInOutcomeEvent() {
+        AgentRuntime runtime = createRuntime();
+        RunContext context = RunContext.create(
+                "run-outcome-event", "conn-outcome-event", "session-outcome-event",
+                LoopConfig.builder().build(),
+                new CancellationManager()
+        );
+        context.setOriginalInput("访问知乎");
+        context.setExecutionPlan(ExecutionPlan.builder()
+                .goal("访问知乎")
+                .status(ExecutionPlanStatus.ACTIVE)
+                .currentItemId("item-1")
+                .items(new java.util.ArrayList<>(java.util.List.of(
+                        PlanItem.builder().id("item-1").title("访问知乎").status(PlanItemStatus.IN_PROGRESS).executionMode(PlanExecutionMode.MAIN_AGENT).build()
+                )))
+                .revision(1)
+                .build());
+        context.setPlanInitialized(true);
+
+        runtime.applyDecision(
+                context,
+                Decision.terminal(
+                        new RunOutcome(
+                                RunOutcomeStatus.BLOCKED_PENDING_USER_DECISION,
+                                "Task requires user decision",
+                                "Please confirm whether to allow access to www.zhihu.com."
+                        ),
+                        RuntimeFailureCategories.USER_DECISION_REQUIRED,
+                        "Please confirm whether to allow access to www.zhihu.com."
+                ),
+                "fallback"
+        );
+
+        ArgumentCaptor<AgentEvent> captor = ArgumentCaptor.forClass(AgentEvent.class);
+        verify(eventBus, atLeastOnce()).publish(captor.capture());
+        AgentEvent.RunOutcomeData data = (AgentEvent.RunOutcomeData) captor.getAllValues().stream()
+                .filter(event -> event.getType() == AgentEvent.EventType.RUN_OUTCOME)
+                .findFirst()
+                .orElseThrow()
+                .getData();
+        assertEquals(RunOutcomeStatus.BLOCKED_PENDING_USER_DECISION.name(), data.getStatus());
+        assertTrue(data.getMessage().contains("confirmation") || data.getMessage().contains("confirm"));
+        assertTrue(data.getDetail().contains("www.zhihu.com"));
+        assertEquals("Please confirm whether to allow access to www.zhihu.com.", data.getPendingQuestion());
+        assertEquals(ExecutionPlanStatus.BLOCKED.name(), data.getPlanStatus());
+        assertEquals("item-1", data.getCurrentItemId());
+    }
+
+    @Test
     @DisplayName("should initialize execution plan when entering react loop")
     void shouldInitializeExecutionPlanWhenEnteringReactLoop() throws Exception {
         AgentRuntime runtime = createRuntime();

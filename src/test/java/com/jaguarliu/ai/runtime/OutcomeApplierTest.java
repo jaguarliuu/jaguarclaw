@@ -108,4 +108,46 @@ class OutcomeApplierTest {
         AgentEvent.RunOutcomeData data = (AgentEvent.RunOutcomeData) outcomeEvent.getData();
         assertEquals("repeated_failures", data.getReason());
     }
+
+    @Test
+    @DisplayName("should publish structured outcome payload for blocked environment")
+    void shouldPublishStructuredOutcomePayloadForBlockedEnvironment() {
+        OutcomeApplier applier = new OutcomeApplier(eventBus);
+        RunContext context = RunContext.create(
+                "run-4", "conn-4", "session-4",
+                LoopConfig.builder().build(),
+                new CancellationManager()
+        );
+        context.setExecutionPlan(ExecutionPlan.builder()
+                .goal("open zhihu")
+                .status(ExecutionPlanStatus.BLOCKED)
+                .currentItemId("item-1")
+                .items(new java.util.ArrayList<>(java.util.List.of(
+                        PlanItem.builder().id("item-1").title("open zhihu").status(PlanItemStatus.BLOCKED).executionMode(PlanExecutionMode.MAIN_AGENT).build()
+                )))
+                .revision(1)
+                .build());
+        context.setPendingQuestion("Please confirm whether to allow access to www.zhihu.com.");
+
+        RunOutcome outcome = RunOutcome.blockedByEnvironment("Domain 'www.zhihu.com' is not in the trusted list.");
+        applier.apply(
+                context,
+                Decision.terminal(outcome, RuntimeFailureCategories.HARD_ENVIRONMENT_BLOCK, "trusted_list_block"),
+                "fallback"
+        );
+
+        ArgumentCaptor<AgentEvent> captor = ArgumentCaptor.forClass(AgentEvent.class);
+        verify(eventBus, atLeastOnce()).publish(captor.capture());
+        AgentEvent.RunOutcomeData data = (AgentEvent.RunOutcomeData) captor.getAllValues().stream()
+                .filter(event -> event.getType() == AgentEvent.EventType.RUN_OUTCOME)
+                .findFirst()
+                .orElseThrow()
+                .getData();
+        assertEquals(RunOutcomeStatus.BLOCKED_BY_ENVIRONMENT.name(), data.getStatus());
+        assertTrue(data.getMessage().contains("environment blocked this action"));
+        assertTrue(data.getDetail().contains("trusted list"));
+        assertEquals("Please confirm whether to allow access to www.zhihu.com.", data.getPendingQuestion());
+        assertEquals(ExecutionPlanStatus.BLOCKED.name(), data.getPlanStatus());
+        assertEquals("item-1", data.getCurrentItemId());
+    }
 }

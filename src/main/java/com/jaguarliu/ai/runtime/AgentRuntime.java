@@ -592,8 +592,10 @@ public class AgentRuntime {
                 if (outcome.status() == RunOutcomeStatus.BLOCKED_PENDING_USER_DECISION) {
                     context.setPendingQuestion(firstNonBlank(
                             decision.feedback(),
-                            RunOutcomeMessageFormatter.render(outcome),
-                            detail
+                            outcome.detail(),
+                            decision.reason(),
+                            fallbackMessage,
+                            RunOutcomeMessageFormatter.render(outcome)
                     ));
                 }
             }
