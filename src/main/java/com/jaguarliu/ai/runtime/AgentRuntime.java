@@ -70,6 +70,7 @@ public class AgentRuntime {
     private final ToolExecutor toolExecutor;
     private final SkillActivator skillActivator;
     private final SubagentBarrier subagentBarrier;
+    private final ReactEntrySkillSelector reactEntrySkillSelector;
     private final DecisionEngine defaultDecisionEngine;
     private final PolicySupervisor policySupervisor;
 
@@ -179,6 +180,16 @@ public class AgentRuntime {
 
                     messages.add(LlmRequest.Message.user(subagentResultsSummary));
                     log.info("Subagent results injected: runId={}", context.getRunId());
+                    continue;
+                }
+
+                Optional<ContextBuilder.SkillAwareRequest> semanticSkillRequest = trySemanticSkillActivation(context, messages, result.content());
+                if (semanticSkillRequest.isPresent()) {
+                    messages.clear();
+                    messages.addAll(semanticSkillRequest.get().request().getMessages());
+                    context.setActiveSkill(semanticSkillRequest.get());
+                    context.setSkillBasePath(semanticSkillRequest.get().skillBasePath());
+                    loopOrchestrator.incrementStepAndPublish(context);
                     continue;
                 }
 
@@ -417,6 +428,63 @@ public class AgentRuntime {
         static DecisionResolution finish(String response) {
             return new DecisionResolution(false, response);
         }
+    }
+
+    private Optional<ContextBuilder.SkillAwareRequest> trySemanticSkillActivation(
+            RunContext context,
+            List<LlmRequest.Message> messages,
+            String assistantReply
+    ) {
+        if (context == null || context.getOriginalInput() == null || context.getOriginalInput().isBlank()) {
+            return Optional.empty();
+        }
+        if (context.getActiveSkill() != null && context.getActiveSkill().hasActiveSkill()) {
+            return Optional.empty();
+        }
+
+        List<LlmRequest.Message> selectionHistory = new ArrayList<>(extractHistory(messages));
+        if (assistantReply != null && !assistantReply.isBlank()) {
+            selectionHistory.add(LlmRequest.Message.assistant(assistantReply));
+        }
+
+        String selectionPrompt = context.currentPlanItem()
+                .map(PlanItem::getTitle)
+                .filter(title -> title != null && !title.isBlank())
+                .orElse(context.getOriginalInput());
+
+        Optional<ReactEntrySkillSelection> selection = reactEntrySkillSelector.select(
+                selectionPrompt,
+                selectionHistory,
+                context.getAgentId(),
+                context.getModelSelection()
+        );
+        if (selection.isEmpty() || !selection.get().hasSelectedSkill()) {
+            return Optional.empty();
+        }
+
+        String skillName = selection.get().getSkillName();
+        if (context.isSkillActivationLimitReached(skillName)) {
+            log.info("skill.activation_skipped reason=limit_reached skill={} runId={}", skillName, context.getRunId());
+            return Optional.empty();
+        }
+
+        Optional<ContextBuilder.SkillAwareRequest> skillRequest = contextBuilder.handleSkillActivationByName(
+                skillName,
+                context.getOriginalInput(),
+                extractHistory(messages),
+                true,
+                context.getAgentId()
+        );
+        if (skillRequest.isEmpty()) {
+            log.warn("runtime.semantic_skill_activation_failed runId={} skill={}", context.getRunId(), skillName);
+            return Optional.empty();
+        }
+
+        context.incrementSkillActivation(skillName);
+        skillActivator.publishActivationEvent(context, new SkillActivator.SkillActivation(skillName, "auto", null));
+        log.info("runtime.semantic_skill_activated runId={} skill={} reason={}",
+                context.getRunId(), skillName, selection.get().getReason());
+        return skillRequest;
     }
 
     RuntimeDecisionStage resolveDecisionStage(RunContext context) {

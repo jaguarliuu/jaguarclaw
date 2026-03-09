@@ -31,6 +31,10 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -116,6 +120,7 @@ class AgentRuntimeTest {
     @Mock private SkillActivator skillActivator;
     @Mock private PlanEngine planEngine;
     @Mock private SubagentBarrier subagentBarrier;
+    @Mock private ReactEntrySkillSelector reactEntrySkillSelector;
     @Mock private DecisionEngine defaultDecisionEngine;
     @Mock private PolicySupervisor policySupervisor;
     @Mock private LlmRuntimeDecisionStage llmRuntimeDecisionStage;
@@ -514,6 +519,69 @@ class AgentRuntimeTest {
     }
 
 
+    @Test
+    @DisplayName("should activate semantic skill during runtime before final direct answer")
+    void shouldActivateSemanticSkillDuringRuntimeBeforeFinalDirectAnswer() throws Exception {
+        AgentRuntime runtime = createRuntime();
+        RunContext context = RunContext.create(
+                "run-semantic-skill", "conn-semantic-skill", "session-semantic-skill",
+                LoopConfig.builder().build(),
+                new CancellationManager()
+        );
+        context.setOriginalInput("打开浏览器访问知乎");
+
+        when(loopOrchestrator.checkStopDecision(any())).thenReturn(
+                StopDecision.continueLoop(),
+                StopDecision.continueLoop(),
+                StopDecision.continueLoop()
+        );
+        when(toolRegistry.toOpenAiTools(any(ToolVisibilityResolver.VisibilityRequest.class))).thenReturn(List.of());
+        when(toolRegistry.listVisibleToolNames(any())).thenReturn(Set.of());
+        when(llmClient.stream(any())).thenReturn(
+                Flux.just(LlmChunk.builder()
+                        .delta("我来帮你打开浏览器")
+                        .usage(LlmResponse.Usage.builder().promptTokens(1).completionTokens(1).build())
+                        .done(true)
+                        .build()),
+                Flux.just(LlmChunk.builder()
+                        .delta("已完成")
+                        .usage(LlmResponse.Usage.builder().promptTokens(1).completionTokens(1).build())
+                        .done(true)
+                        .build())
+        );
+        when(flushHook.checkAndFlush(any(), any())).thenReturn(false);
+        when(reactEntrySkillSelector.select(eq("打开浏览器访问知乎"), anyList(), anyString(), nullable(String.class)))
+                .thenReturn(Optional.of(ReactEntrySkillSelection.builder()
+                        .skillName("agent-browser")
+                        .reason("browser task")
+                        .confidence(0.95)
+                        .build()));
+        LlmRequest skillRequest = LlmRequest.builder()
+                .messages(List.of(
+                        LlmRequest.Message.system("skill system"),
+                        LlmRequest.Message.user("打开浏览器访问知乎")
+                ))
+                .build();
+        when(contextBuilder.handleSkillActivationByName(eq("agent-browser"), eq("打开浏览器访问知乎"), anyList(), eq(true), anyString()))
+                .thenReturn(Optional.of(new ContextBuilder.SkillAwareRequest(
+                        skillRequest,
+                        "agent-browser",
+                        Set.of("shell"),
+                        Set.of(),
+                        java.nio.file.Path.of("/tmp/agent-browser")
+                )));
+        when(defaultDecisionEngine.verify(any(), any(), any())).thenReturn(
+                Decision.taskDone(RunOutcome.completed("已完成"), "done", "item-1")
+        );
+
+        String result = runtime.executeLoopWithContext(context, new ArrayList<>(List.of(LlmRequest.Message.user("打开浏览器访问知乎"))));
+
+        assertEquals("已完成", result);
+        assertEquals("agent-browser", context.getActiveSkill().activeSkillName());
+        verify(llmClient, org.mockito.Mockito.times(2)).stream(any());
+    }
+
+
     private AgentRuntime createRuntime() {
         return createRuntime(defaultDecisionEngine, loopOrchestrator);
     }
@@ -542,6 +610,7 @@ class AgentRuntimeTest {
                 toolExecutor,
                 skillActivator,
                 subagentBarrier,
+                reactEntrySkillSelector,
                 verifier,
                 policySupervisor
         );
