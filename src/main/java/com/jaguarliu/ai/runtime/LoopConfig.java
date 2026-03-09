@@ -49,24 +49,6 @@ public class LoopConfig {
     private double maxCostUsd = 0;
 
     /**
-     * 同类失败允许的最大重复次数。
-     */
-    @Builder.Default
-    private int maxRepeatedFailures = 2;
-
-    /**
-     * 允许的最大低进展轮次。
-     */
-    @Builder.Default
-    private int maxLowProgressRounds = 2;
-
-    /**
-     * 环境修复类尝试次数上限。
-     */
-    @Builder.Default
-    private int maxEnvironmentRepairAttempts = 1;
-
-    /**
      * 创建一个覆盖了 maxSteps 的新配置实例，其余参数继承自 base
      */
     public static LoopConfig withMaxSteps(int maxSteps, LoopConfig base) {
@@ -76,9 +58,6 @@ public class LoopConfig {
         config.setStepTimeoutSeconds(base.getStepTimeoutSeconds());
         config.setMaxTokens(base.getMaxTokens());
         config.setMaxCostUsd(base.getMaxCostUsd());
-        config.setMaxRepeatedFailures(base.getMaxRepeatedFailures());
-        config.setMaxLowProgressRounds(base.getMaxLowProgressRounds());
-        config.setMaxEnvironmentRepairAttempts(base.getMaxEnvironmentRepairAttempts());
         return config;
     }
 }

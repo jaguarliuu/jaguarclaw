@@ -298,17 +298,6 @@ public class ContextBuilder {
         return buildSmart(history, userPrompt, enableTools, agentId);
     }
 
-    public SkillAwareRequest buildForPolicyDecision(List<LlmRequest.Message> history,
-                                                     String userPrompt,
-                                                     boolean enableTools,
-                                                     TaskComplexity complexity,
-                                                     String agentId) {
-        if (complexity == TaskComplexity.DIRECT) {
-            return buildDirectResponse(history, userPrompt, agentId);
-        }
-        return buildReactEntry(history, userPrompt, enableTools, agentId);
-    }
-
     public SkillAwareRequest buildSmart(List<LlmRequest.Message> history,
                                         String userPrompt,
                                         boolean enableTools,

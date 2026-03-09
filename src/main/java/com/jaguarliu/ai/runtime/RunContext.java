@@ -8,14 +8,10 @@ import lombok.Setter;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * ReAct 循环运行上下文
@@ -113,21 +109,6 @@ public class RunContext {
     @Builder.Default
     private final AtomicInteger totalCacheReadTokens = new AtomicInteger(0);
 
-    @Builder.Default
-    private final AtomicInteger repeatedFailureCount = new AtomicInteger(0);
-
-    @Builder.Default
-    private final AtomicInteger lowProgressRounds = new AtomicInteger(0);
-
-    @Builder.Default
-    private final AtomicInteger environmentRepairAttempts = new AtomicInteger(0);
-
-    @Builder.Default
-    private final AtomicReference<String> lastFailureCategory = new AtomicReference<>();
-
-    @Builder.Default
-    private final AtomicReference<String> lastFailureDetail = new AtomicReference<>();
-
     /**
      * 原始用户输入（用于 skill 激活）
      */
@@ -194,32 +175,11 @@ public class RunContext {
     @Setter
     private RunOutcome outcome;
 
-    @Setter
-    private RuntimeDecisionStage runtimeDecisionStage;
-
-    @Setter
-    private TaskContract taskContract;
-
-    @Setter
-    private ExecutionPlan executionPlan;
-
-    @Setter
-    private boolean planInitialized;
-
-    @Setter
-    private String pendingQuestion;
-
     /**
      * Skill 激活计数器（skillName -> count）（线程安全）
      */
     @Builder.Default
     private final Map<String, Integer> skillActivationCounts = new ConcurrentHashMap<>();
-
-    /**
-     * 当前轮的结构化失败类别集合。
-     */
-    @Builder.Default
-    private final Set<String> runtimeFailureCategories = ConcurrentHashMap.newKeySet();
 
     /**
      * 最大单个 Skill 激活次数
@@ -314,94 +274,6 @@ public class RunContext {
 
     public boolean hasOutcome() {
         return outcome != null;
-    }
-
-    public void recordFailure(String category) {
-        recordFailure(category, null);
-    }
-
-    public void recordFailure(String category, String detail) {
-        String normalized = (category == null || category.isBlank()) ? "unknown" : category;
-        String previous = lastFailureCategory.get();
-        if (normalized.equals(previous)) {
-            repeatedFailureCount.incrementAndGet();
-        } else {
-            lastFailureCategory.set(normalized);
-            repeatedFailureCount.set(1);
-        }
-        if (detail != null && !detail.isBlank()) {
-            lastFailureDetail.set(detail.trim());
-        }
-    }
-
-    public void recordLowProgressRound() {
-        lowProgressRounds.incrementAndGet();
-    }
-
-    public void recordMeaningfulProgress() {
-        lowProgressRounds.set(0);
-        repeatedFailureCount.set(0);
-        lastFailureCategory.set(null);
-        lastFailureDetail.set(null);
-    }
-
-    public void recordEnvironmentRepairAttempt() {
-        environmentRepairAttempts.incrementAndGet();
-    }
-
-    public void replaceRuntimeFailureCategories(Collection<String> categories) {
-        runtimeFailureCategories.clear();
-        if (categories != null) {
-            categories.stream()
-                    .filter(category -> category != null && !category.isBlank())
-                    .forEach(runtimeFailureCategories::add);
-        }
-    }
-
-    public void clearRuntimeFailureCategories() {
-        runtimeFailureCategories.clear();
-    }
-
-    public Set<String> getRuntimeFailureCategories() {
-        return Collections.unmodifiableSet(new LinkedHashSet<>(runtimeFailureCategories));
-    }
-
-    public boolean hasRuntimeFailureCategory(String category) {
-        return category != null && runtimeFailureCategories.contains(category);
-    }
-
-    public boolean isRepeatedFailureLimitReached() {
-        return snapshotProgress().shouldStopForRepeatedFailures(
-                config.getMaxRepeatedFailures(),
-                config.getMaxEnvironmentRepairAttempts()
-        );
-    }
-
-    public boolean isLowProgressLimitReached() {
-        return snapshotProgress().shouldStopForLowProgress(config.getMaxLowProgressRounds());
-    }
-
-    public boolean isTokenBudgetReached() {
-        return config.getMaxTokens() > 0 && getTotalTokens() >= config.getMaxTokens();
-    }
-
-    public ProgressSnapshot snapshotProgress() {
-        return new ProgressSnapshot(
-                repeatedFailureCount.get(),
-                lastFailureCategory.get(),
-                lastFailureDetail.get(),
-                lowProgressRounds.get(),
-                environmentRepairAttempts.get(),
-                getTotalTokens()
-        );
-    }
-
-    public boolean hasExecutionPlan() {
-        return executionPlan != null;
-    }
-
-    public java.util.Optional<PlanItem> currentPlanItem() {
-        return executionPlan == null ? java.util.Optional.empty() : executionPlan.currentItem();
     }
 
     /**
