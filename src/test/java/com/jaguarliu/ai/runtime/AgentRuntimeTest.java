@@ -266,6 +266,82 @@ class AgentRuntimeTest {
     }
 
     @Test
+    @DisplayName("should block current plan item when terminal outcome blocks by environment")
+    void shouldBlockCurrentPlanItemWhenTerminalOutcomeBlocksByEnvironment() {
+        AgentRuntime runtime = createRuntime();
+        RunContext context = RunContext.create(
+                "run-blocked-plan", "conn-blocked-plan", "session-blocked-plan",
+                LoopConfig.builder().build(),
+                new CancellationManager()
+        );
+        context.setOriginalInput("打开知乎");
+        context.setExecutionPlan(ExecutionPlan.builder()
+                .goal("打开知乎")
+                .status(ExecutionPlanStatus.ACTIVE)
+                .currentItemId("item-1")
+                .items(new java.util.ArrayList<>(java.util.List.of(
+                        PlanItem.builder().id("item-1").title("打开知乎").status(PlanItemStatus.IN_PROGRESS).executionMode(PlanExecutionMode.MAIN_AGENT).build()
+                )))
+                .revision(1)
+                .build());
+        context.setPlanInitialized(true);
+
+        String result = runtime.applyDecision(
+                context,
+                Decision.terminal(
+                        RunOutcome.blockedByEnvironment("Domain 'www.zhihu.com' is not in the trusted list."),
+                        RuntimeFailureCategories.HARD_ENVIRONMENT_BLOCK,
+                        "Domain 'www.zhihu.com' is not in the trusted list."
+                ),
+                "fallback"
+        );
+
+        assertTrue(result.contains("environment blocked this action"));
+        assertEquals(PlanItemStatus.BLOCKED, context.currentPlanItem().orElseThrow().getStatus());
+        assertTrue(context.currentPlanItem().orElseThrow().getNotes().contains("trusted list"));
+    }
+
+    @Test
+    @DisplayName("should store pending question when terminal outcome requires user decision")
+    void shouldStorePendingQuestionWhenTerminalOutcomeRequiresUserDecision() {
+        AgentRuntime runtime = createRuntime();
+        RunContext context = RunContext.create(
+                "run-pending-question", "conn-pending-question", "session-pending-question",
+                LoopConfig.builder().build(),
+                new CancellationManager()
+        );
+        context.setOriginalInput("继续访问受限站点");
+        context.setExecutionPlan(ExecutionPlan.builder()
+                .goal("继续访问受限站点")
+                .status(ExecutionPlanStatus.ACTIVE)
+                .currentItemId("item-1")
+                .items(new java.util.ArrayList<>(java.util.List.of(
+                        PlanItem.builder().id("item-1").title("继续访问受限站点").status(PlanItemStatus.IN_PROGRESS).executionMode(PlanExecutionMode.MAIN_AGENT).build()
+                )))
+                .revision(1)
+                .build());
+        context.setPlanInitialized(true);
+
+        String result = runtime.applyDecision(
+                context,
+                Decision.terminal(
+                        new RunOutcome(
+                                RunOutcomeStatus.BLOCKED_PENDING_USER_DECISION,
+                                "Task requires user decision",
+                                "Please confirm whether to allow access to www.zhihu.com."
+                        ),
+                        RuntimeFailureCategories.USER_DECISION_REQUIRED,
+                        "Please confirm whether to allow access to www.zhihu.com."
+                ),
+                "fallback"
+        );
+
+        assertTrue(result.contains("confirmation") || result.contains("confirm"));
+        assertEquals(PlanItemStatus.BLOCKED, context.currentPlanItem().orElseThrow().getStatus());
+        assertTrue(context.getPendingQuestion().contains("allow access to www.zhihu.com"));
+    }
+
+    @Test
     @DisplayName("should record environment repair attempt when verifier continues repairable failure")
     void shouldRecordEnvironmentRepairAttemptWhenVerifierContinuesRepairableFailure() {
         AgentRuntime runtime = createRuntime();

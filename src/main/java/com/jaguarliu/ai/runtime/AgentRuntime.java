@@ -561,7 +561,57 @@ public class AgentRuntime {
     }
 
     String applyDecision(RunContext context, Decision decision, String fallbackMessage) {
+        applyTerminalPlanEffects(context, decision, fallbackMessage);
         return outcomeApplier.apply(context, decision, fallbackMessage);
+    }
+
+    private void applyTerminalPlanEffects(RunContext context, Decision decision, String fallbackMessage) {
+        if (context == null || decision == null || decision.outcome() == null) {
+            return;
+        }
+        if (!decision.terminal() && decision.action() != DecisionAction.STOP) {
+            return;
+        }
+        String targetItemId = decision.targetItemId();
+        if ((targetItemId == null || targetItemId.isBlank()) && context.currentPlanItem().isPresent()) {
+            targetItemId = context.currentPlanItem().get().getId();
+        }
+        RunOutcome outcome = decision.outcome();
+        String detail = firstNonBlank(
+                outcome.detail(),
+                decision.feedback(),
+                decision.reason(),
+                fallbackMessage
+        );
+
+        switch (outcome.status()) {
+            case BLOCKED_BY_ENVIRONMENT, BLOCKED_PENDING_USER_DECISION, NOT_WORTH_CONTINUING, FAILED_UNEXPECTEDLY -> {
+                if (context.hasExecutionPlan() && targetItemId != null) {
+                    planEngine.markBlocked(context.getExecutionPlan(), targetItemId, detail);
+                }
+                if (outcome.status() == RunOutcomeStatus.BLOCKED_PENDING_USER_DECISION) {
+                    context.setPendingQuestion(firstNonBlank(
+                            decision.feedback(),
+                            RunOutcomeMessageFormatter.render(outcome),
+                            detail
+                    ));
+                }
+            }
+            default -> {
+            }
+        }
+    }
+
+    private String firstNonBlank(String... values) {
+        if (values == null) {
+            return null;
+        }
+        for (String value : values) {
+            if (value != null && !value.isBlank()) {
+                return value;
+            }
+        }
+        return null;
     }
 
     void recordToolRoundProgress(RunContext context, List<ToolExecutor.ToolExecutionResult> toolResults) {
