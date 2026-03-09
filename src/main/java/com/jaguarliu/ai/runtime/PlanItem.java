@@ -16,4 +16,5 @@ public class PlanItem {
     private PlanExecutionMode executionMode;
     private String notes;
     private String subRunId;
+    private String skillName;
 }

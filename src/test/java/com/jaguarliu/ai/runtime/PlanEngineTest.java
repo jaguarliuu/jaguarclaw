@@ -111,4 +111,23 @@ class PlanEngineTest {
         assertNull(plan.getCurrentItemId());
         assertTrue(plan.allItemsDone());
     }
+    @Test
+    @DisplayName("should bind skill to current plan item")
+    void shouldBindSkillToCurrentPlanItem() {
+        PlanEngine engine = new PlanEngine(structuredOutputExecutor);
+        ExecutionPlan plan = ExecutionPlan.builder()
+                .goal("test")
+                .status(ExecutionPlanStatus.ACTIVE)
+                .currentItemId("item-1")
+                .items(new java.util.ArrayList<>(List.of(
+                        PlanItem.builder().id("item-1").title("step 1").status(PlanItemStatus.IN_PROGRESS).executionMode(PlanExecutionMode.MAIN_AGENT).build()
+                )))
+                .revision(1)
+                .build();
+
+        engine.bindSkill(plan, "item-1", "agent-browser");
+
+        assertEquals("agent-browser", plan.getItems().get(0).getSkillName());
+    }
+
 }

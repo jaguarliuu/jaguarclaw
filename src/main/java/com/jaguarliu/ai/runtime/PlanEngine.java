@@ -103,6 +103,14 @@ public class PlanEngine {
         return plan;
     }
 
+    public ExecutionPlan bindSkill(ExecutionPlan plan, String itemId, String skillName) {
+        PlanItem item = findItem(plan, itemId);
+        if (item != null) {
+            item.setSkillName(skillName);
+        }
+        return plan;
+    }
+
     public ExecutionPlan markDelegated(ExecutionPlan plan, String itemId, String subRunId) {
         PlanItem item = findItem(plan, itemId);
         if (item != null) {

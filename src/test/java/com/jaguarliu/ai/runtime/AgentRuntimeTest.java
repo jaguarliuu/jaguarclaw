@@ -104,6 +104,17 @@ class AgentRuntimeTest {
             plan.setStatus(ExecutionPlanStatus.BLOCKED);
             return plan;
         });
+        org.mockito.Mockito.lenient().when(planEngine.bindSkill(any(), any(), any())).thenAnswer(invocation -> {
+            ExecutionPlan plan = invocation.getArgument(0);
+            String itemId = invocation.getArgument(1);
+            String skillName = invocation.getArgument(2);
+            for (PlanItem item : plan.getItems()) {
+                if (itemId.equals(item.getId())) {
+                    item.setSkillName(skillName);
+                }
+            }
+            return plan;
+        });
     }
 
     @Mock private LlmClient llmClient;
@@ -579,6 +590,94 @@ class AgentRuntimeTest {
         assertEquals("已完成", result);
         assertEquals("agent-browser", context.getActiveSkill().activeSkillName());
         verify(llmClient, org.mockito.Mockito.times(2)).stream(any());
+    }
+
+
+    @Test
+    @DisplayName("should bind entry active skill to current plan item when plan initializes")
+    void shouldBindEntryActiveSkillToCurrentPlanItemWhenPlanInitializes() throws Exception {
+        AgentRuntime runtime = createRuntime();
+        RunContext context = RunContext.create(
+                "run-bind-plan", "conn-bind-plan", "session-bind-plan",
+                LoopConfig.builder().build(),
+                new CancellationManager()
+        );
+        context.setOriginalInput("打开浏览器访问知乎");
+        context.setActiveSkill(new ContextBuilder.SkillAwareRequest(
+                LlmRequest.builder().messages(List.of()).build(),
+                "agent-browser",
+                Set.of("shell"),
+                Set.of(),
+                java.nio.file.Path.of("/tmp/agent-browser")
+        ));
+        context.setSkillBasePath(java.nio.file.Path.of("/tmp/agent-browser"));
+
+        when(loopOrchestrator.checkStopDecision(any())).thenReturn(StopDecision.continueLoop());
+        when(toolRegistry.toOpenAiTools(any(ToolVisibilityResolver.VisibilityRequest.class))).thenReturn(List.of());
+        when(toolRegistry.listVisibleToolNames(any())).thenReturn(Set.of());
+        when(llmClient.stream(any())).thenReturn(Flux.just(LlmChunk.builder()
+                .delta("done")
+                .usage(LlmResponse.Usage.builder().promptTokens(1).completionTokens(1).build())
+                .done(true)
+                .build()));
+        when(flushHook.checkAndFlush(any(), any())).thenReturn(false);
+        when(defaultDecisionEngine.verify(any(), any(), any())).thenReturn(
+                Decision.taskDone(RunOutcome.completed("done"), "done", "item-1")
+        );
+
+        runtime.executeLoopWithContext(context, new ArrayList<>(List.of(LlmRequest.Message.user("打开浏览器访问知乎"))));
+
+        assertEquals("agent-browser", context.currentPlanItem().orElseThrow().getSkillName());
+    }
+
+    @Test
+    @DisplayName("should activate skill bound to current plan item")
+    void shouldActivateSkillBoundToCurrentPlanItem() throws Exception {
+        AgentRuntime runtime = createRuntime();
+        RunContext context = RunContext.create(
+                "run-plan-bound-skill", "conn-plan-bound-skill", "session-plan-bound-skill",
+                LoopConfig.builder().build(),
+                new CancellationManager()
+        );
+        context.setOriginalInput("打开浏览器访问知乎");
+        context.setExecutionPlan(ExecutionPlan.builder()
+                .goal("打开浏览器访问知乎")
+                .status(ExecutionPlanStatus.ACTIVE)
+                .currentItemId("item-1")
+                .items(new java.util.ArrayList<>(List.of(
+                        PlanItem.builder().id("item-1").title("打开浏览器访问知乎").status(PlanItemStatus.IN_PROGRESS).executionMode(PlanExecutionMode.MAIN_AGENT).skillName("agent-browser").build()
+                )))
+                .revision(1)
+                .build());
+        context.setPlanInitialized(true);
+
+        LlmRequest skillRequest = LlmRequest.builder()
+                .messages(List.of(LlmRequest.Message.system("skill system"), LlmRequest.Message.user("打开浏览器访问知乎")))
+                .build();
+        when(contextBuilder.handleSkillActivationByName(eq("agent-browser"), eq("打开浏览器访问知乎"), anyList(), eq(true), anyString()))
+                .thenReturn(Optional.of(new ContextBuilder.SkillAwareRequest(
+                        skillRequest,
+                        "agent-browser",
+                        Set.of("shell"),
+                        Set.of(),
+                        java.nio.file.Path.of("/tmp/agent-browser")
+                )));
+        when(loopOrchestrator.checkStopDecision(any())).thenReturn(StopDecision.continueLoop());
+        when(toolRegistry.toOpenAiTools(any(ToolVisibilityResolver.VisibilityRequest.class))).thenReturn(List.of());
+        when(toolRegistry.listVisibleToolNames(any())).thenReturn(Set.of());
+        when(llmClient.stream(any())).thenReturn(Flux.just(LlmChunk.builder()
+                .delta("done")
+                .usage(LlmResponse.Usage.builder().promptTokens(1).completionTokens(1).build())
+                .done(true)
+                .build()));
+        when(flushHook.checkAndFlush(any(), any())).thenReturn(false);
+        when(defaultDecisionEngine.verify(any(), any(), any())).thenReturn(
+                Decision.taskDone(RunOutcome.completed("done"), "done", "item-1")
+        );
+
+        runtime.executeLoopWithContext(context, new ArrayList<>(List.of(LlmRequest.Message.user("打开浏览器访问知乎"))));
+
+        assertEquals("agent-browser", context.getActiveSkill().activeSkillName());
     }
 
 

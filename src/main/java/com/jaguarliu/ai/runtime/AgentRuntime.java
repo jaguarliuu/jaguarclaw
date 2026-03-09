@@ -131,6 +131,7 @@ public class AgentRuntime {
         initializeExecutionPlanIfNeeded(context, messages);
 
         while (true) {
+            syncActiveSkillWithCurrentPlanItem(context, messages);
             StopDecision stopDecision = loopOrchestrator.checkStopDecision(context);
             if (stopDecision.stop()) {
                 if (stopDecision.isCancelled()) {
@@ -337,6 +338,7 @@ public class AgentRuntime {
         ExecutionPlan plan = planEngine.createInitialPlan(context, extractHistory(messages));
         context.setExecutionPlan(plan);
         context.setPlanInitialized(true);
+        bindCurrentItemToActiveSkill(context);
     }
 
     private List<LlmRequest.Message> enrichMessagesWithPlan(RunContext context, List<LlmRequest.Message> messages) {
@@ -369,6 +371,8 @@ public class AgentRuntime {
                 .filter(item -> item.getStatus() != PlanItemStatus.DONE && item.getStatus() != PlanItemStatus.CANCELLED)
                 .map(item -> item.getId() + ":" + item.getTitle() + "(" + item.getStatus() + ")")
                 .collect(java.util.stream.Collectors.joining(", "));
+        context.currentPlanItem().filter(item -> item.getSkillName() != null && !item.getSkillName().isBlank())
+                .ifPresent(item -> builder.append("- currentItemSkill: ").append(item.getSkillName()).append("\n"));
         builder.append("- remainingItems: ").append(remaining.isBlank() ? "none" : remaining).append("\n")
                 .append("Prefer finishing or advancing the current item before claiming the whole task is done.");
         return builder.toString();
@@ -430,6 +434,68 @@ public class AgentRuntime {
         }
     }
 
+    private void bindCurrentItemToActiveSkill(RunContext context) {
+        if (context == null || !context.hasExecutionPlan() || context.getActiveSkill() == null || !context.getActiveSkill().hasActiveSkill()) {
+            return;
+        }
+        context.currentPlanItem().ifPresent(item -> planEngine.bindSkill(
+                context.getExecutionPlan(),
+                item.getId(),
+                context.getActiveSkill().activeSkillName()
+        ));
+    }
+
+    private void syncActiveSkillWithCurrentPlanItem(RunContext context, List<LlmRequest.Message> messages) {
+        if (context == null || !context.hasExecutionPlan()) {
+            return;
+        }
+
+        var currentItem = context.currentPlanItem().orElse(null);
+        if (currentItem == null) {
+            context.setActiveSkill(null);
+            context.setSkillBasePath(null);
+            return;
+        }
+
+        if ((currentItem.getSkillName() == null || currentItem.getSkillName().isBlank())) {
+            bindCurrentItemToActiveSkill(context);
+            currentItem = context.currentPlanItem().orElse(null);
+        }
+
+        String itemSkill = currentItem != null ? currentItem.getSkillName() : null;
+        String activeSkillName = context.getActiveSkill() != null ? context.getActiveSkill().activeSkillName() : null;
+
+        if (itemSkill == null || itemSkill.isBlank()) {
+            if (activeSkillName != null) {
+                context.setActiveSkill(null);
+                context.setSkillBasePath(null);
+                log.info("runtime.plan_item_skill_cleared runId={} item={}", context.getRunId(), currentItem != null ? currentItem.getId() : "none");
+            }
+            return;
+        }
+
+        if (itemSkill.equals(activeSkillName)) {
+            return;
+        }
+
+        Optional<ContextBuilder.SkillAwareRequest> skillRequest = contextBuilder.handleSkillActivationByName(
+                itemSkill,
+                context.getOriginalInput(),
+                extractHistory(messages),
+                true,
+                context.getAgentId()
+        );
+        if (skillRequest.isPresent()) {
+            context.setActiveSkill(skillRequest.get());
+            context.setSkillBasePath(skillRequest.get().skillBasePath());
+            log.info("runtime.plan_item_skill_activated runId={} item={} skill={}",
+                    context.getRunId(), currentItem.getId(), itemSkill);
+        } else {
+            log.warn("runtime.plan_item_skill_activation_failed runId={} item={} skill={}",
+                    context.getRunId(), currentItem.getId(), itemSkill);
+        }
+    }
+
     private Optional<ContextBuilder.SkillAwareRequest> trySemanticSkillActivation(
             RunContext context,
             List<LlmRequest.Message> messages,
@@ -481,6 +547,9 @@ public class AgentRuntime {
         }
 
         context.incrementSkillActivation(skillName);
+        context.setActiveSkill(skillRequest.get());
+        context.setSkillBasePath(skillRequest.get().skillBasePath());
+        bindCurrentItemToActiveSkill(context);
         skillActivator.publishActivationEvent(context, new SkillActivator.SkillActivation(skillName, "auto", null));
         log.info("runtime.semantic_skill_activated runId={} skill={} reason={}",
                 context.getRunId(), skillName, selection.get().getReason());
