@@ -155,13 +155,35 @@ class RunContextTest {
                 new CancellationManager()
         );
 
-        ctx.recordFailure("environment_missing");
-        ctx.recordFailure("environment_missing");
+        ctx.recordFailure(RuntimeFailureCategories.TOOL_ERROR);
+        ctx.recordFailure(RuntimeFailureCategories.TOOL_ERROR);
         ctx.recordLowProgressRound();
         ctx.recordLowProgressRound();
 
         assertTrue(ctx.isRepeatedFailureLimitReached());
         assertTrue(ctx.isLowProgressLimitReached());
+    }
+
+    @Test
+    @DisplayName("Should expose runtime failure categories for the current round")
+    void shouldExposeRuntimeFailureCategoriesForTheCurrentRound() {
+        RunContext ctx = RunContext.create(
+                "r1", "c1", "s1",
+                LoopConfig.builder().build(),
+                new CancellationManager()
+        );
+
+        ctx.replaceRuntimeFailureCategories(java.util.List.of(
+                RuntimeFailureCategories.REPAIRABLE_ENVIRONMENT,
+                RuntimeFailureCategories.USER_DECISION_REQUIRED
+        ));
+
+        assertTrue(ctx.hasRuntimeFailureCategory(RuntimeFailureCategories.REPAIRABLE_ENVIRONMENT));
+        assertTrue(ctx.hasRuntimeFailureCategory(RuntimeFailureCategories.USER_DECISION_REQUIRED));
+        assertEquals(2, ctx.getRuntimeFailureCategories().size());
+
+        ctx.clearRuntimeFailureCategories();
+        assertTrue(ctx.getRuntimeFailureCategories().isEmpty());
     }
 
     @Test

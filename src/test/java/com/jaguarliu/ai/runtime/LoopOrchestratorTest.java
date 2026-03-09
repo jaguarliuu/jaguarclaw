@@ -24,8 +24,49 @@ class LoopOrchestratorTest {
                 LoopConfig.builder().maxRepeatedFailures(2).build(),
                 new CancellationManager()
         );
-        context.recordFailure("environment_missing");
-        context.recordFailure("environment_missing");
+        context.recordFailure(RuntimeFailureCategories.TOOL_ERROR);
+        context.recordFailure(RuntimeFailureCategories.TOOL_ERROR);
+
+        StopDecision decision = orchestrator.checkStopDecision(context);
+
+        assertTrue(decision.stop());
+        assertEquals(RunOutcomeStatus.NOT_WORTH_CONTINUING, decision.outcome().status());
+    }
+
+    @Test
+    @DisplayName("should preserve repair budget for repairable environment failures")
+    void shouldPreserveRepairBudgetForRepairableEnvironmentFailures() {
+        RunContext context = RunContext.create(
+                "r1", "c1", "s1",
+                LoopConfig.builder()
+                        .maxRepeatedFailures(2)
+                        .maxEnvironmentRepairAttempts(2)
+                        .build(),
+                new CancellationManager()
+        );
+        context.recordFailure(RuntimeFailureCategories.REPAIRABLE_ENVIRONMENT);
+        context.recordFailure(RuntimeFailureCategories.REPAIRABLE_ENVIRONMENT);
+        context.recordEnvironmentRepairAttempt();
+
+        StopDecision decision = orchestrator.checkStopDecision(context);
+
+        assertFalse(decision.stop());
+    }
+
+    @Test
+    @DisplayName("should stop when repair budget is exhausted")
+    void shouldStopWhenRepairBudgetIsExhausted() {
+        RunContext context = RunContext.create(
+                "r1", "c1", "s1",
+                LoopConfig.builder()
+                        .maxRepeatedFailures(2)
+                        .maxEnvironmentRepairAttempts(1)
+                        .build(),
+                new CancellationManager()
+        );
+        context.recordFailure(RuntimeFailureCategories.REPAIRABLE_ENVIRONMENT);
+        context.recordFailure(RuntimeFailureCategories.REPAIRABLE_ENVIRONMENT);
+        context.recordEnvironmentRepairAttempt();
 
         StopDecision decision = orchestrator.checkStopDecision(context);
 

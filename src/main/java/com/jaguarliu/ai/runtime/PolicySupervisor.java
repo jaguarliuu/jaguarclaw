@@ -5,35 +5,17 @@ import org.springframework.stereotype.Component;
 import java.util.List;
 
 /**
- * 运行时 fallback policy，只处理高置信硬信号。
+ * 运行时 fallback policy。
+ * 只在无法进行语义路由时提供保守的执行复杂度默认值，
+ * 不再基于文本内容直接做运行时 blocked 判断。
  */
 @Component
 public class PolicySupervisor {
 
     public PolicyDecision evaluate(String userPrompt, List<String> observations) {
-        if (observations != null) {
-            for (String observation : observations) {
-                String category = RuntimeFailureClassifier.inferFailureCategory(observation);
-                if ("environment_missing".equals(category)) {
-                    return PolicyDecision.blocked(
-                            TaskComplexity.EXTERNAL_DEPENDENCY,
-                            RunOutcome.blockedByEnvironment(observation),
-                            userPrompt
-                    );
-                }
-                if ("user_decision_required".equals(category)) {
-                    return PolicyDecision.blocked(
-                            TaskComplexity.EXTERNAL_DEPENDENCY,
-                            new RunOutcome(
-                                    RunOutcomeStatus.BLOCKED_PENDING_USER_DECISION,
-                                    "Task requires user decision",
-                                    observation
-                            ),
-                            userPrompt
-                    );
-                }
-            }
+        if (userPrompt == null || userPrompt.isBlank()) {
+            return PolicyDecision.heavy("");
         }
-        return PolicyDecision.heavy(userPrompt == null ? "" : userPrompt.trim());
+        return PolicyDecision.heavy(userPrompt.trim());
     }
 }

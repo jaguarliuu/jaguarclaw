@@ -21,18 +21,18 @@ import java.util.Map;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class LlmTaskVerifier implements TaskVerifier {
+public class LlmRuntimeDecisionStage implements RuntimeDecisionStage {
 
     private static final Map<String, Object> VERIFIER_DECISION_SCHEMA = buildSchema();
 
     private final StructuredOutputExecutor structuredOutputExecutor;
 
     @Override
-    public VerificationResult verify(RunContext context, String assistantReply, List<String> observations) {
+    public Decision verify(RunContext context, String assistantReply, List<String> observations) {
         boolean hasAssistantReply = assistantReply != null && !assistantReply.isBlank();
         boolean hasObservations = observations != null && observations.stream().anyMatch(item -> item != null && !item.isBlank());
         if (!hasAssistantReply && !hasObservations) {
-            return VerificationResult.continueLoop(null);
+            return Decision.continueSilently();
         }
 
         try {
@@ -44,7 +44,7 @@ public class LlmTaskVerifier implements TaskVerifier {
         } catch (Exception e) {
             log.warn("LLM verifier degraded to safe continue: runId={}, error={}",
                     context.getRunId(), e.getMessage());
-            return VerificationResult.continueLoop(null);
+            return Decision.continueSilently();
         }
     }
 
@@ -55,8 +55,10 @@ public class LlmTaskVerifier implements TaskVerifier {
                 Decide whether the task is completed, blocked by environment, blocked pending user decision,
                 not worth continuing, failed unexpectedly, or should continue.
                 Do not mark completed only because the assistant produced a reply.
-                Prefer BLOCKED_BY_ENVIRONMENT for missing commands, missing files, permission or sandbox limits.
-                Prefer BLOCKED_PENDING_USER_DECISION for paid plans, subscriptions, approvals, login, or user choices.
+                Use structured runtime failure categories as the primary signal when they are available.
+                If the failure is repairable and repair attempts remain, prefer shouldContinue=true with a concise next action.
+                Use BLOCKED_BY_ENVIRONMENT only when the environment issue is not realistically recoverable within the current run.
+                Use BLOCKED_PENDING_USER_DECISION only for genuine user-choice blockers such as approval, login, payment, or subscription.
                 Return only the structured decision.
                 """.trim()));
         messages.add(LlmRequest.Message.user(buildVerificationPrompt(context, assistantReply, observations)));
@@ -102,7 +104,16 @@ public class LlmTaskVerifier implements TaskVerifier {
                 .append("- repeatedFailureCount: ").append(progress.repeatedFailureCount()).append("\n")
                 .append("- lastFailureCategory: ").append(progress.lastFailureCategory()).append("\n")
                 .append("- lowProgressRounds: ").append(progress.lowProgressRounds()).append("\n")
-                .append("- environmentRepairAttempts: ").append(progress.environmentRepairAttempts()).append("\n");
+                .append("- environmentRepairAttempts: ").append(progress.environmentRepairAttempts()).append("\n")
+                .append("- maxEnvironmentRepairAttempts: ").append(context.getConfig().getMaxEnvironmentRepairAttempts()).append("\n");
+
+        prompt.append("\nStructured runtime failure categories:\n");
+        if (context.getRuntimeFailureCategories().isEmpty()) {
+            prompt.append("- none\n");
+        } else {
+            context.getRuntimeFailureCategories()
+                    .forEach(category -> prompt.append("- ").append(category).append("\n"));
+        }
 
         prompt.append("\nRespond with the structured decision fields only.");
         return prompt.toString();
@@ -119,24 +130,25 @@ public class LlmTaskVerifier implements TaskVerifier {
         }
     }
 
-    private VerificationResult mapDecision(VerifierDecision decision, String assistantReply) {
+    private Decision mapDecision(VerifierDecision decision, String assistantReply) {
         if (decision == null) {
-            return VerificationResult.continueLoop(null);
+            return Decision.continueSilently();
         }
 
         RunOutcomeStatus status = parseOutcomeStatus(decision.getOutcome());
         if (Boolean.TRUE.equals(decision.getTerminal()) && status != null) {
-            return VerificationResult.terminal(
+            return Decision.terminal(
                     buildOutcome(status, decision, assistantReply),
-                    decision.getFailureCategory()
+                    decision.getFailureCategory(),
+                    decision.getReason()
             );
         }
 
         if (Boolean.TRUE.equals(decision.getShouldContinue())) {
-            return VerificationResult.continueLoop(decision.getUserMessage());
+            return Decision.continueWithFeedback(decision.getUserMessage(), decision.getFailureCategory(), decision.getReason());
         }
 
-        return VerificationResult.continueLoop(null);
+        return Decision.continueSilently();
     }
 
     private RunOutcome buildOutcome(RunOutcomeStatus status, VerifierDecision decision, String assistantReply) {

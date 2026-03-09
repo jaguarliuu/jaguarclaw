@@ -41,8 +41,12 @@ public class LoopOrchestrator {
             return StopDecision.maxSteps();
         }
 
-        if (context.isRepeatedFailureLimitReached()) {
-            ProgressSnapshot snapshot = context.snapshotProgress();
+        ProgressSnapshot snapshot = context.snapshotProgress();
+
+        if (snapshot.shouldStopForRepeatedFailures(
+                context.getConfig().getMaxRepeatedFailures(),
+                context.getConfig().getMaxEnvironmentRepairAttempts()
+        )) {
             log.warn("Loop stopped by repeated failures: runId={}, category={}, count={}",
                     context.getRunId(), snapshot.lastFailureCategory(), snapshot.repeatedFailureCount());
             return StopDecision.notWorthContinuing(
@@ -50,9 +54,15 @@ public class LoopOrchestrator {
                     "repeated_failures"
             );
         }
+        if (snapshot.hasRepairBudgetRemaining(context.getConfig().getMaxEnvironmentRepairAttempts())
+                && snapshot.repeatedFailureCount() >= context.getConfig().getMaxRepeatedFailures()
+                && context.getConfig().getMaxRepeatedFailures() > 0) {
+            log.info("Repeated repairable environment failure remains within repair budget: runId={}, attempts={}, maxAttempts={}",
+                    context.getRunId(), snapshot.environmentRepairAttempts(),
+                    context.getConfig().getMaxEnvironmentRepairAttempts());
+        }
 
-        if (context.isLowProgressLimitReached()) {
-            ProgressSnapshot snapshot = context.snapshotProgress();
+        if (snapshot.shouldStopForLowProgress(context.getConfig().getMaxLowProgressRounds())) {
             log.warn("Loop stopped by low progress: runId={}, rounds={}",
                     context.getRunId(), snapshot.lowProgressRounds());
             return StopDecision.notWorthContinuing(
@@ -114,19 +124,6 @@ public class LoopOrchestrator {
         publishStepEvent(context);
     }
 
-    public void publishStopDecision(RunContext context, StopDecision decision) {
-        if (decision == null || decision.outcome() == null) {
-            return;
-        }
-        eventBus.publish(AgentEvent.runOutcome(
-                context.getConnectionId(),
-                context.getRunId(),
-                decision.outcome().status().name(),
-                decision.reason(),
-                context.getCurrentStep(),
-                context.getTotalTokens()
-        ));
-    }
 
     public LoopState checkAndIncrement(RunContext context) {
         LoopState state = checkLoopState(context);

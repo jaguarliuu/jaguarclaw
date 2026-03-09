@@ -8,6 +8,9 @@ import lombok.Setter;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -189,7 +192,7 @@ public class RunContext {
     private RunOutcome outcome;
 
     @Setter
-    private TaskVerifier taskVerifier;
+    private RuntimeDecisionStage runtimeDecisionStage;
 
     @Setter
     private TaskContract taskContract;
@@ -199,6 +202,12 @@ public class RunContext {
      */
     @Builder.Default
     private final Map<String, Integer> skillActivationCounts = new ConcurrentHashMap<>();
+
+    /**
+     * 当前轮的结构化失败类别集合。
+     */
+    @Builder.Default
+    private final Set<String> runtimeFailureCategories = ConcurrentHashMap.newKeySet();
 
     /**
      * 最大单个 Skill 激活次数
@@ -320,14 +329,36 @@ public class RunContext {
         environmentRepairAttempts.incrementAndGet();
     }
 
+    public void replaceRuntimeFailureCategories(Collection<String> categories) {
+        runtimeFailureCategories.clear();
+        if (categories != null) {
+            categories.stream()
+                    .filter(category -> category != null && !category.isBlank())
+                    .forEach(runtimeFailureCategories::add);
+        }
+    }
+
+    public void clearRuntimeFailureCategories() {
+        runtimeFailureCategories.clear();
+    }
+
+    public Set<String> getRuntimeFailureCategories() {
+        return Collections.unmodifiableSet(new LinkedHashSet<>(runtimeFailureCategories));
+    }
+
+    public boolean hasRuntimeFailureCategory(String category) {
+        return category != null && runtimeFailureCategories.contains(category);
+    }
+
     public boolean isRepeatedFailureLimitReached() {
-        return config.getMaxRepeatedFailures() > 0
-                && repeatedFailureCount.get() >= config.getMaxRepeatedFailures();
+        return snapshotProgress().shouldStopForRepeatedFailures(
+                config.getMaxRepeatedFailures(),
+                config.getMaxEnvironmentRepairAttempts()
+        );
     }
 
     public boolean isLowProgressLimitReached() {
-        return config.getMaxLowProgressRounds() > 0
-                && lowProgressRounds.get() >= config.getMaxLowProgressRounds();
+        return snapshotProgress().shouldStopForLowProgress(config.getMaxLowProgressRounds());
     }
 
     public boolean isTokenBudgetReached() {

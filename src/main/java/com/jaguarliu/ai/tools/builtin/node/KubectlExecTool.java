@@ -1,6 +1,7 @@
 package com.jaguarliu.ai.tools.builtin.node;
 
 import com.jaguarliu.ai.nodeconsole.AuditLogService;
+import com.jaguarliu.ai.runtime.RuntimeFailureCategories;
 import com.jaguarliu.ai.nodeconsole.NodeEntity;
 import com.jaguarliu.ai.nodeconsole.NodeService;
 import com.jaguarliu.ai.nodeconsole.RemoteCommandClassifier;
@@ -87,7 +88,7 @@ public class KubectlExecTool implements Tool {
                         "kubectl_exec", command, safetyLevel, policy,
                         false, null,
                         "blocked", classification.reason(), 0);
-                return ToolResult.error("Command blocked: " + classification.reason());
+                return ToolResult.error("Command blocked: " + classification.reason(), RuntimeFailureCategories.POLICY_BLOCK);
             }
 
             // 检查是否需要 HITL（此时应该已经通过 HITL 确认了）
@@ -114,7 +115,7 @@ public class KubectlExecTool implements Tool {
                         hitlRequired, hitlRequired ? "approve" : null,
                         "error", e.getMessage(), durationMs);
 
-                return ToolResult.error(e.getMessage());
+                return ToolResult.error(e.getMessage(), RuntimeFailureCategories.TOOL_ERROR);
             }
         });
     }

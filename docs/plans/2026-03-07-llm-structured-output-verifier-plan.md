@@ -113,8 +113,8 @@ git commit -m "feat(llm): add structured output execution"
 
 **Files:**
 - Create: `src/main/java/com/jaguarliu/ai/runtime/VerifierDecision.java`
-- Create: `src/main/java/com/jaguarliu/ai/runtime/LlmTaskVerifier.java`
-- Test: `src/test/java/com/jaguarliu/ai/runtime/LlmTaskVerifierTest.java`
+- Create: `src/main/java/com/jaguarliu/ai/runtime/LlmRuntimeDecisionStage.java`
+- Test: `src/test/java/com/jaguarliu/ai/runtime/LlmRuntimeDecisionStageTest.java`
 
 **Step 1: Write the failing tests**
 - Verify a structured LLM decision maps to `BLOCKED_BY_ENVIRONMENT`.
@@ -122,31 +122,31 @@ git commit -m "feat(llm): add structured output execution"
 - Verify parse or provider failure degrades to non-terminal fallback instead of crashing runtime.
 
 **Step 2: Run test to verify it fails**
-Run: `mvn -Dtest=LlmTaskVerifierTest test`
+Run: `mvn -Dtest=LlmRuntimeDecisionStageTest test`
 Expected: FAIL because verifier decision types do not exist.
 
 **Step 3: Write minimal implementation**
 - Define `VerifierDecision` schema fields: `terminal`, `shouldContinue`, `outcome`, `failureCategory`, `reason`, `userMessage`, `confidence`.
-- Implement `LlmTaskVerifier` using `LlmClient.structured(...)` and map to `VerificationResult`.
+- Implement `LlmRuntimeDecisionStage` using `LlmClient.structured(...)` and map to `VerificationResult`.
 
 **Step 4: Run test to verify it passes**
-Run: `mvn -Dtest=LlmTaskVerifierTest test`
+Run: `mvn -Dtest=LlmRuntimeDecisionStageTest test`
 Expected: PASS.
 
 **Step 5: Commit**
 ```bash
 git add src/main/java/com/jaguarliu/ai/runtime/VerifierDecision.java \
-        src/main/java/com/jaguarliu/ai/runtime/LlmTaskVerifier.java \
-        src/test/java/com/jaguarliu/ai/runtime/LlmTaskVerifierTest.java
+        src/main/java/com/jaguarliu/ai/runtime/LlmRuntimeDecisionStage.java \
+        src/test/java/com/jaguarliu/ai/runtime/LlmRuntimeDecisionStageTest.java
 git commit -m "feat(runtime): add llm-based verifier"
 ```
 
 ### Task 5: Convert current default verifier into cheap rule fallback
 
 **Files:**
-- Modify: `src/main/java/com/jaguarliu/ai/runtime/DefaultTaskVerifier.java`
+- Modify: `src/main/java/com/jaguarliu/ai/runtime/DefaultRuntimeDecisionStage.java`
 - Modify: `src/main/java/com/jaguarliu/ai/runtime/ToolExecutor.java`
-- Test: `src/test/java/com/jaguarliu/ai/runtime/DefaultTaskVerifierTest.java`
+- Test: `src/test/java/com/jaguarliu/ai/runtime/DefaultRuntimeDecisionStageTest.java`
 - Test: `src/test/java/com/jaguarliu/ai/runtime/ToolExecutorTest.java`
 
 **Step 1: Write the failing tests**
@@ -157,7 +157,7 @@ git commit -m "feat(runtime): add llm-based verifier"
 - Verify assistant reply alone does not automatically imply `COMPLETED`.
 
 **Step 2: Run test to verify it fails**
-Run: `mvn -Dtest=DefaultTaskVerifierTest,ToolExecutorTest test`
+Run: `mvn -Dtest=DefaultRuntimeDecisionStageTest,ToolExecutorTest test`
 Expected: FAIL because these signals are not recognized.
 
 **Step 3: Write minimal implementation**
@@ -166,14 +166,14 @@ Expected: FAIL because these signals are not recognized.
 - Extend failure categorization for Windows/localized blocker messages.
 
 **Step 4: Run test to verify it passes**
-Run: `mvn -Dtest=DefaultTaskVerifierTest,ToolExecutorTest test`
+Run: `mvn -Dtest=DefaultRuntimeDecisionStageTest,ToolExecutorTest test`
 Expected: PASS.
 
 **Step 5: Commit**
 ```bash
-git add src/main/java/com/jaguarliu/ai/runtime/DefaultTaskVerifier.java \
+git add src/main/java/com/jaguarliu/ai/runtime/DefaultRuntimeDecisionStage.java \
         src/main/java/com/jaguarliu/ai/runtime/ToolExecutor.java \
-        src/test/java/com/jaguarliu/ai/runtime/DefaultTaskVerifierTest.java \
+        src/test/java/com/jaguarliu/ai/runtime/DefaultRuntimeDecisionStageTest.java \
         src/test/java/com/jaguarliu/ai/runtime/ToolExecutorTest.java
 git commit -m "refactor(runtime): narrow rule-based verifier"
 ```
@@ -181,10 +181,10 @@ git commit -m "refactor(runtime): narrow rule-based verifier"
 ### Task 6: Compose hybrid verifier and wire into runtime
 
 **Files:**
-- Create: `src/main/java/com/jaguarliu/ai/runtime/CompositeTaskVerifier.java`
+- Create: `src/main/java/com/jaguarliu/ai/runtime/CompositeRuntimeDecisionStage.java`
 - Modify: `src/main/java/com/jaguarliu/ai/runtime/AgentRuntime.java`
 - Modify: Spring wiring if needed in runtime configuration
-- Test: `src/test/java/com/jaguarliu/ai/runtime/CompositeTaskVerifierTest.java`
+- Test: `src/test/java/com/jaguarliu/ai/runtime/CompositeRuntimeDecisionStageTest.java`
 - Test: `src/test/java/com/jaguarliu/ai/runtime/AgentRuntimeTest.java`
 
 **Step 1: Write the failing tests**
@@ -193,23 +193,23 @@ git commit -m "refactor(runtime): narrow rule-based verifier"
 - Verify the `wkhtmltopdf + README.md missing` scenario surfaces `BLOCKED_BY_ENVIRONMENT` instead of silently ending.
 
 **Step 2: Run test to verify it fails**
-Run: `mvn -Dtest=CompositeTaskVerifierTest,AgentRuntimeTest test`
+Run: `mvn -Dtest=CompositeRuntimeDecisionStageTest,AgentRuntimeTest test`
 Expected: FAIL because composite pipeline does not exist.
 
 **Step 3: Write minimal implementation**
-- Implement `CompositeTaskVerifier`.
+- Implement `CompositeRuntimeDecisionStage`.
 - Prefer rule-based shortcuts, then LLM verifier, then safe continue fallback.
 - Wire runtime to use the composite verifier by default.
 
 **Step 4: Run test to verify it passes**
-Run: `mvn -Dtest=CompositeTaskVerifierTest,AgentRuntimeTest test`
+Run: `mvn -Dtest=CompositeRuntimeDecisionStageTest,AgentRuntimeTest test`
 Expected: PASS.
 
 **Step 5: Commit**
 ```bash
-git add src/main/java/com/jaguarliu/ai/runtime/CompositeTaskVerifier.java \
+git add src/main/java/com/jaguarliu/ai/runtime/CompositeRuntimeDecisionStage.java \
         src/main/java/com/jaguarliu/ai/runtime/AgentRuntime.java \
-        src/test/java/com/jaguarliu/ai/runtime/CompositeTaskVerifierTest.java \
+        src/test/java/com/jaguarliu/ai/runtime/CompositeRuntimeDecisionStageTest.java \
         src/test/java/com/jaguarliu/ai/runtime/AgentRuntimeTest.java
 git commit -m "feat(runtime): compose rule and llm verifiers"
 ```
@@ -222,7 +222,7 @@ git commit -m "feat(runtime): compose rule and llm verifiers"
 - Optional: `docs/plans/2026-03-07-agent-intelligence-stop-loss-ralph-loop-design.md`
 
 **Step 1: Run focused verification suite**
-Run: `mvn -Dtest=LlmRequestStructuredOutputTest,StructuredOutputServiceTest,OpenAiCompatibleLlmClientStructuredOutputTest,LlmTaskVerifierTest,DefaultTaskVerifierTest,ToolExecutorTest,CompositeTaskVerifierTest,SystemPromptBuilderTest,ContextBuilderPolicyTest,AgentRuntimeTest test`
+Run: `mvn -Dtest=LlmRequestStructuredOutputTest,StructuredOutputServiceTest,OpenAiCompatibleLlmClientStructuredOutputTest,LlmRuntimeDecisionStageTest,DefaultRuntimeDecisionStageTest,ToolExecutorTest,CompositeRuntimeDecisionStageTest,SystemPromptBuilderTest,ContextBuilderPolicyTest,AgentRuntimeTest test`
 Expected: PASS.
 
 **Step 2: Run compile verification**

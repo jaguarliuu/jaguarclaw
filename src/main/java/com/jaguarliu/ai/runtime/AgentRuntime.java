@@ -50,6 +50,8 @@ import java.util.concurrent.TimeoutException;
 @RequiredArgsConstructor
 public class AgentRuntime {
 
+    private final DecisionInputFactory decisionInputFactory;
+    private final OutcomeApplier outcomeApplier;
     private final LlmClient llmClient;
     private final ToolRegistry toolRegistry;
     private final ToolDispatcher toolDispatcher;
@@ -67,7 +69,7 @@ public class AgentRuntime {
     private final ToolExecutor toolExecutor;
     private final SkillActivator skillActivator;
     private final SubagentBarrier subagentBarrier;
-    private final TaskVerifier taskVerifier;
+    private final RuntimeDecisionStage runtimeDecisionStage;
     private final PolicySupervisor policySupervisor;
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
@@ -96,9 +98,7 @@ public class AgentRuntime {
                 PolicyDecision decision = policySupervisor.evaluate(originalInput, List.of());
                 context.setTaskContract(decision.contract());
                 if (decision.outcome() != null && !decision.enterHeavyLoop()) {
-                    context.setOutcome(decision.outcome());
-                    publishOutcomeEvent(context, decision.outcome(), "policy_gate");
-                    return renderOutcomeMessage(decision.outcome());
+                    return outcomeApplier.apply(context, Decision.terminal(decision.outcome(), "policy_gate", decision.outcome().detail()), decision.outcome().detail());
                 }
             }
         }
@@ -142,14 +142,13 @@ public class AgentRuntime {
                             context.getRunId(), context.getConfig().getMaxSteps());
                     StepResult finalResult = executeSingleStep(context, messages);
                     messages.add(LlmRequest.Message.assistant(finalResult.content()));
-                    VerificationResult verification = resolveVerifier(context)
-                            .verify(context, finalResult.content(), List.of());
-                    return resolveVerificationResult(context, verification, finalResult.content());
+                    DecisionInput decisionInput = decisionInputFactory.fromAssistantStep(context, finalResult.content());
+                    Decision decision = resolveDecisionStage(context)
+                            .verify(context, decisionInput.assistantReply(), decisionInput.observations());
+                    return applyDecision(context, decision, finalResult.content());
                 }
                 if (stopDecision.outcome() != null) {
-                    context.setOutcome(stopDecision.outcome());
-                    loopOrchestrator.publishStopDecision(context, stopDecision);
-                    return renderOutcomeMessage(stopDecision.outcome());
+                    return outcomeApplier.apply(context, Decision.terminal(stopDecision.outcome(), null, stopDecision.reason()), stopDecision.outcome().detail());
                 }
             }
 
@@ -161,6 +160,7 @@ public class AgentRuntime {
 
             // 没有 tool_calls
             if (!result.hasToolCalls()) {
+                context.clearRuntimeFailureCategories();
                 // SubAgent 屏障等待
                 if (!pendingSubRunIds.isEmpty() && context.isMain()) {
                     log.info("Waiting for {} pending subagents: runId={}",
@@ -178,11 +178,12 @@ public class AgentRuntime {
                 }
 
                 messages.add(LlmRequest.Message.assistant(result.content()));
-                VerificationResult verification = resolveVerifier(context)
-                        .verify(context, result.content(), List.of());
+                DecisionInput decisionInput = decisionInputFactory.fromAssistantStep(context, result.content());
+                Decision decision = resolveDecisionStage(context)
+                        .verify(context, decisionInput.assistantReply(), decisionInput.observations());
                 log.info("Loop completed normally: runId={}, steps={}",
                         context.getRunId(), context.getCurrentStep());
-                return resolveVerificationResult(context, verification, result.content());
+                return applyDecision(context, decision, result.content());
             }
 
             // 有 tool_calls，使用 ToolExecutor 执行
@@ -252,7 +253,7 @@ public class AgentRuntime {
                 messages.add(LlmRequest.Message.toolResult(
                         toolCall.getId(), execResult.result().getContent()));
 
-                if (isHitlRejectedResult(execResult.result())) {
+                if (isHitlRejectedResult(execResult)) {
                     shouldStopOnHitlReject = true;
                     rejectedToolName = toolCall.getName();
                 }
@@ -280,43 +281,27 @@ public class AgentRuntime {
             }
 
             recordToolRoundProgress(context, toolResults);
-            List<String> observations = toolResults.stream()
-                    .map(execResult -> execResult.result().getContent())
-                    .filter(content -> content != null && !content.isBlank())
-                    .toList();
-            VerificationResult verification = resolveVerifier(context)
-                    .verify(context, null, observations);
-            if (verification.terminal()) {
-                return resolveVerificationResult(context, verification, verification.feedback());
+            DecisionInput decisionInput = decisionInputFactory.fromToolRound(context, toolResults, pendingSubRunIds);
+            context.replaceRuntimeFailureCategories(decisionInput.runtimeFailureCategories());
+            Decision decision = resolveDecisionStage(context)
+                    .verify(context, decisionInput.assistantReply(), decisionInput.observations());
+            if (decision.terminal()) {
+                return applyDecision(context, decision, decision.feedback());
             }
-            if (verification.feedback() != null && !verification.feedback().isBlank()) {
-                messages.add(LlmRequest.Message.user(verification.feedback()));
+            if (decision.feedback() != null && !decision.feedback().isBlank()) {
+                messages.add(LlmRequest.Message.user(decision.feedback()));
             }
 
             loopOrchestrator.incrementStepAndPublish(context);
         }
     }
 
-    TaskVerifier resolveVerifier(RunContext context) {
-        return context.getTaskVerifier() != null ? context.getTaskVerifier() : taskVerifier;
+    RuntimeDecisionStage resolveDecisionStage(RunContext context) {
+        return context.getRuntimeDecisionStage() != null ? context.getRuntimeDecisionStage() : runtimeDecisionStage;
     }
 
-    String resolveVerificationResult(RunContext context, VerificationResult verification, String fallbackMessage) {
-        if (verification == null) {
-            return fallbackMessage;
-        }
-        if (verification.failureCategory() != null) {
-            context.recordFailure(verification.failureCategory());
-        } else if (verification.terminal()) {
-            context.recordMeaningfulProgress();
-        }
-        if (verification.outcome() != null) {
-            context.setOutcome(verification.outcome());
-            publishOutcomeEvent(context, verification.outcome(),
-                    verification.failureCategory() != null ? verification.failureCategory() : "verifier");
-            return renderOutcomeMessage(verification.outcome());
-        }
-        return fallbackMessage;
+    String applyDecision(RunContext context, Decision decision, String fallbackMessage) {
+        return outcomeApplier.apply(context, decision, fallbackMessage);
     }
 
     void recordToolRoundProgress(RunContext context, List<ToolExecutor.ToolExecutionResult> toolResults) {
@@ -332,29 +317,6 @@ public class AgentRuntime {
                 .forEach(context::recordFailure);
     }
 
-    private void publishOutcomeEvent(RunContext context, RunOutcome outcome, String reason) {
-        if (outcome == null) {
-            return;
-        }
-        eventBus.publish(AgentEvent.runOutcome(
-                context.getConnectionId(),
-                context.getRunId(),
-                outcome.status().name(),
-                reason,
-                context.getCurrentStep(),
-                context.getTotalTokens()
-        ));
-    }
-
-    private String renderOutcomeMessage(RunOutcome outcome) {
-        if (outcome == null) {
-            return null;
-        }
-        if (outcome.detail() != null && !outcome.detail().isBlank()) {
-            return outcome.detail();
-        }
-        return outcome.message();
-    }
 
     /**
      * 执行单步 LLM 调用
@@ -538,11 +500,8 @@ public class AgentRuntime {
         return null;
     }
 
-    static boolean isHitlRejectedResult(ToolResult result) {
-        if (result == null || result.isSuccess() || result.getContent() == null) {
-            return false;
-        }
-        return result.getContent().contains(ToolExecutor.HITL_REJECTED_MARKER);
+    static boolean isHitlRejectedResult(ToolExecutor.ToolExecutionResult result) {
+        return result != null && RuntimeFailureCategories.HITL_REJECTED.equals(result.failureCategory());
     }
 
     /**

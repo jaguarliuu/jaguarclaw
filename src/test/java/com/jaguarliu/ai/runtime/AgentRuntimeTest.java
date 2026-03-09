@@ -53,21 +53,21 @@ class AgentRuntimeTest {
     @Mock private ToolExecutor toolExecutor;
     @Mock private SkillActivator skillActivator;
     @Mock private SubagentBarrier subagentBarrier;
-    @Mock private TaskVerifier taskVerifier;
+    @Mock private RuntimeDecisionStage runtimeDecisionStage;
     @Mock private PolicySupervisor policySupervisor;
-    @Mock private LlmTaskVerifier llmTaskVerifier;
+    @Mock private LlmRuntimeDecisionStage llmRuntimeDecisionStage;
 
     @Test
     @DisplayName("should detect HITL rejection marker from tool result")
     void shouldDetectHitlRejectionMarker() {
-        ToolResult result = ToolResult.error(ToolExecutor.HITL_REJECTED_MARKER + ": rejected");
+        ToolExecutor.ToolExecutionResult result = new ToolExecutor.ToolExecutionResult("call-1", ToolResult.error("rejected", RuntimeFailureCategories.HITL_REJECTED), RuntimeFailureCategories.HITL_REJECTED);
         assertTrue(AgentRuntime.isHitlRejectedResult(result));
     }
 
     @Test
     @DisplayName("should not treat normal tool errors as HITL rejection")
     void shouldIgnoreGenericToolErrors() {
-        ToolResult result = ToolResult.error("Command blocked by safety policy");
+        ToolExecutor.ToolExecutionResult result = new ToolExecutor.ToolExecutionResult("call-1", ToolResult.error("Command blocked by safety policy"), RuntimeFailureCategories.POLICY_BLOCK);
         assertFalse(AgentRuntime.isHitlRejectedResult(result));
     }
 
@@ -103,13 +103,14 @@ class AgentRuntimeTest {
                 new ToolExecutor.ToolExecutionResult(
                         "call-1",
                         ToolResult.error("wkhtmltopdf: command not found"),
-                        "environment_missing"
+                        RuntimeFailureCategories.REPAIRABLE_ENVIRONMENT
                 )
         ));
-        when(taskVerifier.verify(any(), any(), any())).thenReturn(
-                VerificationResult.terminal(
+        when(runtimeDecisionStage.verify(any(), any(), any())).thenReturn(
+                Decision.terminal(
                         RunOutcome.blockedByEnvironment("wkhtmltopdf: command not found"),
-                        "environment_missing"
+                        RuntimeFailureCategories.REPAIRABLE_ENVIRONMENT,
+                        "wkhtmltopdf: command not found"
                 )
         );
         when(flushHook.checkAndFlush(any(), any())).thenReturn(false);
@@ -131,10 +132,10 @@ class AgentRuntimeTest {
     }
 
     @Test
-    @DisplayName("should surface README missing as blocked by environment through composite verifier")
-    void shouldSurfaceReadmeMissingAsBlockedByEnvironmentThroughCompositeVerifier() throws Exception {
-        TaskVerifier compositeVerifier = new CompositeTaskVerifier(new DefaultTaskVerifier(), llmTaskVerifier);
-        AgentRuntime runtime = createRuntime(compositeVerifier);
+    @DisplayName("should allow llm verifier to decide README missing through decision engine")
+    void shouldAllowLlmVerifierToDecideReadmeMissingThroughDecisionEngine() throws Exception {
+        RuntimeDecisionStage decisionEngine = new DecisionEngine(new DecisionInputFactory(), new HardGuardVerifier(), llmRuntimeDecisionStage);
+        AgentRuntime runtime = createRuntime(decisionEngine);
         RunContext context = RunContext.create(
                 "run-3", "conn-3", "session-3",
                 LoopConfig.builder().build(),
@@ -162,10 +163,17 @@ class AgentRuntimeTest {
         when(toolExecutor.executeToolCalls(any(), any())).thenReturn(List.of(
                 new ToolExecutor.ToolExecutionResult(
                         "call-3",
-                        ToolResult.error("Error: File not found: README.md"),
-                        "tool_error"
+                        ToolResult.error("Error: File not found: README.md", RuntimeFailureCategories.REPAIRABLE_ENVIRONMENT),
+                        RuntimeFailureCategories.REPAIRABLE_ENVIRONMENT
                 )
         ));
+        when(llmRuntimeDecisionStage.verify(any(), any(), any())).thenReturn(
+                Decision.terminal(
+                        RunOutcome.blockedByEnvironment("README.md was not found after recovery attempts"),
+                        RuntimeFailureCategories.REPAIRABLE_ENVIRONMENT,
+                        "README.md was not found after recovery attempts"
+                )
+        );
         when(flushHook.checkAndFlush(any(), any())).thenReturn(false);
 
         String result = runtime.executeLoopWithContext(context,
@@ -174,7 +182,28 @@ class AgentRuntimeTest {
         assertTrue(result.contains("README.md"));
         assertTrue(context.hasOutcome());
         assertEquals(RunOutcomeStatus.BLOCKED_BY_ENVIRONMENT, context.getOutcome().status());
-        verify(llmTaskVerifier, never()).verify(any(), any(), any());
+        verify(llmRuntimeDecisionStage).verify(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("should record environment repair attempt when verifier continues repairable failure")
+    void shouldRecordEnvironmentRepairAttemptWhenVerifierContinuesRepairableFailure() {
+        AgentRuntime runtime = createRuntime();
+        RunContext context = RunContext.create(
+                "run-4", "conn-4", "session-4",
+                LoopConfig.builder().build(),
+                new CancellationManager()
+        );
+
+        String result = runtime.applyDecision(
+                context,
+                Decision.continueWithFeedback("search for alternative launcher", RuntimeFailureCategories.REPAIRABLE_ENVIRONMENT, null),
+                "search for alternative launcher"
+        );
+
+        assertEquals("search for alternative launcher", result);
+        assertEquals(1, context.snapshotProgress().environmentRepairAttempts());
+        assertEquals(RuntimeFailureCategories.REPAIRABLE_ENVIRONMENT, context.snapshotProgress().lastFailureCategory());
     }
 
     @Test
@@ -191,7 +220,7 @@ class AgentRuntimeTest {
                 new ToolExecutor.ToolExecutionResult(
                         "call-1",
                         ToolResult.error("noop"),
-                        "tool_error"
+                        RuntimeFailureCategories.TOOL_ERROR
                 )
         );
 
@@ -205,14 +234,14 @@ class AgentRuntimeTest {
     @DisplayName("should publish stop reason when budget is exceeded")
     void shouldPublishStopReasonWhenBudgetIsExceeded() throws Exception {
         LoopOrchestrator realLoopOrchestrator = new LoopOrchestrator(eventBus);
-        AgentRuntime runtime = createRuntime(taskVerifier, realLoopOrchestrator);
+        AgentRuntime runtime = createRuntime(runtimeDecisionStage, realLoopOrchestrator);
         RunContext context = RunContext.create(
                 "run-2", "conn-2", "session-2",
                 LoopConfig.builder().maxRepeatedFailures(2).build(),
                 new CancellationManager()
         );
-        context.recordFailure("environment_missing");
-        context.recordFailure("environment_missing");
+        context.recordFailure(RuntimeFailureCategories.TOOL_ERROR);
+        context.recordFailure(RuntimeFailureCategories.TOOL_ERROR);
 
         String result = runtime.executeLoopWithContext(context,
                 new ArrayList<>(List.of(LlmRequest.Message.user("导出 PDF"))));
@@ -231,15 +260,17 @@ class AgentRuntimeTest {
     }
 
     private AgentRuntime createRuntime() {
-        return createRuntime(taskVerifier, loopOrchestrator);
+        return createRuntime(runtimeDecisionStage, loopOrchestrator);
     }
 
-    private AgentRuntime createRuntime(TaskVerifier verifier) {
+    private AgentRuntime createRuntime(RuntimeDecisionStage verifier) {
         return createRuntime(verifier, loopOrchestrator);
     }
 
-    private AgentRuntime createRuntime(TaskVerifier verifier, LoopOrchestrator orchestrator) {
+    private AgentRuntime createRuntime(RuntimeDecisionStage verifier, LoopOrchestrator orchestrator) {
         return new AgentRuntime(
+                new DecisionInputFactory(),
+                new OutcomeApplier(eventBus),
                 llmClient,
                 toolRegistry,
                 toolDispatcher,

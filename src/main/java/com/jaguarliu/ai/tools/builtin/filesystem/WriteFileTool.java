@@ -1,5 +1,6 @@
 package com.jaguarliu.ai.tools.builtin.filesystem;
 
+import com.jaguarliu.ai.runtime.RuntimeFailureCategories;
 import com.jaguarliu.ai.tools.Tool;
 import com.jaguarliu.ai.tools.ToolDefinition;
 import com.jaguarliu.ai.tools.ToolResult;
@@ -70,12 +71,12 @@ public class WriteFileTool implements Tool {
                 if (!filePath.startsWith(workspacePath)) {
                     log.warn("Write path traversal attempt: {}", pathStr);
                     return ToolResult.error("Access denied: write only allowed within workspace. Attempted: "
-                            + filePath + ". Allowed workspace: " + workspacePath);
+                            + filePath + ". Allowed workspace: " + workspacePath, RuntimeFailureCategories.HARD_ENVIRONMENT_BLOCK);
                 }
 
                 // 检查内容大小
                 if (content.length() > properties.getMaxFileSize()) {
-                    return ToolResult.error("Content too large: " + content.length() + " bytes (max: " + properties.getMaxFileSize() + ")");
+                    return ToolResult.error("Content too large: " + content.length() + " bytes (max: " + properties.getMaxFileSize() + ")", RuntimeFailureCategories.HARD_ENVIRONMENT_BLOCK);
                 }
 
                 // 确保父目录存在
@@ -92,7 +93,7 @@ public class WriteFileTool implements Tool {
 
             } catch (IOException e) {
                 log.error("Failed to write file: {}", pathStr, e);
-                return ToolResult.error("Failed to write file: " + e.getMessage());
+                return ToolResult.error("Failed to write file: " + e.getMessage(), RuntimeFailureCategories.HARD_ENVIRONMENT_BLOCK);
             }
         });
     }

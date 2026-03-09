@@ -18,7 +18,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CancellationException;
@@ -124,7 +123,8 @@ public class ToolExecutor {
 
                 ToolResult rejectResult = ToolResult.error(
                         HITL_REJECTED_MESSAGE +
-                        ". Do not retry automatically; ask user for explicit approval."
+                        ". Do not retry automatically; ask user for explicit approval.",
+                        RuntimeFailureCategories.HITL_REJECTED
                 );
 
                 // 发布 tool.result 事件（被拒绝）
@@ -277,15 +277,13 @@ public class ToolExecutor {
      * 工具执行结果
      */
     private String inferFailureCategory(ToolResult result) {
-        if (result == null || result.isSuccess() || result.getContent() == null) {
+        if (result == null || result.isSuccess()) {
             return null;
         }
-        String normalized = result.getContent().toLowerCase(Locale.ROOT);
-        if (normalized.contains(HITL_REJECTED_MARKER.toLowerCase(Locale.ROOT))) {
-            return "hitl_rejected";
+        if (result.getFailureCategory() != null && !result.getFailureCategory().isBlank()) {
+            return result.getFailureCategory();
         }
-        String category = RuntimeFailureClassifier.inferFailureCategory(result.getContent());
-        return category != null ? category : "tool_error";
+        return RuntimeFailureCategories.TOOL_ERROR;
     }
 
     public record ToolExecutionResult(String callId, ToolResult result, String failureCategory) {

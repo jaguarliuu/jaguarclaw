@@ -1,5 +1,6 @@
 package com.jaguarliu.ai.tools.builtin;
 
+import com.jaguarliu.ai.runtime.RuntimeFailureCategories;
 import com.jaguarliu.ai.tools.ToolResult;
 import com.jaguarliu.ai.tools.ToolExecutionContext;
 import com.jaguarliu.ai.tools.ToolsProperties;
@@ -14,6 +15,7 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -50,6 +52,18 @@ class ShellToolTest {
         assertNotNull(result);
         assertTrue(result.isSuccess(), () -> "Unexpected error: " + result.getContent());
         assertTrue(result.getContent().toLowerCase().contains("hello-script"));
+    }
+
+    @Test
+    @DisplayName("missing command should expose repairable environment category")
+    void missingCommandShouldExposeRepairableEnvironmentCategory() {
+        ShellTool tool = newTool(propertiesWithWorkspace());
+
+        ToolResult result = tool.execute(Map.of("command", "definitely_missing_command_xyz --version")).block();
+
+        assertNotNull(result);
+        assertFalse(result.isSuccess());
+        assertEquals(RuntimeFailureCategories.REPAIRABLE_ENVIRONMENT, result.getFailureCategory());
     }
 
     @Test

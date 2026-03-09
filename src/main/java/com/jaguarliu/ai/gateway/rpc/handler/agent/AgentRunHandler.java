@@ -308,6 +308,7 @@ public class AgentRunHandler implements RpcHandler {
             };
 
             String persistedAssistantMessage = buildPersistedAssistantMessage(context, response);
+            publishTerminalAssistantDeltaIfNeeded(connectionId, runId, context, persistedAssistantMessage);
             messageService.saveAssistantMessage(sessionId, runId, persistedAssistantMessage, principalId);
             tokenBudgetService.tryConsume(principalId, tokenBudgetService.estimateTokens(persistedAssistantMessage));
 
@@ -455,6 +456,23 @@ public class AgentRunHandler implements RpcHandler {
             return draft;
         }
         return response;
+    }
+
+    private void publishTerminalAssistantDeltaIfNeeded(String connectionId,
+                                                       String runId,
+                                                       RunContext context,
+                                                       String content) {
+        if (context == null || context.getOutcome() == null) {
+            return;
+        }
+        String draft = context.getLatestAssistantDraft();
+        if (draft != null && !draft.isBlank()) {
+            return;
+        }
+        if (content == null || content.isBlank()) {
+            return;
+        }
+        eventBus.publish(AgentEvent.assistantDelta(connectionId, runId, content));
     }
 
     private String buildCancellationAssistantMessage(RunContext context) {

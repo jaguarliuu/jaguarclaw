@@ -1,5 +1,6 @@
 package com.jaguarliu.ai.tools.builtin;
 
+import com.jaguarliu.ai.runtime.RuntimeFailureCategories;
 import com.jaguarliu.ai.subagent.SubagentService;
 import com.jaguarliu.ai.subagent.model.SubagentSpawnResult;
 import com.jaguarliu.ai.tools.ToolDefinition;
@@ -210,6 +211,7 @@ class SessionsSpawnToolTest {
             ToolResult result = tool.execute(Map.of("task", "分析AI芯片市场")).block();
 
             assertFalse(result.isSuccess());
+            assertEquals(RuntimeFailureCategories.POLICY_BLOCK, result.getFailureCategory());
             assertTrue(result.getContent().contains("Nested spawn is not allowed"));
         }
 
@@ -266,6 +268,7 @@ class SessionsSpawnToolTest {
             ToolResult result = tool.execute(Map.of("task", "分析AI芯片市场")).block();
 
             assertFalse(result.isSuccess());
+            assertEquals(RuntimeFailureCategories.TOOL_ERROR, result.getFailureCategory());
             assertTrue(result.getContent().contains("Invalid agentId"));
         }
     }
@@ -285,6 +288,7 @@ class SessionsSpawnToolTest {
             ToolResult result = tool.execute(Map.of("task", "分析AI芯片市场")).block();
 
             assertFalse(result.isSuccess());
+            assertEquals(RuntimeFailureCategories.TOOL_ERROR, result.getFailureCategory());
             assertTrue(result.getContent().contains("context"));
         }
     }

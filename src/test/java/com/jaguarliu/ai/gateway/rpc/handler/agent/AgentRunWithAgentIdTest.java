@@ -22,6 +22,8 @@ import com.jaguarliu.ai.runtime.ChatRouter;
 import com.jaguarliu.ai.runtime.ContextBuilder;
 import com.jaguarliu.ai.runtime.LoopConfig;
 import com.jaguarliu.ai.runtime.RunContext;
+import com.jaguarliu.ai.runtime.RunOutcome;
+import com.jaguarliu.ai.runtime.RunOutcomeStatus;
 import com.jaguarliu.ai.runtime.SessionLaneManager;
 import com.jaguarliu.ai.runtime.TaskComplexity;
 import com.jaguarliu.ai.runtime.TaskRouteMode;
@@ -572,6 +574,66 @@ class AgentRunWithAgentIdTest {
                     "Full streamed answer about today's AI news",
                     PRINCIPAL_ID
             );
+        }
+
+        @Test
+        void heavyRouteShouldPublishTerminalResponseWhenNoDraftWasStreamed() throws Exception {
+            AgentRunHandler handler = newAgentRunHandler();
+            mockCommonRunPrerequisites();
+
+            when(sessionService.get("session-env", PRINCIPAL_ID))
+                    .thenReturn(Optional.of(sessionEntity("session-env", "Env Chat", "coder")));
+            when(sessionLaneManager.nextSequence("session-env")).thenReturn(15L);
+            when(runService.create("session-env", "open website", "coder", PRINCIPAL_ID))
+                    .thenReturn(runEntity("run-env", "session-env", "coder", "open website"));
+
+            AgentStrategy strategy = org.mockito.Mockito.mock(AgentStrategy.class);
+            when(strategyResolver.resolve(any())).thenReturn(strategy);
+            when(strategy.prepare(any())).thenReturn(AgentExecutionPlan.builder()
+                    .systemPrompt("system prompt")
+                    .strategyName("default")
+                    .build());
+            when(messageService.getSessionHistory(eq("session-env"), anyInt(), eq(PRINCIPAL_ID)))
+                    .thenReturn(List.of());
+
+            String terminalResponse = "'.\\agent-browser.cmd' 不是内部或外部命令，也不是可运行的程序或批处理文件。";
+            when(agentRuntime.executeLoopWithContext(any(RunContext.class), anyList()))
+                    .thenAnswer(invocation -> {
+                        RunContext context = invocation.getArgument(0);
+                        context.setOutcome(new RunOutcome(
+                                RunOutcomeStatus.BLOCKED_BY_ENVIRONMENT,
+                                "Task blocked by environment",
+                                terminalResponse
+                        ));
+                        return terminalResponse;
+                    });
+            when(sessionLaneManager.submit(eq("session-env"), eq("run-env"), eq(15L), any(Supplier.class)))
+                    .thenAnswer(invocation -> {
+                        @SuppressWarnings("unchecked")
+                        Supplier<Object> task = (Supplier<Object>) invocation.getArgument(3);
+                        task.get();
+                        return Mono.empty();
+                    });
+
+            RpcResponse response = handler.handle(CONNECTION_ID, RpcRequest.builder()
+                    .id("10")
+                    .method("agent.run")
+                    .payload(Map.of("sessionId", "session-env", "prompt", "open website"))
+                    .build()).block();
+
+            assertNotNull(response);
+            assertNull(response.getError());
+            verify(messageService).saveAssistantMessage("session-env", "run-env", terminalResponse, PRINCIPAL_ID);
+
+            ArgumentCaptor<AgentEvent> eventCaptor = ArgumentCaptor.forClass(AgentEvent.class);
+            verify(eventBus, org.mockito.Mockito.atLeastOnce()).publish(eventCaptor.capture());
+            List<AgentEvent> assistantDeltas = eventCaptor.getAllValues().stream()
+                    .filter(event -> event.getType() == AgentEvent.EventType.ASSISTANT_DELTA)
+                    .toList();
+
+            assertEquals(1, assistantDeltas.size());
+            assertTrue(assistantDeltas.get(0).getData() instanceof AgentEvent.DeltaData delta
+                    && terminalResponse.equals(delta.getContent()));
         }
 
         @Test

@@ -1,5 +1,6 @@
 package com.jaguarliu.ai.tools.builtin.shell;
 
+import com.jaguarliu.ai.runtime.RuntimeFailureCategories;
 import com.jaguarliu.ai.tools.Tool;
 import com.jaguarliu.ai.tools.ToolDefinition;
 import com.jaguarliu.ai.tools.ToolResult;
@@ -55,7 +56,7 @@ public class ShellKillTool implements Tool {
 
             Optional<ManagedProcess> mpOpt = processManager.getProcess(processId);
             if (mpOpt.isEmpty()) {
-                return ToolResult.error("Process not found: " + processId);
+                return ToolResult.error("Process not found: " + processId, RuntimeFailureCategories.TOOL_ERROR);
             }
 
             ManagedProcess mp = mpOpt.get();
