@@ -7,6 +7,7 @@ import { watch, onBeforeUnmount, onMounted, ref, nextTick } from 'vue'
 import type { Document } from '@/types'
 import DocumentBubbleMenu from './DocumentBubbleMenu.vue'
 import DocumentFormatToolbar from './DocumentFormatToolbar.vue'
+import { createSlashExtension } from './SlashExtension'
 
 const props = defineProps<{
   document: Document | null
@@ -26,6 +27,9 @@ const editor = useEditor({
   extensions: [
     StarterKit,
     Placeholder.configure({ placeholder: '开始输入…' }),
+    createSlashExtension((action) => {
+      emit('aiAction', action)
+    }),
   ],
   editorProps: {
     attributes: { class: 'doc-editor__prose' },
