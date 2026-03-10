@@ -8,6 +8,9 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 
 @DataJpaTest
+// replace=NONE preserves the real SQLite datasource configured in application properties;
+// this is the project-wide convention (see MemoryDualScopeMigrationTest, McpServerRepositoryTest, etc.)
+// so that schema migrations and SQLite-specific behaviour are exercised, not an in-memory H2 stub.
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 class DocumentRepositoryTest {
 
