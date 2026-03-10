@@ -4,6 +4,7 @@ import com.jaguarliu.ai.gateway.rpc.RpcHandler;
 import com.jaguarliu.ai.gateway.rpc.model.RpcRequest;
 import com.jaguarliu.ai.gateway.rpc.model.RpcResponse;
 import com.jaguarliu.ai.skills.model.LoadedSkill;
+import com.jaguarliu.ai.skills.model.SkillEntry;
 import com.jaguarliu.ai.skills.registry.SkillRegistry;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -53,14 +54,19 @@ public class SkillGetHandler implements RpcHandler {
 
         String scope = extractScope(payload);
         String agentId = extractAgentId(payload);
+
+        Optional<SkillEntry> entry = "global".equalsIgnoreCase(scope)
+                ? skillRegistry.getByName(name, null)
+                : skillRegistry.getByName(name, agentId);
+        if (entry.isEmpty()) {
+            return Mono.just(RpcResponse.error(request.getId(), "NOT_FOUND", "Skill not found: " + name));
+        }
+
         Optional<LoadedSkill> skill = "global".equalsIgnoreCase(scope)
                 ? skillRegistry.activateGlobal(name)
                 : skillRegistry.activate(name, agentId);
-        if (skill.isEmpty()) {
-            return Mono.just(RpcResponse.error(request.getId(), "NOT_FOUND", "Skill not found or unavailable: " + name));
-        }
 
-        return Mono.just(RpcResponse.success(request.getId(), toDto(skill.get())));
+        return Mono.just(RpcResponse.success(request.getId(), toDto(entry.get(), skill.orElse(null))));
     }
 
     private String extractAgentId(Map<String, Object> payload) {
@@ -79,13 +85,23 @@ public class SkillGetHandler implements RpcHandler {
         return "effective";
     }
 
-    private Map<String, Object> toDto(LoadedSkill skill) {
+    private Map<String, Object> toDto(SkillEntry entry, LoadedSkill skill) {
         Map<String, Object> dto = new HashMap<>();
-        dto.put("name", skill.getName());
-        dto.put("description", skill.getDescription());
-        dto.put("body", skill.getBody());
-        dto.put("allowedTools", skill.getAllowedTools() != null ? skill.getAllowedTools() : List.of());
-        dto.put("confirmBefore", skill.getConfirmBefore() != null ? skill.getConfirmBefore() : List.of());
+        dto.put("name", entry.getMetadata().getName());
+        dto.put("description", entry.getMetadata().getDescription());
+        dto.put("available", entry.isAvailable());
+        dto.put("unavailableReason", entry.getUnavailableReason() != null ? entry.getUnavailableReason() : "");
+        dto.put("priority", entry.getMetadata().getPriority());
+        dto.put("tokenCost", entry.getTokenCost());
+        if (skill != null) {
+            dto.put("body", skill.getBody());
+            dto.put("allowedTools", skill.getAllowedTools() != null ? skill.getAllowedTools() : List.of());
+            dto.put("confirmBefore", skill.getConfirmBefore() != null ? skill.getConfirmBefore() : List.of());
+        } else {
+            dto.put("body", "");
+            dto.put("allowedTools", List.of());
+            dto.put("confirmBefore", List.of());
+        }
         return dto;
     }
 }

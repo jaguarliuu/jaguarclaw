@@ -3,6 +3,7 @@ import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useSoulConfig } from '@/composables/useSoulConfig'
 import { useAgents } from '@/composables/useAgents'
+import { useWebSocket } from '@/composables/useWebSocket'
 import { useMarkdown } from '@/composables/useMarkdown'
 import Select from '@/components/common/Select.vue'
 import type { SelectOption } from '@/components/common/Select.vue'
@@ -10,9 +11,10 @@ import type { SelectOption } from '@/components/common/Select.vue'
 const route = useRoute()
 const { persona, loading, error, fetchPersona, saveFile, watchPersonaUpdates } = useSoulConfig()
 const { agents, defaultAgent, loadAgents } = useAgents()
+const { request } = useWebSocket()
 const { render: renderMarkdown } = useMarkdown()
 
-type FileKey = 'soul' | 'rule' | 'profile'
+type FileKey = 'soul' | 'rule' | 'profile' | 'heartbeat'
 type TabKey = 'content' | 'preview'
 
 const selectedAgentId = ref('main')
@@ -23,12 +25,21 @@ const saving = ref(false)
 const saveSuccess = ref(false)
 const saveError = ref<string | null>(null)
 
+// Unified content store for all files
+const allFiles = ref<Record<FileKey, string>>({
+  soul: '',
+  rule: '',
+  profile: '',
+  heartbeat: '',
+})
+
 let stopWatcher: (() => void) | null = null
 
 const fileList: { key: FileKey; label: string; desc: string }[] = [
   { key: 'soul', label: 'SOUL.md', desc: 'Identity & personality' },
   { key: 'rule', label: 'RULE.md', desc: 'Behavioral constraints' },
   { key: 'profile', label: 'PROFILE.md', desc: 'User preferences' },
+  { key: 'heartbeat', label: 'HEARTBEAT.md', desc: 'Heartbeat checklist' },
 ]
 
 const sortedAgents = computed(() => {
@@ -48,9 +59,7 @@ const previewHtml = computed(() => renderMarkdown(editContent.value))
 function selectFile(key: FileKey) {
   activeFile.value = key
   activeTab.value = 'content'
-  if (persona.value) {
-    editContent.value = persona.value[key] || ''
-  }
+  editContent.value = allFiles.value[key]
 }
 
 function resolveRouteAgentId() {
@@ -64,16 +73,31 @@ function resolveRouteAgentId() {
 async function loadPersona(agentId: string) {
   await fetchPersona(agentId)
   if (persona.value) {
-    editContent.value = persona.value[activeFile.value] || ''
+    allFiles.value.soul = persona.value.soul || ''
+    allFiles.value.rule = persona.value.rule || ''
+    allFiles.value.profile = persona.value.profile || ''
   }
+  try {
+    const result = await request<{ content: string }>('heartbeat.md.get', { agentId })
+    allFiles.value.heartbeat = result.content ?? ''
+  } catch {
+    allFiles.value.heartbeat = ''
+  }
+  editContent.value = allFiles.value[activeFile.value]
 }
 
 async function handleSave() {
   saving.value = true
   saveError.value = null
   saveSuccess.value = false
+  // sync current edit back to allFiles
+  allFiles.value[activeFile.value] = editContent.value
   try {
-    await saveFile(selectedAgentId.value, activeFile.value, editContent.value)
+    if (activeFile.value === 'heartbeat') {
+      await request('heartbeat.md.save', { agentId: selectedAgentId.value, content: editContent.value })
+    } else {
+      await saveFile(selectedAgentId.value, activeFile.value, editContent.value)
+    }
     saveSuccess.value = true
     setTimeout(() => { saveSuccess.value = false }, 3000)
   } catch (e) {
@@ -111,9 +135,7 @@ watch(
 )
 
 watch(activeFile, (key) => {
-  if (persona.value) {
-    editContent.value = persona.value[key] || ''
-  }
+  editContent.value = allFiles.value[key]
 })
 </script>
 
@@ -149,7 +171,7 @@ watch(activeFile, (key) => {
         >
           <span class="file-name">{{ f.label }}</span>
           <span class="file-desc">{{ f.desc }}</span>
-          <span class="file-size">{{ persona[f.key]?.length ?? 0 }} chars</span>
+          <span class="file-size">{{ allFiles[f.key]?.length ?? 0 }} chars</span>
         </button>
       </aside>
 

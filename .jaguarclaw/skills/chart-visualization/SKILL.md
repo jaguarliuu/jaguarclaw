@@ -38,7 +38,7 @@ Once a chart type is selected, read the corresponding file in the `references/` 
 Extract the data from the user's input and map it to the expected `args` format.
 
 ### 3. Chart Generation
-Invoke the `scripts/generate.js` script with a JSON payload.
+Invoke the `scripts/generate.js` script with a JSON payload. The script generates a self-contained HTML file locally — **no network connection required**.
 
 **Payload Format:**
 ```json
@@ -58,10 +58,19 @@ Invoke the `scripts/generate.js` script with a JSON payload.
 node ./scripts/generate.js '<payload_json>'
 ```
 
+The script writes an HTML file to the system temp directory (or `CHART_OUTPUT_DIR` if set) and prints the **absolute file path** to stdout.
+
+**Renderer used per chart type:**
+- Standard charts (line, bar, column, pie, scatter, radar, funnel, treemap, histogram, sankey, boxplot, violin, dual_axes, network_graph, word_cloud, liquid) → **ECharts 5** (loaded from CDN, override via `ECHARTS_CDN_URL` env var)
+- Diagrams (mind_map, organization_chart, flow_diagram, fishbone_diagram) → **Mermaid 11** (loaded from CDN, override via `MERMAID_CDN_URL` env var)
+- Venn chart → inline SVG, no external dependency
+- Maps (district_map, pin_map, path_map) → offline not supported; HTML shows a notice + raw data
+
 ### 4. Result Return
-The script will output the URL of the generated chart image.
+The script outputs the absolute path of the generated HTML file.
 Return the following to the user:
-- The image URL.
+- The file path (formatted as a clickable link if possible, e.g. `file:///path/to/chart.html`).
+- A brief description of the chart type and data used.
 - The complete `args` (specification) used for generation.
 
 ## Reference Material

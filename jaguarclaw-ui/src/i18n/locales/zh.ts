@@ -382,6 +382,7 @@ export default {
         soulDesc: '定义你的 Agent 的个性、名称与角色特质',
         ruleDesc: '为 Agent 设置行为约束与操作规范',
         profileDesc: '存储用户偏好信息，帮助 Agent 个性化响应',
+        heartbeatDesc: '定义 Agent 每次心跳时执行的检查清单与行为规则（Markdown 格式）',
       },
       fields: {
         agentNameLabel: 'Agent 名称',

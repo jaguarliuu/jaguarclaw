@@ -3,6 +3,7 @@ import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useSoulConfig } from '@/composables/useSoulConfig'
 import { useAgents } from '@/composables/useAgents'
+import { useWebSocket } from '@/composables/useWebSocket'
 import { useI18n } from '@/i18n'
 import Select from '@/components/common/Select.vue'
 import type { SelectOption } from '@/components/common/Select.vue'
@@ -12,6 +13,7 @@ const route = useRoute()
 
 const { persona, loading, error, fetchPersona, saveFile, watchPersonaUpdates } = useSoulConfig()
 const { agents, defaultAgent, loadAgents } = useAgents()
+const { request } = useWebSocket()
 
 let stopWatcher: (() => void) | null = null
 const selectedAgentId = ref('main')
@@ -19,6 +21,7 @@ const selectedAgentId = ref('main')
 const editSoul = ref('')
 const editRule = ref('')
 const editProfile = ref('')
+const editHeartbeatMd = ref('')
 
 const saving = ref(false)
 const saveSuccess = ref(false)
@@ -43,9 +46,19 @@ function syncFormFromPersona() {
   editProfile.value = persona.value.profile
 }
 
+async function fetchHeartbeatMd(agentId: string) {
+  try {
+    const result = await request<{ content: string }>('heartbeat.md.get', { agentId })
+    editHeartbeatMd.value = result.content ?? ''
+  } catch {
+    editHeartbeatMd.value = ''
+  }
+}
+
 async function loadAgentSoul(agentId: string) {
   await fetchPersona(agentId)
   syncFormFromPersona()
+  await fetchHeartbeatMd(agentId)
 }
 
 function resolveRouteAgentId() {
@@ -64,6 +77,7 @@ async function handleSave() {
     await saveFile(selectedAgentId.value, 'soul', editSoul.value)
     await saveFile(selectedAgentId.value, 'rule', editRule.value)
     await saveFile(selectedAgentId.value, 'profile', editProfile.value)
+    await request('heartbeat.md.save', { agentId: selectedAgentId.value, content: editHeartbeatMd.value })
     saveSuccess.value = true
     setTimeout(() => { saveSuccess.value = false }, 3000)
   } catch (e) {
@@ -142,6 +156,13 @@ watch(
           <h3 class="block-title">PROFILE.md</h3>
           <p class="block-desc">{{ t('sections.soul.blocks.profileDesc') }}</p>
           <textarea v-model="editProfile" class="form-textarea md-editor" rows="8" />
+        </div>
+
+        <!-- HEARTBEAT.md -->
+        <div class="config-block">
+          <h3 class="block-title">HEARTBEAT.md</h3>
+          <p class="block-desc">{{ t('sections.soul.blocks.heartbeatDesc') }}</p>
+          <textarea v-model="editHeartbeatMd" class="form-textarea md-editor" rows="10" />
         </div>
       </div>
 

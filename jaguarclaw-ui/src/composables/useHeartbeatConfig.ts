@@ -46,11 +46,22 @@ export function useHeartbeatConfig(agentId: string = 'main') {
     }
   }
 
+  async function getMd(): Promise<string> {
+    const result = await request<{ content: string }>('heartbeat.md.get', { agentId })
+    return result.content ?? ''
+  }
+
+  async function saveMd(content: string): Promise<void> {
+    await request('heartbeat.md.save', { agentId, content })
+  }
+
   return {
     config,
     loading,
     error,
     fetchConfig,
-    saveConfig
+    saveConfig,
+    getMd,
+    saveMd
   }
 }

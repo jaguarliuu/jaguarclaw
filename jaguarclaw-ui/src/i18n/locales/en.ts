@@ -384,6 +384,7 @@ export default {
         soulDesc: "Define your agent's personality, name, and character",
         ruleDesc: 'Set behavioral constraints and guidelines for your agent',
         profileDesc: 'Store information about the user to personalize responses',
+        heartbeatDesc: 'Define the checklist and behavior rules the Agent follows on each heartbeat (Markdown format)',
       },
       fields: {
         agentNameLabel: 'Agent Name',
