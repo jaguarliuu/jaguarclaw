@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import WorkspaceView from '@/views/WorkspaceView.vue'
 import SettingsView from '@/views/SettingsView.vue'
 import SetupWizard from '@/views/SetupWizard.vue'
+import DocumentView from '@/views/DocumentView.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -25,7 +26,18 @@ const router = createRouter({
       name: 'settings',
       component: SettingsView,
       props: true
-    }
+    },
+    {
+      path: '/documents',
+      name: 'documents',
+      component: DocumentView,
+    },
+    {
+      path: '/documents/:id',
+      name: 'document-detail',
+      component: DocumentView,
+      props: true,
+    },
   ]
 })
 
