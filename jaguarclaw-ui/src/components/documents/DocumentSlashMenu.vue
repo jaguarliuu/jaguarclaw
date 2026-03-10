@@ -23,14 +23,17 @@ function selectItem(index: number) {
 function onKeyDown(event: KeyboardEvent): boolean {
   if (event.key === 'ArrowDown') {
     selectedIndex.value = (selectedIndex.value + 1) % Math.max(props.items.length, 1)
+    event.preventDefault()
     return true
   }
   if (event.key === 'ArrowUp') {
     selectedIndex.value = (selectedIndex.value - 1 + Math.max(props.items.length, 1)) % Math.max(props.items.length, 1)
+    event.preventDefault()
     return true
   }
   if (event.key === 'Enter') {
     selectItem(selectedIndex.value)
+    event.preventDefault()
     return true
   }
   return false

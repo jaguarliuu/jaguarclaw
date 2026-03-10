@@ -133,54 +133,44 @@ export function createSlashExtension(onAiAction: SlashAiActionCallback) {
           render: () => {
             let mountEl: HTMLDivElement | null = null
             let vueApp: App | null = null
-            let menuInstance: any = null
+            let exposedOnKeyDown: ((e: KeyboardEvent) => boolean) | null = null
 
-            function mountMenu(items: SlashMenuItem[], rect: DOMRect) {
-              // Reuse the container div; unmount previous app if any
+            function showMenu(items: SlashMenuItem[], clientRect: () => DOMRect | null) {
               if (!mountEl) {
                 mountEl = document.createElement('div')
                 document.body.appendChild(mountEl)
               }
-              if (vueApp) {
-                vueApp.unmount()
-                vueApp = null
-                menuInstance = null
-              }
+              if (vueApp) { vueApp.unmount(); vueApp = null }
+              exposedOnKeyDown = null
 
-              const app = createApp(DocumentSlashMenu, { items })
-              vueApp = app
-              const instance = app.mount(mountEl) as any
-              menuInstance = instance
+              vueApp = createApp(DocumentSlashMenu, { items })
+              const instance = vueApp.mount(mountEl) as any
+              // After mount, grab the exposed onKeyDown from the component instance
+              exposedOnKeyDown = typeof instance.onKeyDown === 'function' ? instance.onKeyDown : null
 
               // Position the inner element (the .slash-menu div rendered by the component)
+              const rect = clientRect()
               const el = mountEl.firstElementChild as HTMLElement | null
-              if (el) {
+              if (el && rect) {
+                el.style.position = 'fixed'
                 el.style.top = `${rect.bottom + 4}px`
                 el.style.left = `${rect.left}px`
               }
             }
 
             function destroyMenu() {
-              if (vueApp) {
-                vueApp.unmount()
-                vueApp = null
-              }
-              if (mountEl) {
-                mountEl.remove()
-                mountEl = null
-              }
-              menuInstance = null
+              if (vueApp) { vueApp.unmount(); vueApp = null }
+              if (mountEl) { mountEl.remove(); mountEl = null }
+              exposedOnKeyDown = null
             }
 
             return {
               onStart(props: any) {
-                const rect = props.clientRect?.()
-                if (rect) mountMenu(props.items, rect)
+                if (props.clientRect) showMenu(props.items, props.clientRect)
               },
 
               onUpdate(props: any) {
-                const rect = props.clientRect?.()
-                if (rect) mountMenu(props.items, rect)
+                if (props.clientRect) showMenu(props.items, props.clientRect)
               },
 
               onKeyDown(props: { event: KeyboardEvent }): boolean {
@@ -188,9 +178,7 @@ export function createSlashExtension(onAiAction: SlashAiActionCallback) {
                   destroyMenu()
                   return true
                 }
-                if (menuInstance && typeof menuInstance.onKeyDown === 'function') {
-                  return menuInstance.onKeyDown(props.event)
-                }
+                if (exposedOnKeyDown) return exposedOnKeyDown(props.event)
                 return false
               },
 
