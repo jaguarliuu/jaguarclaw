@@ -20,7 +20,6 @@ const emit = defineEmits<{
 
 const titleValue = ref(props.document?.title ?? '')
 const bubbleMenuRef = ref<HTMLElement | null>(null)
-const bubbleVisible = ref(false)
 
 const editor = useEditor({
   extensions: [
@@ -35,13 +34,6 @@ const editor = useEditor({
     const content = JSON.stringify(editor.getJSON())
     const wordCount = editor.getText().trim().split(/\s+/).filter(Boolean).length
     emit('change', titleValue.value, content, wordCount)
-  },
-  onSelectionUpdate({ editor: ed }) {
-    const { empty } = ed.state.selection
-    bubbleVisible.value = !empty
-  },
-  onBlur() {
-    // keep bubble visible briefly so user can click it
   },
 })
 
@@ -64,6 +56,7 @@ onMounted(async () => {
         pluginKey: 'bubbleMenu',
         editor: editor.value,
         element: bubbleMenuRef.value,
+        appendTo: () => document.body,
       })
     )
   }
@@ -119,7 +112,7 @@ function handleAiAction(action: string) {
 </template>
 
 <style scoped>
-.doc-editor { flex: 1; display: flex; flex-direction: column; overflow: hidden; background: var(--color-white); }
+.doc-editor { flex: 1; display: flex; flex-direction: column; overflow: hidden; background: var(--color-white); position: relative; }
 .doc-editor__toolbar {
   display: flex; align-items: center; gap: var(--space-3);
   padding: var(--space-3) var(--space-6); border-bottom: var(--border); flex-shrink: 0;
