@@ -14,6 +14,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 @Slf4j
@@ -44,6 +45,10 @@ public class DocumentAiAssistHandler implements RpcHandler {
                     return Mono.just(RpcResponse.error(request.getId(), "INVALID_PARAMS", "docId is required"));
                 if (action == null || action.isBlank())
                     return Mono.just(RpcResponse.error(request.getId(), "INVALID_PARAMS", "action is required"));
+
+                var validActions = Set.of("continue", "optimize", "rewrite", "summarize", "translate");
+                if (!validActions.contains(action))
+                    return Mono.just(RpcResponse.error(request.getId(), "INVALID_PARAMS", "Unknown action: " + action));
 
                 String ownerId = resolveOwner(connectionId);
                 var doc     = documentService.get(docId, ownerId);
@@ -86,7 +91,7 @@ public class DocumentAiAssistHandler implements RpcHandler {
             case "rewrite"   -> "请改写以下文本，使其更清晰简洁，只输出改写结果：\n\n" + target;
             case "summarize" -> "请提炼以下文档的核心要点，以3-5条Markdown列表形式输出，只输出摘要：\n\n" + target;
             case "translate" -> "请将以下文本翻译（中英互译），只输出译文：\n\n" + target;
-            default          -> "请处理以下内容：\n\n" + target;
+            default          -> throw new IllegalArgumentException("Unknown action: " + action);
         };
     }
 

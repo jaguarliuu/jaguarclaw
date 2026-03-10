@@ -7,6 +7,7 @@ import com.jaguarliu.ai.gateway.rpc.model.RpcRequest;
 import com.jaguarliu.ai.gateway.rpc.model.RpcResponse;
 import com.jaguarliu.ai.gateway.ws.ConnectionManager;
 import com.jaguarliu.ai.session.SessionService;
+import com.jaguarliu.ai.document.DocumentEntity;
 import com.jaguarliu.ai.storage.entity.SessionEntity;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
