@@ -1,5 +1,6 @@
 package com.jaguarliu.ai.gateway.rpc.handler.document;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jaguarliu.ai.document.DocumentEntity;
 import com.jaguarliu.ai.document.DocumentService;
@@ -30,7 +31,8 @@ public class DocumentGetHandler implements RpcHandler {
     @Override
     public Mono<RpcResponse> handle(String connectionId, RpcRequest request) {
         return Mono.fromCallable(() -> {
-            Map<String, Object> params = objectMapper.convertValue(request.getPayload(), Map.class);
+            Map<String, Object> params = objectMapper.convertValue(
+                request.getPayload(), new TypeReference<Map<String, Object>>() {});
             String id = (String) params.get("id");
             if (id == null || id.isBlank())
                 return RpcResponse.error(request.getId(), "INVALID_PARAMS", "id is required");
@@ -48,7 +50,7 @@ public class DocumentGetHandler implements RpcHandler {
     private Map<String, Object> toDto(DocumentEntity doc) {
         var dto = new HashMap<String, Object>();
         dto.put("id", doc.getId());
-        dto.put("parentId", doc.getParentId() != null ? doc.getParentId() : "");
+        dto.put("parentId", doc.getParentId());
         dto.put("title", doc.getTitle());
         dto.put("content", doc.getContent());
         dto.put("wordCount", doc.getWordCount());
