@@ -66,7 +66,9 @@ public class AgentEvent {
         TOKEN_USAGE("token.usage"),
         RUN_OUTCOME("run.outcome"),
         // P2 扩展占位：上下文压缩通知
-        CONTEXT_COMPACTED("context.compacted");
+        CONTEXT_COMPACTED("context.compacted"),
+        // 文档内容插入事件（document-writer agent 实时推送）
+        DOC_CONTENT_INSERT("doc.content.insert");
 
         private final String value;
 
@@ -290,6 +292,18 @@ public class AgentEvent {
                 .build();
     }
 
+    /**
+     * 创建 doc.content.insert 事件（document-writer agent 向编辑器实时插入内容）
+     */
+    public static AgentEvent docContentInsert(String connectionId, String runId, String content) {
+        return AgentEvent.builder()
+                .connectionId(connectionId)
+                .type(EventType.DOC_CONTENT_INSERT)
+                .runId(runId)
+                .data(new DocContentInsertData(content))
+                .build();
+    }
+
     @Data
     @AllArgsConstructor
     public static class DeltaData {
@@ -502,6 +516,12 @@ public class AgentEvent {
         private String currentItemId;
         private int step;
         private int totalTokens;
+    }
+
+    @Data
+    @AllArgsConstructor
+    public static class DocContentInsertData {
+        private String content;
     }
 
 }

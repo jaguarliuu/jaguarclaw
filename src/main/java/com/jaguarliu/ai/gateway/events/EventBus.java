@@ -90,7 +90,8 @@ public class EventBus {
                  ARTIFACT_DELTA,
                  HEARTBEAT_NOTIFY,
                  TOKEN_USAGE,
-                 CONTEXT_COMPACTED -> false;
+                 CONTEXT_COMPACTED,
+                 DOC_CONTENT_INSERT -> false;
         };
     }
 
