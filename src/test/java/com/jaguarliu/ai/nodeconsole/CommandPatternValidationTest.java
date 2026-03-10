@@ -120,6 +120,36 @@ class CommandPatternValidationTest {
     }
 
     @Test
+    void testPipeToShellInterpreterIsDestructive() {
+        // echo 开头看似安全，但管道到 bash 是危险的 — 当前 isSafeCommandWithDangerousArg 会放行，这个测试应失败
+        assertEquals(RemoteCommandClassifier.SafetyLevel.DESTRUCTIVE,
+            classifier.classify("echo 'rm -rf /' | bash", "standard").safetyLevel(),
+            "Piping dangerous content to bash should be DESTRUCTIVE");
+
+        // cat 开头，但管道到 sh — DangerousCommandDetector 不识别 cat|sh，READ_ONLY 白名单会放行
+        assertEquals(RemoteCommandClassifier.SafetyLevel.DESTRUCTIVE,
+            classifier.classify("cat malware.sh | sh", "standard").safetyLevel(),
+            "Piping cat to sh should be DESTRUCTIVE");
+
+        // grep 开头，但 xargs rm -rf 是破坏性的 — isSafeCommandWithDangerousArg 会豁免 grep
+        assertEquals(RemoteCommandClassifier.SafetyLevel.DESTRUCTIVE,
+            classifier.classify("grep -rl . | xargs rm -rf", "standard").safetyLevel(),
+            "grep | xargs rm -rf should be DESTRUCTIVE");
+    }
+
+    @Test
+    void testEchoWithoutPipeRemainsNonDestructive() {
+        // echo 没有管道，保持现有行为：不是 DESTRUCTIVE
+        assertNotEquals(RemoteCommandClassifier.SafetyLevel.DESTRUCTIVE,
+            classifier.classify("echo shutdown", "standard").safetyLevel(),
+            "echo shutdown without pipe should not be DESTRUCTIVE");
+
+        assertNotEquals(RemoteCommandClassifier.SafetyLevel.DESTRUCTIVE,
+            classifier.classify("echo 'hello world'", "standard").safetyLevel(),
+            "Simple echo should not be DESTRUCTIVE");
+    }
+
+    @Test
     void testComplexPatterns() {
         // 测试复杂的正则表达式模式
 

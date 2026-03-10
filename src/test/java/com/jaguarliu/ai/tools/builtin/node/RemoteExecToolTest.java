@@ -16,9 +16,11 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import org.mockito.ArgumentCaptor;
 
 @DisplayName("RemoteExecTool Tests")
 class RemoteExecToolTest {
@@ -74,5 +76,35 @@ class RemoteExecToolTest {
         assertNotNull(result);
         assertFalse(result.isSuccess());
         assertEquals(RuntimeFailureCategories.POLICY_BLOCK, result.getFailureCategory());
+    }
+
+    @Test
+    @DisplayName("script_content command uses properly quoted printf format string")
+    void scriptContentCommandUsesQuotedPrintfFormat() {
+        NodeService nodeService = mock(NodeService.class);
+        AuditLogService auditLogService = mock(AuditLogService.class);
+        RemoteCommandClassifier classifier = mock(RemoteCommandClassifier.class);
+        ToolsProperties properties = new ToolsProperties();
+
+        when(nodeService.getSafetyPolicy(anyString())).thenReturn("relaxed");
+        when(classifier.classify(anyString(), anyString())).thenReturn(
+                new RemoteCommandClassifier.Classification(
+                        RemoteCommandClassifier.SafetyLevel.READ_ONLY,
+                        "allowed", "relaxed"
+                )
+        );
+        ArgumentCaptor<String> commandCaptor = ArgumentCaptor.forClass(String.class);
+        when(nodeService.executeCommandAfterHitl(anyString(), commandCaptor.capture())).thenReturn("hello");
+
+        RemoteExecTool tool = new RemoteExecTool(nodeService, classifier, auditLogService, properties);
+
+        tool.execute(Map.of(
+                "alias", "n1",
+                "script_content", "echo hello"
+        )).block();
+
+        String generatedCommand = commandCaptor.getValue();
+        assertTrue(generatedCommand.contains("printf '%s'"),
+                "printf format string should be single-quoted: printf '%s', got: " + generatedCommand);
     }
 }

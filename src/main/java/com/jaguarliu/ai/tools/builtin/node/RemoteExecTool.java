@@ -241,7 +241,7 @@ public class RemoteExecTool implements Tool {
     private String buildRemoteScriptCommand(String scriptContent, String interpreter, List<String> args) {
         String encoded = Base64.getEncoder().encodeToString(scriptContent.getBytes(StandardCharsets.UTF_8));
         StringBuilder sb = new StringBuilder();
-        sb.append("printf %s ").append(quoteSh(encoded))
+        sb.append("printf '%s' ").append(quoteSh(encoded))
                 .append(" | base64 -d | ")
                 .append(quoteSh(interpreter))
                 .append(" -s");

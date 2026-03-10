@@ -47,4 +47,12 @@ public class NodeConsoleProperties {
      * 最大输出长度（字节）- 防止 OOM
      */
     private int maxOutputBytes = 32000;
+
+    /**
+     * SSH 严格主机密钥检查（StrictHostKeyChecking）
+     * 默认 false（向后兼容）。生产运维场景建议开启以防 MITM 攻击。
+     * true  → StrictHostKeyChecking=yes（拒绝未知主机）
+     * false → StrictHostKeyChecking=no（自动接受）
+     */
+    private boolean sshStrictHostKeyChecking = false;
 }

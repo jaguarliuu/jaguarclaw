@@ -52,6 +52,14 @@ class SshConnectorTimeoutTest {
         assertEquals("ssh", connector.getType(), "Connector type should be 'ssh'");
     }
 
+    @Test
+    void defaultStrictHostKeyCheckingIsFalse() {
+        // StrictHostKeyChecking 默认应为 false（向后兼容），但字段必须存在
+        NodeConsoleProperties props = new NodeConsoleProperties();
+        assertFalse(props.isSshStrictHostKeyChecking(),
+            "Default sshStrictHostKeyChecking should be false for backward compatibility");
+    }
+
     private SshConnector newConnector() {
         return new SshConnector(new NodeConsoleProperties());
     }

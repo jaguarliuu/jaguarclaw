@@ -472,8 +472,9 @@ public class SshConnector implements Connector {
             session.setPassword(credential);
         }
 
-        // 禁用严格主机密钥检查（运维场景）
-        session.setConfig("StrictHostKeyChecking", "no");
+        // 主机密钥检查：默认关闭（运维场景），可通过配置开启防 MITM
+        String strictHostKeyChecking = properties.isSshStrictHostKeyChecking() ? "yes" : "no";
+        session.setConfig("StrictHostKeyChecking", strictHostKeyChecking);
         session.setTimeout(timeoutMs);
 
         return session;

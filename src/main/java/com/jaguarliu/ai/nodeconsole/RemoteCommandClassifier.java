@@ -7,7 +7,6 @@ import org.springframework.stereotype.Component;
 
 import java.util.List;
 import java.util.regex.Pattern;
-
 /**
  * 远程命令安全分类器（基于 DangerousCommandDetector）
  *
@@ -33,6 +32,12 @@ public class RemoteCommandClassifier {
             Pattern.compile("\\bkubectl\\s+delete\\b", Pattern.CASE_INSENSITIVE),
             Pattern.compile("\\bkubectl\\s+drain\\b", Pattern.CASE_INSENSITIVE),
             Pattern.compile("\\bkubectl\\s+cordon\\b", Pattern.CASE_INSENSITIVE)
+    );
+
+    // 管道到 shell 解释器的检测（无论前置命令是什么，都视为潜在 RCE）
+    private static final Pattern PIPE_TO_SHELL_PATTERN = Pattern.compile(
+            "\\|\\s*(bash|sh|zsh|ksh|fish|python3?|ruby|perl|node|nodejs)\\b",
+            Pattern.CASE_INSENSITIVE
     );
 
     /**
@@ -122,6 +127,12 @@ public class RemoteCommandClassifier {
             return new Classification(SafetyLevel.SIDE_EFFECT, "Empty command", policy);
         }
 
+        // Step 0: 管道到 shell 解释器 — 无论前置命令是什么，均视为潜在远程代码执行
+        if (PIPE_TO_SHELL_PATTERN.matcher(command).find()) {
+            return new Classification(SafetyLevel.DESTRUCTIVE,
+                    "Command pipes to shell interpreter (potential remote code execution)", policy);
+        }
+
         // Step 1a: 检查远程特有的破坏性模式（kubectl 命令）
         for (Pattern pattern : REMOTE_DESTRUCTIVE_PATTERNS) {
             if (pattern.matcher(command).find()) {
@@ -182,6 +193,10 @@ public class RemoteCommandClassifier {
      */
     private boolean isSafeCommandWithDangerousArg(String command) {
         String trimmed = command.trim();
+        // 如果命令含有管道，不豁免 — 管道后的命令可能是危险的（如 | xargs rm -rf）
+        if (trimmed.contains("|")) {
+            return false;
+        }
         // 常见的安全只读/输出命令
         String[] safeCommands = {"echo", "printf", "cat", "less", "more", "head", "tail", "grep"};
         for (String safe : safeCommands) {
