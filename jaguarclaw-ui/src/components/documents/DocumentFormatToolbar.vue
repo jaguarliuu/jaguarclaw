@@ -2,9 +2,7 @@
 <script setup lang="ts">
 import type { Editor } from '@tiptap/vue-3'
 
-const props = defineProps<{ editor: Editor | undefined }>()
-
-function run(cmd: () => boolean) { cmd() }
+defineProps<{ editor: Editor | undefined }>()
 </script>
 
 <template>
@@ -12,32 +10,35 @@ function run(cmd: () => boolean) { cmd() }
     <button
       :class="{ active: editor.isActive('bold') }"
       title="Bold (Ctrl+B)"
-      @click="run(() => editor!.chain().focus().toggleBold().run())"
+      @click="editor?.chain().focus().toggleBold().run()"
     >B</button>
     <button
       :class="{ active: editor.isActive('italic') }"
       title="Italic (Ctrl+I)"
-      @click="run(() => editor!.chain().focus().toggleItalic().run())"
+      @click="editor?.chain().focus().toggleItalic().run()"
     ><em>I</em></button>
     <button
       :class="{ active: editor.isActive('strike') }"
       title="Strikethrough"
-      @click="run(() => editor!.chain().focus().toggleStrike().run())"
+      @click="editor?.chain().focus().toggleStrike().run()"
     ><s>S</s></button>
 
     <div class="format-toolbar__sep" />
 
     <button
       :class="{ active: editor.isActive('heading', { level: 1 }) }"
-      @click="run(() => editor!.chain().focus().toggleHeading({ level: 1 }).run())"
+      title="Heading 1"
+      @click="editor?.chain().focus().toggleHeading({ level: 1 }).run()"
     >H1</button>
     <button
       :class="{ active: editor.isActive('heading', { level: 2 }) }"
-      @click="run(() => editor!.chain().focus().toggleHeading({ level: 2 }).run())"
+      title="Heading 2"
+      @click="editor?.chain().focus().toggleHeading({ level: 2 }).run()"
     >H2</button>
     <button
       :class="{ active: editor.isActive('heading', { level: 3 }) }"
-      @click="run(() => editor!.chain().focus().toggleHeading({ level: 3 }).run())"
+      title="Heading 3"
+      @click="editor?.chain().focus().toggleHeading({ level: 3 }).run()"
     >H3</button>
 
     <div class="format-toolbar__sep" />
@@ -45,12 +46,12 @@ function run(cmd: () => boolean) { cmd() }
     <button
       :class="{ active: editor.isActive('bulletList') }"
       title="Bullet list"
-      @click="run(() => editor!.chain().focus().toggleBulletList().run())"
+      @click="editor?.chain().focus().toggleBulletList().run()"
     >• List</button>
     <button
       :class="{ active: editor.isActive('orderedList') }"
       title="Numbered list"
-      @click="run(() => editor!.chain().focus().toggleOrderedList().run())"
+      @click="editor?.chain().focus().toggleOrderedList().run()"
     >1. List</button>
 
     <div class="format-toolbar__sep" />
@@ -58,20 +59,20 @@ function run(cmd: () => boolean) { cmd() }
     <button
       :class="{ active: editor.isActive('codeBlock') }"
       title="Code block"
-      @click="run(() => editor!.chain().focus().toggleCodeBlock().run())"
+      @click="editor?.chain().focus().toggleCodeBlock().run()"
     >&lt;/&gt;</button>
     <button
       :class="{ active: editor.isActive('blockquote') }"
       title="Blockquote"
-      @click="run(() => editor!.chain().focus().toggleBlockquote().run())"
+      @click="editor?.chain().focus().toggleBlockquote().run()"
     >"</button>
     <button
       title="Horizontal rule"
-      @click="run(() => editor!.chain().focus().setHorizontalRule().run())"
+      @click="editor?.chain().focus().setHorizontalRule().run()"
     >—</button>
     <button
       title="Insert Mermaid diagram"
-      @click="run(() => editor!.chain().focus().insertContent({ type: 'codeBlock', attrs: { language: 'mermaid' }, content: [{ type: 'text', text: 'graph TD\n  A --> B' }] }).run())"
+      @click="editor?.chain().focus().insertContent({ type: 'codeBlock', attrs: { language: 'mermaid' }, content: [{ type: 'text', text: 'graph TD\n  A --> B' }] }).run()"
     >⬡ Mermaid</button>
   </div>
 </template>
