@@ -145,6 +145,34 @@ public class SessionService {
     }
 
     /**
+     * Creates a hidden session bound to a document (sessionKind='document').
+     * These sessions are invisible to listMainSessions() and the chat sidebar.
+     */
+    @Transactional
+    public SessionEntity createDocumentSession(String docId, String ownerPrincipalId) {
+        SessionEntity session = SessionEntity.builder()
+                .id(UUID.randomUUID().toString())
+                .name("doc:" + docId)
+                .sessionKind("document")
+                .agentId(DEFAULT_AGENT_ID)
+                .ownerPrincipalId(ownerPrincipalId != null ? ownerPrincipalId : DEFAULT_PRINCIPAL_ID)
+                .build();
+
+        session = sessionRepository.save(session);
+        log.info("Created document session: id={}, docId={}", session.getId(), docId);
+        return session;
+    }
+
+    /**
+     * Returns the existing document session for docId, or creates one if none exists.
+     */
+    @Transactional
+    public SessionEntity findOrCreateDocumentSession(String docId, String ownerPrincipalId) {
+        return sessionRepository.findBySessionKindAndName("document", "doc:" + docId)
+                .orElseGet(() -> createDocumentSession(docId, ownerPrincipalId));
+    }
+
+    /**
      * 获取所有主会话（按创建时间倒序）
      */
     public List<SessionEntity> list() {

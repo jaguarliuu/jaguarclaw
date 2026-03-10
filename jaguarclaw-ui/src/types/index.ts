@@ -583,3 +583,20 @@ export interface AttachedContext {
 
 /** 向后兼容：AttachedFile 类型别名 */
 export type AttachedFile = AttachedContext
+
+// ─── Document types ───────────────────────────────────────────────────────────
+
+export interface DocumentNode {
+  id: string
+  parentId: string | null
+  title: string
+  sortOrder: number
+  wordCount: number
+  createdAt: string
+  updatedAt: string
+  children: DocumentNode[]
+}
+
+export interface Document extends Omit<DocumentNode, 'children'> {
+  content: string   // TipTap JSON string
+}

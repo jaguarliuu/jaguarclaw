@@ -45,4 +45,9 @@ public interface SessionRepository extends JpaRepository<SessionEntity, String> 
      * 按创建时间范围查询（用于每日回顾）
      */
     List<SessionEntity> findByCreatedAtBetween(LocalDateTime start, LocalDateTime end);
+
+    /**
+     * 根据 sessionKind 和 name 查询（用于文档会话查找）
+     */
+    Optional<SessionEntity> findBySessionKindAndName(String sessionKind, String name);
 }
