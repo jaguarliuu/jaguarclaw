@@ -349,14 +349,18 @@ public class SshConnector implements Connector {
 
     /**
      * 映射 JSch 异常到 ErrorType
+     * package-private for unit testing
      */
-    private ExecResult.ErrorType mapJSchException(com.jcraft.jsch.JSchException e) {
+    ExecResult.ErrorType mapJSchException(com.jcraft.jsch.JSchException e) {
         String message = e.getMessage();
         if (message == null) {
             return ExecResult.ErrorType.UNKNOWN;
         }
 
         message = message.toLowerCase(Locale.ROOT);
+        if (message.contains("algorithm negotiation") || message.contains("algo nego")) {
+            return ExecResult.ErrorType.VALIDATION_ERROR;
+        }
         if (message.contains("invalid privatekey")
                 || message.contains("private key")
                 || message.contains("passphrase")
@@ -409,9 +413,16 @@ public class SshConnector implements Connector {
         }
     }
 
-    private String mapJSchMessage(ExecResult.ErrorType errorType, String rawMessage, String authType) {
+    String mapJSchMessage(ExecResult.ErrorType errorType, String rawMessage, String authType) {
         String message = rawMessage != null ? rawMessage.toLowerCase(Locale.ROOT) : "";
         boolean keyAuth = "key".equalsIgnoreCase(authType);
+
+        // 算法协商失败：优先检查，给出最有用的错误信息
+        if (message.contains("algorithm negotiation") || message.contains("algo nego")) {
+            return "SSH algorithm negotiation failed. The server may use legacy algorithms " +
+                    "(e.g. diffie-hellman-group1-sha1, ssh-rsa, aes-cbc). " +
+                    "Check the server's SSH version and configuration.";
+        }
 
         return switch (errorType) {
             case VALIDATION_ERROR -> keyAuth
@@ -471,6 +482,45 @@ public class SshConnector implements Connector {
         if ("password".equals(authType)) {
             session.setPassword(credential);
         }
+
+        // 扩展算法列表：现代算法优先，遗留算法兜底（支持老旧 SSH 服务器）
+        // 解决 JSchAlgoNegoFailException：JSch 0.2.x 默认只支持现代算法，
+        // 老服务器（旧 OpenSSH、网络设备等）只支持遗留算法时会报算法协商失败
+        session.setConfig("kex", String.join(",",
+                "curve25519-sha256", "curve25519-sha256@libssh.org",
+                "ecdh-sha2-nistp256", "ecdh-sha2-nistp384", "ecdh-sha2-nistp521",
+                "diffie-hellman-group-exchange-sha256",
+                "diffie-hellman-group16-sha512", "diffie-hellman-group18-sha512",
+                "diffie-hellman-group14-sha256",
+                // 遗留算法（老旧服务器兜底）
+                "diffie-hellman-group14-sha1",
+                "diffie-hellman-group1-sha1",
+                "diffie-hellman-group-exchange-sha1"));
+        session.setConfig("server_host_key", String.join(",",
+                "ssh-ed25519",
+                "ecdsa-sha2-nistp256", "ecdsa-sha2-nistp384", "ecdsa-sha2-nistp521",
+                "rsa-sha2-512", "rsa-sha2-256",
+                // 遗留算法（大量老服务器仍在使用）
+                "ssh-rsa"));
+        String ciphers = String.join(",",
+                "aes128-ctr", "aes192-ctr", "aes256-ctr",
+                "aes128-gcm@openssh.com", "aes256-gcm@openssh.com",
+                // 遗留 CBC 加密（老服务器）
+                "aes128-cbc", "aes192-cbc", "aes256-cbc", "3des-cbc");
+        session.setConfig("cipher.c2s", ciphers);
+        session.setConfig("cipher.s2c", ciphers);
+        String macs = String.join(",",
+                "hmac-sha2-256", "hmac-sha2-512",
+                "hmac-sha2-256-etm@openssh.com", "hmac-sha2-512-etm@openssh.com",
+                // 遗留 MAC（老服务器）
+                "hmac-sha1", "hmac-sha1-etm@openssh.com", "hmac-md5");
+        session.setConfig("mac.c2s", macs);
+        session.setConfig("mac.s2c", macs);
+        // PubkeyAcceptedAlgorithms：密钥认证时服务端可接受的签名算法（包含遗留 ssh-rsa）
+        session.setConfig("PubkeyAcceptedAlgorithms", String.join(",",
+                "ssh-ed25519",
+                "ecdsa-sha2-nistp256", "ecdsa-sha2-nistp384", "ecdsa-sha2-nistp521",
+                "rsa-sha2-512", "rsa-sha2-256", "ssh-rsa"));
 
         // 主机密钥检查：默认关闭（运维场景），可通过配置开启防 MITM
         String strictHostKeyChecking = properties.isSshStrictHostKeyChecking() ? "yes" : "no";
