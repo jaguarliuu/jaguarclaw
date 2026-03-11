@@ -15,6 +15,7 @@ const error = ref<string | null>(null)
 let saveTimer: ReturnType<typeof setTimeout> | null = null
 let aiUnsubDelta: (() => void) | null = null
 let aiUnsubEnd: (() => void) | null = null
+let aiUnsubError: (() => void) | null = null
 let aiUnsubInsert: (() => void) | null = null
 
 export function useDocuments() {
@@ -90,6 +91,7 @@ export function useDocuments() {
     aiStatusText.value = ''
     aiUnsubDelta?.()
     aiUnsubEnd?.()
+    aiUnsubError?.()
     aiUnsubInsert?.()
 
     const result = await request<{ streamRunId: string }>('document.ai.assist', { docId, action, selection })
@@ -118,12 +120,17 @@ export function useDocuments() {
     aiUnsubEnd = onEvent('lifecycle.end', (event: RpcEvent) => {
       if (event.runId === streamRunId) {
         aiStreaming.value = false
-        aiUnsubDelta?.()
-        aiUnsubEnd?.()
-        aiUnsubInsert?.()
-        aiUnsubDelta = null
-        aiUnsubEnd = null
-        aiUnsubInsert = null
+        aiUnsubDelta?.(); aiUnsubEnd?.(); aiUnsubError?.(); aiUnsubInsert?.()
+        aiUnsubDelta = null; aiUnsubEnd = null; aiUnsubError = null; aiUnsubInsert = null
+      }
+    })
+
+    aiUnsubError = onEvent('lifecycle.error', (event: RpcEvent) => {
+      if (event.runId === streamRunId) {
+        aiStreaming.value = false
+        aiStatusText.value = ''
+        aiUnsubDelta?.(); aiUnsubEnd?.(); aiUnsubError?.(); aiUnsubInsert?.()
+        aiUnsubDelta = null; aiUnsubEnd = null; aiUnsubError = null; aiUnsubInsert = null
       }
     })
 
@@ -134,12 +141,8 @@ export function useDocuments() {
     aiStreaming.value = false
     aiStreamContent.value = ''
     aiStatusText.value = ''
-    aiUnsubDelta?.()
-    aiUnsubEnd?.()
-    aiUnsubInsert?.()
-    aiUnsubDelta = null
-    aiUnsubEnd = null
-    aiUnsubInsert = null
+    aiUnsubDelta?.(); aiUnsubEnd?.(); aiUnsubError?.(); aiUnsubInsert?.()
+    aiUnsubDelta = null; aiUnsubEnd = null; aiUnsubError = null; aiUnsubInsert = null
   }
 
   async function getConfig(): Promise<string> {
