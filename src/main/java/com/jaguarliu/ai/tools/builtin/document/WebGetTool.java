@@ -22,14 +22,14 @@ import java.util.Map;
  */
 @Slf4j
 @Component
-public class HttpGetTool implements Tool {
+public class WebGetTool implements Tool {
 
     private static final int MAX_CONTENT_LENGTH = 8000;
     private static final int TIMEOUT_MS = 10_000;
 
     private final ToolConfigProperties toolConfigProperties;
 
-    public HttpGetTool(ToolConfigProperties toolConfigProperties) {
+    public WebGetTool(ToolConfigProperties toolConfigProperties) {
         this.toolConfigProperties = toolConfigProperties;
     }
 
