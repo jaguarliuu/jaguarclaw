@@ -43,7 +43,8 @@ class LaneAwareQueueManagerTest {
         agentRegistry = mock(AgentRegistry.class);
         when(agentRegistry.getLaneConfig()).thenReturn(laneConfig);
 
-        queueManager = new LaneAwareQueueManager(agentRegistry);
+        CancellationManager cancellationManager = mock(CancellationManager.class);
+        queueManager = new LaneAwareQueueManager(agentRegistry, cancellationManager);
     }
 
     // ==================== 初始化测试 ====================
