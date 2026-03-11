@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { Session, AgentProfile } from '@/types'
 import { ref, watch, computed } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useConfirm } from '@/composables/useConfirm'
 import { useI18n } from '@/i18n'
 import { useHeartbeat } from '@/composables/useHeartbeat'
@@ -11,11 +12,29 @@ const { t } = useI18n()
 const { notifications, unreadCount, markAsRead, markAllAsRead, clearAll, selectNotification } =
   useHeartbeat()
 const { state: connectionState } = useWebSocket()
+const route = useRoute()
+const router = useRouter()
+
+const activeSection = computed(() => {
+  if (route.path.startsWith('/documents')) return 'documents'
+  if (route.path.startsWith('/settings')) return 'settings'
+  return 'chat'
+})
+
+function navTo(section: 'chat' | 'documents') {
+  if (section === 'chat') {
+    router.push('/')
+    collapsed.value = false
+  } else {
+    router.push('/documents')
+  }
+}
 
 const props = defineProps<{
   sessions: Session[]
   currentId: string | null
   agents?: AgentProfile[]
+  forceCollapsed?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -84,27 +103,45 @@ function sessionAgentLabel(session: Session): string {
   <aside class="sidebar-root">
     <!-- Icon Rail (56px) -->
     <div class="app-rail">
+      <!-- Logo -->
       <div class="rail-top">
         <div class="rail-logo" :class="`conn-${connectionState}`">M</div>
       </div>
-      <div class="rail-bottom">
+
+      <!-- Primary nav icons -->
+      <div class="rail-nav">
+        <!-- Chat -->
         <button
-          v-if="collapsed"
           class="rail-btn"
-          @click="collapsed = false"
-          :title="t('session.expand')"
+          :class="{ 'nav-active': activeSection === 'chat' }"
+          @click="navTo('chat')"
+          title="会话"
         >
-          <svg width="15" height="15" viewBox="0 0 15 15" fill="none">
-            <path
-              d="M6 3L10 7.5L6 12"
-              stroke="currentColor"
-              stroke-width="1.5"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            />
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+            <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"
+              stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
         </button>
 
+        <!-- Documents -->
+        <button
+          class="rail-btn"
+          :class="{ 'nav-active': activeSection === 'documents' }"
+          @click="navTo('documents')"
+          title="文档"
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+            <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"
+              stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <polyline points="14 2 14 8 20 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <line x1="16" y1="13" x2="8" y2="13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            <line x1="16" y1="17" x2="8" y2="17" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </div>
+
+      <!-- Bottom utilities -->
+      <div class="rail-bottom">
         <!-- Notification Bell -->
         <button
           class="rail-btn notif-trigger"
@@ -113,60 +150,26 @@ function sessionAgentLabel(session: Session): string {
           :title="t('session.notifications')"
         >
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-            <line
-              x1="8"
-              y1="1.5"
-              x2="8"
-              y2="3"
-              stroke="currentColor"
-              stroke-width="1.4"
-              stroke-linecap="round"
-            />
-            <path
-              d="M4 11V8a4 4 0 0 0 8 0v3"
-              stroke="currentColor"
-              stroke-width="1.4"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            />
-            <line
-              x1="2"
-              y1="11"
-              x2="14"
-              y2="11"
-              stroke="currentColor"
-              stroke-width="1.4"
-              stroke-linecap="round"
-            />
-            <path
-              d="M6.5 13a1.5 1.5 0 0 0 3 0"
-              stroke="currentColor"
-              stroke-width="1.4"
-              stroke-linecap="round"
-            />
+            <line x1="8" y1="1.5" x2="8" y2="3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+            <path d="M4 11V8a4 4 0 0 0 8 0v3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+            <line x1="2" y1="11" x2="14" y2="11" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+            <path d="M6.5 13a1.5 1.5 0 0 0 3 0" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
           </svg>
-          <span v-if="unreadCount > 0" class="notif-badge">{{
-            unreadCount > 9 ? '9+' : unreadCount
-          }}</span>
+          <span v-if="unreadCount > 0" class="notif-badge">{{ unreadCount > 9 ? '9+' : unreadCount }}</span>
         </button>
 
-        <RouterLink to="/settings/llm" class="rail-btn" :title="t('common.settings')">
+        <RouterLink to="/settings/llm" class="rail-btn" :class="{ 'nav-active': activeSection === 'settings' }" :title="t('common.settings')">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-            <path
-              d="M12.22 2h-.44a2 2 0 00-2 2v.18a2 2 0 01-1 1.73l-.43.25a2 2 0 01-2 0l-.15-.08a2 2 0 00-2.73.73l-.22.38a2 2 0 00.73 2.73l.15.1a2 2 0 011 1.72v.51a2 2 0 01-1 1.74l-.15.09a2 2 0 00-.73 2.73l.22.38a2 2 0 002.73.73l.15-.08a2 2 0 012 0l.43.25a2 2 0 011 1.73V20a2 2 0 002 2h.44a2 2 0 002-2v-.18a2 2 0 011-1.73l.43-.25a2 2 0 012 0l.15.08a2 2 0 002.73-.73l.22-.39a2 2 0 00-.73-2.73l-.15-.08a2 2 0 01-1-1.74v-.5a2 2 0 011-1.74l.15-.09a2 2 0 00.73-2.73l-.22-.38a2 2 0 00-2.73-.73l-.15.08a2 2 0 01-2 0l-.43-.25a2 2 0 01-1-1.73V4a2 2 0 00-2-2z"
-              stroke="currentColor"
-              stroke-width="1.5"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            />
-            <circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.5" />
+            <path d="M12.22 2h-.44a2 2 0 00-2 2v.18a2 2 0 01-1 1.73l-.43.25a2 2 0 01-2 0l-.15-.08a2 2 0 00-2.73.73l-.22.38a2 2 0 00.73 2.73l.15.1a2 2 0 011 1.72v.51a2 2 0 01-1 1.74l-.15.09a2 2 0 00-.73 2.73l.22.38a2 2 0 002.73.73l.15-.08a2 2 0 012 0l.43.25a2 2 0 011 1.73V20a2 2 0 002 2h.44a2 2 0 002-2v-.18a2 2 0 011-1.73l.43-.25a2 2 0 012 0l.15.08a2 2 0 002.73-.73l.22-.39a2 2 0 00-.73-2.73l-.15-.08a2 2 0 01-1-1.74v-.5a2 2 0 011-1.74l.15-.09a2 2 0 00.73-2.73l-.22-.38a2 2 0 00-2.73-.73l-.15.08a2 2 0 01-2 0l-.43-.25a2 2 0 01-1-1.73V4a2 2 0 00-2-2z"
+              stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.5"/>
           </svg>
         </RouterLink>
       </div>
     </div>
 
     <!-- Session / Notification Panel (220px, collapsible) -->
-    <div class="session-panel" :class="{ collapsed }">
+    <div class="session-panel" :class="{ collapsed: collapsed || forceCollapsed }">
       <!-- Session mode header -->
       <div class="panel-header" v-if="!notificationsOpen">
         <button class="new-session-btn" @click="emit('create')" :title="t('session.new')">
@@ -307,7 +310,16 @@ function sessionAgentLabel(session: Session): string {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
+  padding-bottom: 4px;
+}
+
+.rail-nav {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 0;
 }
 
 .rail-logo {
@@ -361,6 +373,24 @@ function sessionAgentLabel(session: Session): string {
 .rail-btn:hover {
   background: var(--sidebar-rail-hover-bg);
   color: var(--sidebar-rail-logo-fg);
+}
+
+.rail-btn.nav-active {
+  background: var(--sidebar-rail-hover-bg);
+  color: var(--sidebar-rail-logo-fg);
+  position: relative;
+}
+
+.rail-btn.nav-active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 20px;
+  background: var(--sidebar-rail-logo-fg);
+  border-radius: 0 2px 2px 0;
 }
 
 .rail-bottom {

@@ -22,7 +22,6 @@ import ContextInputModal from '@/components/ContextInputModal.vue'
 import DocumentSidebar from '@/components/documents/DocumentSidebar.vue'
 import DocumentEditor from '@/components/documents/DocumentEditor.vue'
 import DocumentAiIndicator from '@/components/documents/DocumentAiIndicator.vue'
-import DocumentStatusBar from '@/components/documents/DocumentStatusBar.vue'
 import DocumentAiSettingsPopover from '@/components/documents/DocumentAiSettingsPopover.vue'
 import { useArtifact } from '@/composables/useArtifact'
 import { useHeartbeat } from '@/composables/useHeartbeat'
@@ -349,11 +348,6 @@ async function handleInstallAction() {
         @delete="onDocDelete"
       />
       <div class="main-area doc-main">
-        <DocumentStatusBar
-          v-if="docAiStreaming"
-          :status-text="docAiStatusText"
-          @stop="onDocAiDiscard"
-        />
         <DocumentEditor
           ref="docEditorRef"
           :document="currentDoc"

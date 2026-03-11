@@ -254,6 +254,7 @@ defineExpose({ insertChunk, insertMarkdown, insertStreamingBlock, updateStreamin
 
 <template>
   <div class="doc-editor" v-if="document">
+    <!-- Title bar -->
     <div class="doc-editor__toolbar">
       <input
         class="doc-editor__title"
@@ -261,16 +262,18 @@ defineExpose({ insertChunk, insertMarkdown, insertStreamingBlock, updateStreamin
         placeholder="Untitled"
         @input="onTitleInput"
       />
-      <div class="doc-editor__actions">
-        <button @click="handleAiAction('continue')" :disabled="aiStreaming">续写</button>
-        <button @click="handleAiAction('optimize')" :disabled="aiStreaming">润色全文</button>
-        <button @click="handleAiAction('summarize')" :disabled="aiStreaming">总结</button>
-        <button @click="emit('aiSettings')" style="margin-left: 8px">⚙ AI 设置</button>
-        <span class="doc-editor__save-status">{{ saving ? '保存中…' : '已保存' }}</span>
+      <div class="doc-editor__save-indicator" :class="{ saving: saving }" :title="saving ? '保存中…' : '已保存'">
+        <span class="doc-editor__save-dot" />
       </div>
     </div>
 
-    <DocumentFormatToolbar :editor="editor" @insert-image="openImageFilePicker" />
+    <DocumentFormatToolbar
+      :editor="editor"
+      :ai-streaming="aiStreaming"
+      @insert-image="openImageFilePicker"
+      @ai-action="handleAiAction"
+      @ai-settings="emit('aiSettings')"
+    />
 
     <input
       ref="imageFileInput"
@@ -279,6 +282,9 @@ defineExpose({ insertChunk, insertMarkdown, insertStreamingBlock, updateStreamin
       style="display: none"
       @change="onImageFileSelected"
     />
+
+    <!-- Streaming progress bar -->
+    <div v-if="aiStreaming" class="doc-editor__progress" />
 
     <div ref="bubbleMenuRef" class="bubble-menu-wrapper">
       <DocumentBubbleMenu :ai-streaming="aiStreaming" @action="handleAiAction" />
@@ -298,44 +304,148 @@ defineExpose({ insertChunk, insertMarkdown, insertStreamingBlock, updateStreamin
     />
   </div>
   <div v-else class="doc-editor__empty">
-    <div class="doc-editor__empty-icon">📄</div>
-    <p>从左侧选择一个文档，或点击「＋」新建</p>
+    <svg class="doc-editor__empty-icon" width="48" height="48" viewBox="0 0 48 48" fill="none" stroke="#ccc" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="8" y="4" width="32" height="40" rx="4"/>
+      <path d="M16 14h16M16 20h16M16 26h10"/>
+    </svg>
+    <h3>选择文档开始写作</h3>
+    <p>从左侧选择一个文档，或点击 + 新建</p>
   </div>
 </template>
 
 <style scoped>
-.doc-editor { flex: 1; display: flex; flex-direction: column; overflow: hidden; background: var(--color-white); position: relative; }
+.doc-editor {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: #fff;
+  position: relative;
+}
+
+/* Title toolbar */
 .doc-editor__toolbar {
-  display: flex; align-items: center; gap: 8px;
-  padding: 8px 20px; border-bottom: var(--border); flex-shrink: 0;
-  background: var(--color-white);
+  display: flex;
+  align-items: center;
+  padding: 16px 48px 12px;
+  border-bottom: 1px solid #f0f0f0;
+  flex-shrink: 0;
+  background: #fff;
+  gap: 12px;
 }
+
 .doc-editor__title {
-  flex: 1; font-size: 15px; font-weight: 600;
-  border: none; outline: none; background: transparent; color: var(--color-gray-900);
+  flex: 1;
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+  color: #111;
+  border: none;
+  outline: none;
+  background: transparent;
   font-family: var(--font-ui);
+  line-height: 1.2;
 }
-.doc-editor__title::placeholder { color: var(--color-gray-400); font-weight: 400; }
-.doc-editor__actions { display: flex; align-items: center; gap: 4px; }
-.doc-editor__actions button {
-  padding: 4px 10px; font-size: 12px; font-family: var(--font-ui);
-  border: var(--border); border-radius: var(--radius-md);
-  background: var(--color-white); cursor: pointer; color: var(--color-gray-700);
-  white-space: nowrap;
+
+.doc-editor__title::placeholder {
+  color: #ccc;
+  font-weight: 400;
 }
-.doc-editor__actions button:hover:not(:disabled) { background: var(--color-gray-100); border-color: var(--color-gray-300); }
-.doc-editor__actions button:disabled { opacity: 0.4; cursor: default; }
-.doc-editor__save-status { font-size: 11px; color: var(--color-gray-400); margin-left: 4px; }
-.bubble-menu-wrapper { position: absolute; z-index: 100; visibility: hidden; opacity: 0; }
-.doc-editor__body { flex: 1; overflow-y: auto; padding: 32px 48px; }
+
+/* Save status dot */
+.doc-editor__save-indicator {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+}
+
+.doc-editor__save-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #d1d5db;
+  transition: background 300ms ease;
+}
+
+.doc-editor__save-indicator.saving .doc-editor__save-dot {
+  background: #f59e0b;
+  animation: savePulse 1s ease-in-out infinite;
+}
+
+@keyframes savePulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+/* Streaming progress bar */
+.doc-editor__progress {
+  height: 2px;
+  background: linear-gradient(90deg, #6366f1, #8b5cf6, #6366f1);
+  background-size: 200% 100%;
+  animation: progressSlide 1.5s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes progressSlide {
+  0% { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
+}
+
+.bubble-menu-wrapper {
+  position: absolute;
+  z-index: 100;
+  visibility: hidden;
+  opacity: 0;
+}
+
+.doc-editor__body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 32px 48px;
+}
+
+/* Empty state */
 .doc-editor__empty {
-  flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
-  color: var(--color-gray-400); font-size: 14px; gap: 8px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: #aaa;
 }
-.doc-editor__empty-icon { font-size: 32px; opacity: 0.4; }
+
+.doc-editor__empty-icon {
+  opacity: 0.6;
+  margin-bottom: 4px;
+}
+
+.doc-editor__empty h3 {
+  font-size: 16px;
+  font-weight: 600;
+  color: #888;
+  margin: 0;
+}
+
+.doc-editor__empty p {
+  font-size: 13px;
+  color: #bbb;
+  margin: 0;
+}
+
+/* Prose styles (global) */
 :global(.doc-editor__prose) {
-  outline: none; font-family: var(--font-ui); font-size: 15px; line-height: 1.75;
-  color: var(--color-gray-900); min-height: 400px; max-width: 680px; margin: 0 auto;
+  outline: none;
+  font-family: var(--font-ui);
+  font-size: 15px;
+  line-height: 1.75;
+  color: var(--color-gray-900);
+  min-height: 400px;
+  max-width: 680px;
+  margin: 0 auto;
 }
 :global(.doc-editor__prose p) { margin: 0 0 8px; }
 :global(.doc-editor__prose h1) { font-size: 26px; font-weight: 700; margin: 24px 0 8px; }
@@ -344,57 +454,95 @@ defineExpose({ insertChunk, insertMarkdown, insertStreamingBlock, updateStreamin
 :global(.doc-editor__prose ul, .doc-editor__prose ol) { padding-left: 20px; margin: 8px 0; }
 :global(.doc-editor__prose li) { margin: 2px 0; }
 :global(.doc-editor__prose code) {
-  background: var(--color-gray-100); padding: 1px 5px;
-  border-radius: 3px; font-family: var(--font-mono); font-size: 13px;
+  background: var(--color-gray-100);
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-family: var(--font-mono);
+  font-size: 13px;
 }
 :global(.doc-editor__prose pre) {
-  background: var(--color-gray-50); color: var(--color-gray-800);
+  background: var(--color-gray-50);
+  color: var(--color-gray-800);
   border: 1px solid var(--color-gray-200);
-  padding: 16px; border-radius: var(--radius-md); overflow-x: auto; margin: 12px 0;
-  font-family: var(--font-mono); font-size: 13px; line-height: 1.6;
+  padding: 16px;
+  border-radius: var(--radius-md);
+  overflow-x: auto;
+  margin: 12px 0;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.6;
 }
 :global(.doc-editor__prose pre code) {
-  background: transparent; color: inherit; padding: 0; font-size: inherit;
+  background: transparent;
+  color: inherit;
+  padding: 0;
+  font-size: inherit;
 }
 :global(.doc-editor__prose .code-block-wrapper) { margin: 12px 0; }
 :global(.doc-editor__prose blockquote) {
-  border-left: 3px solid var(--color-gray-300); padding-left: 12px;
-  color: var(--color-gray-500); margin: 8px 0;
+  border-left: 3px solid var(--color-gray-300);
+  padding-left: 12px;
+  color: var(--color-gray-500);
+  margin: 8px 0;
 }
 :global(.doc-editor__prose .is-editor-empty:first-child::before) {
-  content: attr(data-placeholder); color: var(--color-gray-400);
-  float: left; pointer-events: none; height: 0;
+  content: attr(data-placeholder);
+  color: var(--color-gray-400);
+  float: left;
+  pointer-events: none;
+  height: 0;
 }
 :global(.doc-editor__prose strong) { font-weight: 600; }
 :global(.doc-editor__prose hr) { border: none; border-top: var(--border); margin: 20px 0; }
 :global(.doc-editor__prose img) {
-  max-width: 100%; border-radius: var(--radius-md); margin: 8px 0; cursor: pointer;
+  max-width: 100%;
+  border-radius: var(--radius-md);
+  margin: 8px 0;
+  cursor: pointer;
   border: 2px solid transparent;
 }
 :global(.doc-editor__prose img.ProseMirror-selectednode) {
   border-color: var(--color-primary, #6366f1);
 }
 :global(.doc-link) {
-  color: #6366f1; text-decoration: underline; cursor: pointer;
+  color: #6366f1;
+  text-decoration: underline;
+  cursor: pointer;
 }
 :global(.doc-link:hover) { color: #4f46e5; }
 :global(.doc-editor__prose table) {
-  border-collapse: collapse; width: 100%; margin: 12px 0; font-size: 14px;
+  border-collapse: collapse;
+  width: 100%;
+  margin: 12px 0;
+  font-size: 14px;
 }
 :global(.doc-editor__prose th, .doc-editor__prose td) {
-  border: 1px solid var(--color-gray-200); padding: 8px 12px; min-width: 80px;
-  position: relative; vertical-align: top;
+  border: 1px solid var(--color-gray-200);
+  padding: 8px 12px;
+  min-width: 80px;
+  position: relative;
+  vertical-align: top;
 }
 :global(.doc-editor__prose th) {
-  background: var(--color-gray-50); font-weight: 600; text-align: left;
+  background: var(--color-gray-50);
+  font-weight: 600;
+  text-align: left;
 }
 :global(.doc-editor__prose .selectedCell:after) {
   background: rgba(99, 102, 241, 0.1);
-  content: ""; left: 0; right: 0; top: 0; bottom: 0;
-  pointer-events: none; position: absolute; z-index: 2;
+  content: "";
+  left: 0; right: 0; top: 0; bottom: 0;
+  pointer-events: none;
+  position: absolute;
+  z-index: 2;
 }
 :global(.doc-editor__prose .column-resize-handle) {
-  background-color: #6366f1; bottom: -2px; position: absolute; right: -2px;
-  pointer-events: none; top: 0; width: 4px;
+  background-color: #6366f1;
+  bottom: -2px;
+  position: absolute;
+  right: -2px;
+  pointer-events: none;
+  top: 0;
+  width: 4px;
 }
 </style>
