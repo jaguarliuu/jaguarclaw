@@ -146,7 +146,7 @@ watch(() => props.node.textContent, () => {
       </div>
 
       <!-- Code view -->
-      <pre v-if="showCode" class="mermaid-source"><NodeViewContent as="code" /></pre>
+      <pre v-show="showCode" class="mermaid-source"><NodeViewContent as="code" /></pre>
     </template>
 
     <!-- Normal code block -->
