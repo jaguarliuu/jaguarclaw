@@ -8,6 +8,7 @@ import Image from '@tiptap/extension-image'
 import Link from '@tiptap/extension-link'
 import { Table, TableRow, TableHeader, TableCell } from '@tiptap/extension-table'
 import { watch, onBeforeUnmount, onMounted, ref, nextTick } from 'vue'
+import { marked } from 'marked'
 import MermaidBlockView from './MermaidBlockView.vue'
 import type { Document } from '@/types'
 import DocumentBubbleMenu from './DocumentBubbleMenu.vue'
@@ -152,6 +153,12 @@ function insertChunk(text: string) {
   editor.value?.commands.insertContent(text)
 }
 
+function insertMarkdown(markdown: string) {
+  if (!editor.value || !markdown.trim()) return
+  const html = marked.parse(markdown) as string
+  editor.value.chain().focus().insertContent(html).run()
+}
+
 function openImageFilePicker() {
   imageFileInput.value?.click()
 }
@@ -167,7 +174,7 @@ function onImageFileSelected(e: Event) {
   ;(e.target as HTMLInputElement).value = ''
 }
 
-defineExpose({ insertChunk, openImageFilePicker })
+defineExpose({ insertChunk, insertMarkdown, openImageFilePicker })
 </script>
 
 <template>

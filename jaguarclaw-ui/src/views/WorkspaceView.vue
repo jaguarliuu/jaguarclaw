@@ -39,7 +39,8 @@ const isDocumentMode = computed(() => route.path.startsWith('/documents'))
 const docId = computed(() => route.params.id as string | undefined)
 
 const {
-  tree: docTree, currentDoc, saving: docSaving, aiStreaming: docAiStreaming, aiStatusText: docAiStatusText,
+  tree: docTree, currentDoc, saving: docSaving, aiStreaming: docAiStreaming,
+  aiStatusText: docAiStatusText, aiStreamContent: docAiStreamContent,
   loadTree, loadDocument, createDocument, scheduleSave, deleteDocument, aiAssist, stopAiStream,
   getConfig, setConfig,
 } = useDocuments()
@@ -75,12 +76,16 @@ async function onDocAiAction(action: string, selection?: string, userPrompt?: st
   if (!currentDoc.value) return
   showAiIndicator.value = true
   try {
-    await aiAssist(currentDoc.value.id, action as any, selection, (chunk) => {
-      docEditorRef.value?.insertChunk(chunk)
-    }, userPrompt)
+    await aiAssist(currentDoc.value.id, action as any, selection, undefined, userPrompt)
   } catch (e) { console.error('AI assist failed:', e); showAiIndicator.value = false }
 }
-function onDocAiKeep() { showAiIndicator.value = false; stopAiStream() }
+function onDocAiKeep() {
+  showAiIndicator.value = false
+  if (docAiStreamContent.value) {
+    docEditorRef.value?.insertMarkdown(docAiStreamContent.value)
+  }
+  stopAiStream()
+}
 async function onDocAiDiscard() {
   showAiIndicator.value = false; stopAiStream()
   if (currentDoc.value) await loadDocument(currentDoc.value.id)
@@ -360,6 +365,7 @@ async function handleInstallAction() {
         <DocumentAiIndicator
           v-if="showAiIndicator"
           :streaming="docAiStreaming"
+          :content="docAiStreamContent"
           @keep="onDocAiKeep"
           @discard="onDocAiDiscard"
         />

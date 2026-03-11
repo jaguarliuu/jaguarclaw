@@ -12,12 +12,13 @@ const props = defineProps<{ id?: string }>()
 const router = useRouter()
 
 const {
-  tree, currentDoc, saving, aiStreaming,
+  tree, currentDoc, saving, aiStreaming, aiStreamContent,
   loadTree, loadDocument, createDocument, scheduleSave, deleteDocument,
   aiAssist, stopAiStream,
 } = useDocuments()
 
 const showAiIndicator = ref(false)
+const editorRef = ref<InstanceType<typeof DocumentEditor> | null>(null)
 // Cast readonly tree from composable to mutable for child component prop
 const mutableTree = computed(() => tree.value as DocumentNode[])
 
@@ -66,6 +67,7 @@ async function onAiAction(action: string, selection?: string) {
 
 function onAiKeep() {
   showAiIndicator.value = false
+  if (aiStreamContent.value) editorRef.value?.insertMarkdown(aiStreamContent.value)
   stopAiStream()
 }
 
@@ -88,6 +90,7 @@ async function onAiDiscard() {
     />
     <div class="document-view__main">
       <DocumentEditor
+        ref="editorRef"
         :document="currentDoc"
         :saving="saving"
         :ai-streaming="aiStreaming"
@@ -97,6 +100,7 @@ async function onAiDiscard() {
       <DocumentAiIndicator
         v-if="showAiIndicator"
         :streaming="aiStreaming"
+        :content="aiStreamContent"
         @keep="onAiKeep"
         @discard="onAiDiscard"
       />
