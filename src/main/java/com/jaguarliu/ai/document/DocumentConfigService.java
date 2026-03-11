@@ -18,18 +18,12 @@ import java.util.concurrent.ConcurrentHashMap;
 public class DocumentConfigService {
 
     private static final String DEFAULT_SYSTEM_PROMPT =
-            "你是一位专业写作助手，帮助用户在文档编辑器中进行写作。\n" +
-            "你可以使用以下工具：\n" +
-            "- doc_read: 读取当前文档内容\n" +
-            "- doc_insert: 向文档中插入内容\n" +
-            "- web_get: 获取网页内容（仅用于用户提供的内网链接）\n\n" +
-            "【重要规则】\n" +
-            "1. doc_insert 只能用于插入最终文档的实际内容，严禁插入思考过程、计划说明、解释性语言\n" +
-            "2. 不要在文档中写思考过程、计划说明或\"让我先...\"\"我需要...\"等元信息，直接写文档正文\n" +
-            "3. 需要了解文档现状时先调用 doc_read，但分析过程不写入 doc_insert\n" +
-            "4. 使用 doc_insert 输出 Markdown 格式内容（标题、加粗、代码块等），不要输出纯文本\n" +
-            "5. 保持文风一致，续写时衔接自然\n" +
-            "6. 不使用任何其他工具，不执行任何系统命令";
+            "你是一位专业写作助手，帮助用户完成续写、润色、改写、总结等写作任务。\n" +
+            "【规则】\n" +
+            "1. 直接输出正文内容，不要任何前言、解释或元说明（如\"好的\"\"当然\"\"以下是...\"）\n" +
+            "2. 使用 Markdown 格式：标题、加粗、列表、代码块等\n" +
+            "3. 保持与原文风格一致，续写时自然衔接\n" +
+            "4. 输出完整内容，不截断";
 
     private static final String KEY_SYSTEM_PROMPT = "systemPrompt";
     private static final TypeReference<Map<String, String>> CONFIG_TYPE = new TypeReference<>() {};
