@@ -9,7 +9,8 @@ import { useMcpServers } from '@/composables/useMcpServers'
 import { useModelSelector } from '@/composables/useModelSelector'
 import { useI18n } from '@/i18n'
 import { useToast } from '@/composables/useToast'
-import type { ContextType } from '@/types'
+import { useDocuments } from '@/composables/useDocuments'
+import type { ContextType, DocumentNode } from '@/types'
 import SessionSidebar from '@/components/SessionSidebar.vue'
 import MessageList from '@/components/MessageList.vue'
 import MessageInput from '@/components/MessageInput.vue'
@@ -18,6 +19,10 @@ import ArtifactPanel from '@/components/ArtifactPanel.vue'
 import HeartbeatDetailPanel from '@/components/HeartbeatDetailPanel.vue'
 import RunOutcomeBanner from '@/components/RunOutcomeBanner.vue'
 import ContextInputModal from '@/components/ContextInputModal.vue'
+import DocumentSidebar from '@/components/documents/DocumentSidebar.vue'
+import DocumentEditor from '@/components/documents/DocumentEditor.vue'
+import DocumentAiIndicator from '@/components/documents/DocumentAiIndicator.vue'
+import DocumentStatusBar from '@/components/documents/DocumentStatusBar.vue'
 import { useArtifact } from '@/composables/useArtifact'
 import { useHeartbeat } from '@/composables/useHeartbeat'
 
@@ -27,6 +32,56 @@ const router = useRouter()
 const route = useRoute()
 const { artifact } = useArtifact()
 const { selectedNotification, selectNotification } = useHeartbeat()
+
+// ─── Document mode ───────────────────────────────────────────────────────────
+const isDocumentMode = computed(() => route.path.startsWith('/documents'))
+const docId = computed(() => route.params.id as string | undefined)
+
+const {
+  tree: docTree, currentDoc, saving: docSaving, aiStreaming: docAiStreaming, aiStatusText: docAiStatusText,
+  loadTree, loadDocument, createDocument, scheduleSave, deleteDocument, aiAssist, stopAiStream,
+} = useDocuments()
+
+const showAiIndicator = ref(false)
+const docEditorRef = ref<InstanceType<typeof DocumentEditor> | null>(null)
+const mutableDocTree = computed(() => docTree.value as DocumentNode[])
+
+watch(isDocumentMode, async (on) => {
+  if (on) await loadTree()
+}, { immediate: true })
+
+watch(docId, async (id) => {
+  if (isDocumentMode.value && id) await loadDocument(id)
+})
+
+async function onDocSelect(id: string) { router.push(`/documents/${id}`) }
+async function onDocCreate(parentId?: string) {
+  const doc = await createDocument('Untitled', parentId)
+  router.push(`/documents/${doc.id}`)
+}
+async function onDocDelete(id: string) {
+  await deleteDocument(id)
+  if (docId.value === id) router.push('/documents')
+}
+function onDocChange(title: string, content: string, wordCount: number) {
+  if (!currentDoc.value) return
+  scheduleSave(currentDoc.value.id, title, content, wordCount)
+}
+async function onDocAiAction(action: string, selection?: string) {
+  if (!currentDoc.value) return
+  showAiIndicator.value = true
+  try {
+    await aiAssist(currentDoc.value.id, action as any, selection, (chunk) => {
+      docEditorRef.value?.insertChunk(chunk)
+    })
+  } catch (e) { console.error('AI assist failed:', e); showAiIndicator.value = false }
+}
+function onDocAiKeep() { showAiIndicator.value = false; stopAiStream() }
+async function onDocAiDiscard() {
+  showAiIndicator.value = false; stopAiStream()
+  if (currentDoc.value) await loadDocument(currentDoc.value.id)
+}
+// ─────────────────────────────────────────────────────────────────────────────
 const {
   contexts: attachedContexts,
   uploadFile,
@@ -252,12 +307,47 @@ async function handleInstallAction() {
       :sessions="filteredSessions"
       :current-id="currentSessionId"
       :agents="agents"
+      :force-collapsed="isDocumentMode"
       @select="handleSelectSession"
       @create="handleCreateSession"
       @delete="handleDeleteSession"
     />
 
+    <!-- ─── Document mode layout ─── -->
+    <template v-if="isDocumentMode">
+      <DocumentSidebar
+        :tree="mutableDocTree"
+        :active-id="docId ?? null"
+        @select="onDocSelect"
+        @create="onDocCreate"
+        @delete="onDocDelete"
+      />
+      <div class="main-area doc-main">
+        <DocumentStatusBar
+          v-if="docAiStreaming"
+          :status-text="docAiStatusText"
+          @stop="onDocAiDiscard"
+        />
+        <DocumentEditor
+          ref="docEditorRef"
+          :document="currentDoc"
+          :saving="docSaving"
+          :ai-streaming="docAiStreaming"
+          @change="onDocChange"
+          @ai-action="onDocAiAction"
+        />
+        <DocumentAiIndicator
+          v-if="showAiIndicator"
+          :streaming="docAiStreaming"
+          @keep="onDocAiKeep"
+          @discard="onDocAiDiscard"
+        />
+      </div>
+    </template>
+
+    <!-- ─── Chat mode layout ─── -->
     <main
+      v-else
       class="main-area"
       @click="selectedNotification && !artifact ? selectNotification(null) : undefined"
     >
@@ -303,7 +393,7 @@ async function handleInstallAction() {
       />
     </main>
 
-    <!-- Context input modal -->
+
     <ContextInputModal
       :type="currentContextType"
       :show="showContextModal"
@@ -347,6 +437,11 @@ async function handleInstallAction() {
   min-width: 0;
   background: var(--content-bg);
   transition: all var(--duration-normal) var(--ease-out);
+}
+
+/* Document mode: editor area stacks vertically */
+.doc-main {
+  position: relative;
 }
 
 /* Panel slide transition */

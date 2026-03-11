@@ -9,11 +9,13 @@ const loading = ref(false)
 const saving = ref(false)
 const aiStreaming = ref(false)
 const aiStreamContent = ref('')
+const aiStatusText = ref('')
 const error = ref<string | null>(null)
 
 let saveTimer: ReturnType<typeof setTimeout> | null = null
 let aiUnsubDelta: (() => void) | null = null
 let aiUnsubEnd: (() => void) | null = null
+let aiUnsubInsert: (() => void) | null = null
 
 export function useDocuments() {
   const { request, onEvent } = useWebSocket()
@@ -80,21 +82,35 @@ export function useDocuments() {
   async function aiAssist(
     docId: string,
     action: 'continue' | 'optimize' | 'rewrite' | 'summarize' | 'translate',
-    selection?: string
+    selection?: string,
+    onChunk?: (chunk: string) => void
   ): Promise<string> {
     aiStreaming.value = true
     aiStreamContent.value = ''
+    aiStatusText.value = ''
     aiUnsubDelta?.()
     aiUnsubEnd?.()
+    aiUnsubInsert?.()
 
-    const result = await request<{ runId: string }>('document.ai.assist', { docId, action, selection })
-    const streamRunId = result.runId
+    const result = await request<{ streamRunId: string }>('document.ai.assist', { docId, action, selection })
+    const streamRunId = result.streamRunId
 
     aiUnsubDelta = onEvent('assistant.delta', (event: RpcEvent) => {
       if (event.runId === streamRunId) {
         if (event.payload && typeof event.payload === 'object' && 'content' in event.payload) {
-          aiStreamContent.value += (event.payload as { content: string }).content
+          const chunk = (event.payload as { content: string }).content
+          aiStreamContent.value += chunk
+          onChunk?.(chunk)
+          aiStatusText.value = chunk.slice(0, 80)
         }
+      }
+    })
+
+    aiUnsubInsert = onEvent('doc.content.insert', (event: RpcEvent) => {
+      if (event.runId === streamRunId) {
+        const chunk = (event.data as { content: string })?.content
+          ?? (event.payload as { content: string })?.content
+        if (chunk) onChunk?.(chunk)
       }
     })
 
@@ -103,6 +119,8 @@ export function useDocuments() {
         aiStreaming.value = false
         aiUnsubDelta?.()
         aiUnsubEnd?.()
+        aiUnsubInsert?.()
+        aiUnsubInsert = null
       }
     })
 
@@ -112,10 +130,13 @@ export function useDocuments() {
   function stopAiStream() {
     aiStreaming.value = false
     aiStreamContent.value = ''
+    aiStatusText.value = ''
     aiUnsubDelta?.()
     aiUnsubEnd?.()
+    aiUnsubInsert?.()
     aiUnsubDelta = null
     aiUnsubEnd = null
+    aiUnsubInsert = null
   }
 
   return {
@@ -125,6 +146,7 @@ export function useDocuments() {
     saving: readonly(saving),
     aiStreaming: readonly(aiStreaming),
     aiStreamContent: readonly(aiStreamContent),
+    aiStatusText: readonly(aiStatusText),
     error: readonly(error),
     loadTree,
     loadDocument,
