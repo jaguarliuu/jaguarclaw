@@ -23,6 +23,15 @@ import java.util.concurrent.TimeoutException;
 @RequiredArgsConstructor
 public class SubagentBarrier {
 
+    /** 单条子代理结果最大字符数（~500 tokens） */
+    private static final int MAX_RESULT_CHARS = 2000;
+
+    /**
+     * 注入 LLM 上下文的子代理汇总总字符上限（~2000 tokens），防止撑爆 context window。
+     * 超出时截断，并附说明。
+     */
+    private static final int MAX_SUMMARY_CHARS = 8000;
+
     private final SubagentCompletionTracker subagentCompletionTracker;
     private final CancellationManager cancellationManager;
 
@@ -115,8 +124,8 @@ public class SubagentBarrier {
             sb.append("Status: ").append(r.status()).append("\n");
 
             if (r.isSuccess() && r.result() != null) {
-                String resultText = r.result().length() > 2000
-                        ? r.result().substring(0, 1997) + "..."
+                String resultText = r.result().length() > MAX_RESULT_CHARS
+                        ? r.result().substring(0, MAX_RESULT_CHARS - 3) + "..."
                         : r.result();
                 sb.append("Result:\n").append(resultText).append("\n");
             }
@@ -126,6 +135,14 @@ public class SubagentBarrier {
             }
 
             sb.append("\n");
+
+            // 超出总字符限制：截断剩余结果并附说明
+            if (sb.length() > MAX_SUMMARY_CHARS && i < results.size() - 1) {
+                int remaining = results.size() - i - 1;
+                sb.append("[").append(remaining).append(" more subagent result(s) omitted: summary too large]\n\n");
+                log.warn("Subagent summary truncated: total chars={}, omitted={} results", sb.length(), remaining);
+                break;
+            }
         }
 
         sb.append("Please summarize the above subagent results for the user. ");

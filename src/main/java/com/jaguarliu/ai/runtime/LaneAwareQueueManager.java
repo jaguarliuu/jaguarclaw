@@ -71,6 +71,11 @@ public class LaneAwareQueueManager {
     private final int subagentMaxConcurrency;
 
     /**
+     * 取消管理器（用于在任务出队前跳过已取消的 run）
+     */
+    private final CancellationManager cancellationManager;
+
+    /**
      * 共享线程池（用于执行任务）
      */
     private final ExecutorService executor = Executors.newCachedThreadPool(r -> {
@@ -79,12 +84,13 @@ public class LaneAwareQueueManager {
         return t;
     });
 
-    public LaneAwareQueueManager(AgentRegistry agentRegistry) {
+    public LaneAwareQueueManager(AgentRegistry agentRegistry, CancellationManager cancellationManager) {
         AgentsProperties.LaneConfig laneConfig = agentRegistry.getLaneConfig();
         this.mainMaxConcurrency = laneConfig.getMainMaxConcurrency();
         this.subagentMaxConcurrency = laneConfig.getSubagentMaxConcurrency();
         this.mainSemaphore = new Semaphore(mainMaxConcurrency);
         this.subagentSemaphore = new Semaphore(subagentMaxConcurrency);
+        this.cancellationManager = cancellationManager;
 
         log.info("LaneAwareQueueManager initialized: mainMax={}, subagentMax={}",
                 mainMaxConcurrency, subagentMaxConcurrency);
@@ -216,6 +222,12 @@ public class LaneAwareQueueManager {
             while (true) {
                 try {
                     Task<?> task = queue.take();
+                    // 跳过已取消的排队任务，避免启动一个即将立即停止的 run
+                    if (cancellationManager.isCancelled(task.runId)) {
+                        log.info("Skipping cancelled queued run: sessionId={}, runId={}", sessionId, task.runId);
+                        task.emitter.success(null);
+                        continue;
+                    }
                     executeWithLaneLimit(task);
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();

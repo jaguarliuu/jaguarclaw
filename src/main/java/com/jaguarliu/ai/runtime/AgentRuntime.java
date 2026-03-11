@@ -118,6 +118,8 @@ public class AgentRuntime {
                 // Wait for any pending subagents before the final summarization step,
                 // so the LLM can incorporate their results into the response.
                 waitForPendingSubagentsIntoMessages(pendingSubRunIds, context, messages);
+                // 注入子代理结果可能使 context 变大，补做一次 flush 检查
+                flushHook.checkAndFlush(context.getRunId(), messages);
                 StepResult finalResult = executeSingleStep(context, messages);
                 return finalResult.content();
             }
