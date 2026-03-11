@@ -915,6 +915,11 @@ function createMainWindow(port) {
   // Hide the default menu bar
   mainWindow.setMenuBarVisibility(false);
 
+  // Prevent the HTML <title> tag from overriding the window title set by app identity
+  mainWindow.on('page-title-updated', (event) => {
+    event.preventDefault();
+  });
+
   mainWindow.loadURL(`http://localhost:${port}`);
 
   mainWindow.on('closed', () => {
