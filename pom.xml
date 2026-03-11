@@ -137,6 +137,13 @@
             <version>2.5.1</version>
         </dependency>
 
+        <!-- Jsoup (HTML fetching and parsing for HttpGetTool) -->
+        <dependency>
+            <groupId>org.jsoup</groupId>
+            <artifactId>jsoup</artifactId>
+            <version>1.17.2</version>
+        </dependency>
+
         <!-- Test dependencies -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
