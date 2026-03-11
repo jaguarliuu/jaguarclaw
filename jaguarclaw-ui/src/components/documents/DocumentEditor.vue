@@ -1,12 +1,14 @@
 <script setup lang="ts">
-import { useEditor, EditorContent } from '@tiptap/vue-3'
+import { useEditor, EditorContent, VueNodeViewRenderer } from '@tiptap/vue-3'
 import { BubbleMenuPlugin } from '@tiptap/extension-bubble-menu'
 import StarterKit from '@tiptap/starter-kit'
+import CodeBlock from '@tiptap/extension-code-block'
 import Placeholder from '@tiptap/extension-placeholder'
 import Image from '@tiptap/extension-image'
 import Link from '@tiptap/extension-link'
 import { Table, TableRow, TableHeader, TableCell } from '@tiptap/extension-table'
 import { watch, onBeforeUnmount, onMounted, ref, nextTick } from 'vue'
+import MermaidBlockView from './MermaidBlockView.vue'
 import type { Document } from '@/types'
 import DocumentBubbleMenu from './DocumentBubbleMenu.vue'
 import DocumentFormatToolbar from './DocumentFormatToolbar.vue'
@@ -27,6 +29,7 @@ const emit = defineEmits<{
 
 const titleValue = ref(props.document?.title ?? '')
 const bubbleMenuRef = ref<HTMLElement | null>(null)
+const imageFileInput = ref<HTMLInputElement | null>(null)
 
 const aiPromptVisible = ref(false)
 const aiPromptAction = ref('')
@@ -34,9 +37,16 @@ const aiPromptX = ref(0)
 const aiPromptY = ref(0)
 const aiPromptSelection = ref<string | undefined>(undefined)
 
+const MermaidCodeBlock = CodeBlock.extend({
+  addNodeView() {
+    return VueNodeViewRenderer(MermaidBlockView as any)
+  }
+})
+
 const editor = useEditor({
   extensions: [
-    StarterKit,
+    StarterKit.configure({ codeBlock: false }),
+    MermaidCodeBlock,
     Placeholder.configure({ placeholder: '开始输入…' }),
     createSlashExtension((action) => {
       emit('aiAction', action)
@@ -50,6 +60,19 @@ const editor = useEditor({
   ],
   editorProps: {
     attributes: { class: 'doc-editor__prose' },
+    handlePaste(_, event) {
+      const items = Array.from(event.clipboardData?.items ?? [])
+      const imageItem = items.find(item => item.type.startsWith('image/'))
+      if (!imageItem) return false
+      const file = imageItem.getAsFile()
+      if (!file) return false
+      const reader = new FileReader()
+      reader.onload = () => {
+        editor.value?.chain().focus().setImage({ src: reader.result as string }).run()
+      }
+      reader.readAsDataURL(file)
+      return true
+    },
   },
   onUpdate({ editor }) {
     if (!props.document) return
@@ -129,7 +152,22 @@ function insertChunk(text: string) {
   editor.value?.commands.insertContent(text)
 }
 
-defineExpose({ insertChunk })
+function openImageFilePicker() {
+  imageFileInput.value?.click()
+}
+
+function onImageFileSelected(e: Event) {
+  const file = (e.target as HTMLInputElement).files?.[0]
+  if (!file || !editor.value) return
+  const reader = new FileReader()
+  reader.onload = () => {
+    editor.value?.chain().focus().setImage({ src: reader.result as string }).run()
+  }
+  reader.readAsDataURL(file)
+  ;(e.target as HTMLInputElement).value = ''
+}
+
+defineExpose({ insertChunk, openImageFilePicker })
 </script>
 
 <template>
@@ -150,7 +188,15 @@ defineExpose({ insertChunk })
       </div>
     </div>
 
-    <DocumentFormatToolbar :editor="editor" />
+    <DocumentFormatToolbar :editor="editor" @insert-image="openImageFilePicker" />
+
+    <input
+      ref="imageFileInput"
+      type="file"
+      accept="image/*"
+      style="display: none"
+      @change="onImageFileSelected"
+    />
 
     <div ref="bubbleMenuRef" class="bubble-menu-wrapper">
       <DocumentBubbleMenu :ai-streaming="aiStreaming" @action="handleAiAction" />
@@ -228,9 +274,7 @@ defineExpose({ insertChunk })
 :global(.doc-editor__prose pre code) {
   background: transparent; color: inherit; padding: 0; font-size: inherit;
 }
-:global(.doc-editor__prose pre[data-language="mermaid"]) {
-  background: #f0f4ff; border-color: #c7d2fe;
-}
+:global(.doc-editor__prose .code-block-wrapper) { margin: 12px 0; }
 :global(.doc-editor__prose blockquote) {
   border-left: 3px solid var(--color-gray-300); padding-left: 12px;
   color: var(--color-gray-500); margin: 8px 0;

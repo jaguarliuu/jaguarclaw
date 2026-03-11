@@ -3,13 +3,7 @@
 import type { Editor } from '@tiptap/vue-3'
 
 const props = defineProps<{ editor: Editor | undefined }>()
-
-function insertImage() {
-  const url = window.prompt('输入图片 URL：')
-  if (url && props.editor) {
-    props.editor.chain().focus().setImage({ src: url }).run()
-  }
-}
+const emit = defineEmits<{ insertImage: [] }>()
 
 function toggleLink() {
   if (!props.editor) return
@@ -26,82 +20,67 @@ function toggleLink() {
 
 <template>
   <div v-if="editor" class="format-toolbar">
-    <button
-      :class="{ active: editor.isActive('bold') }"
-      title="Bold (Ctrl+B)"
-      @click="editor?.chain().focus().toggleBold().run()"
-    >B</button>
-    <button
-      :class="{ active: editor.isActive('italic') }"
-      title="Italic (Ctrl+I)"
-      @click="editor?.chain().focus().toggleItalic().run()"
-    ><em>I</em></button>
-    <button
-      :class="{ active: editor.isActive('strike') }"
-      title="Strikethrough"
-      @click="editor?.chain().focus().toggleStrike().run()"
-    ><s>S</s></button>
+    <!-- Text formatting -->
+    <button :class="{ active: editor.isActive('bold') }" title="Bold (Ctrl+B)"
+      @click="editor?.chain().focus().toggleBold().run()">B</button>
+    <button :class="{ active: editor.isActive('italic') }" title="Italic (Ctrl+I)"
+      @click="editor?.chain().focus().toggleItalic().run()"><em>I</em></button>
+    <button :class="{ active: editor.isActive('strike') }" title="Strikethrough"
+      @click="editor?.chain().focus().toggleStrike().run()"><s>S</s></button>
 
     <div class="format-toolbar__sep" />
 
-    <button
-      :class="{ active: editor.isActive('heading', { level: 1 }) }"
-      title="Heading 1"
-      @click="editor?.chain().focus().toggleHeading({ level: 1 }).run()"
-    >H1</button>
-    <button
-      :class="{ active: editor.isActive('heading', { level: 2 }) }"
-      title="Heading 2"
-      @click="editor?.chain().focus().toggleHeading({ level: 2 }).run()"
-    >H2</button>
-    <button
-      :class="{ active: editor.isActive('heading', { level: 3 }) }"
-      title="Heading 3"
-      @click="editor?.chain().focus().toggleHeading({ level: 3 }).run()"
-    >H3</button>
+    <!-- Headings -->
+    <button :class="{ active: editor.isActive('heading', { level: 1 }) }" title="Heading 1"
+      @click="editor?.chain().focus().toggleHeading({ level: 1 }).run()">H1</button>
+    <button :class="{ active: editor.isActive('heading', { level: 2 }) }" title="Heading 2"
+      @click="editor?.chain().focus().toggleHeading({ level: 2 }).run()">H2</button>
+    <button :class="{ active: editor.isActive('heading', { level: 3 }) }" title="Heading 3"
+      @click="editor?.chain().focus().toggleHeading({ level: 3 }).run()">H3</button>
 
     <div class="format-toolbar__sep" />
 
-    <button
-      :class="{ active: editor.isActive('bulletList') }"
-      title="Bullet list"
-      @click="editor?.chain().focus().toggleBulletList().run()"
-    >• List</button>
-    <button
-      :class="{ active: editor.isActive('orderedList') }"
-      title="Numbered list"
-      @click="editor?.chain().focus().toggleOrderedList().run()"
-    >1. List</button>
+    <!-- Lists -->
+    <button :class="{ active: editor.isActive('bulletList') }" title="Bullet list"
+      @click="editor?.chain().focus().toggleBulletList().run()">• List</button>
+    <button :class="{ active: editor.isActive('orderedList') }" title="Numbered list"
+      @click="editor?.chain().focus().toggleOrderedList().run()">1. List</button>
 
     <div class="format-toolbar__sep" />
 
-    <button
-      :class="{ active: editor.isActive('codeBlock') }"
-      title="Code block"
-      @click="editor?.chain().focus().toggleCodeBlock().run()"
-    >&lt;/&gt;</button>
-    <button
-      :class="{ active: editor.isActive('blockquote') }"
-      title="Blockquote"
-      @click="editor?.chain().focus().toggleBlockquote().run()"
-    >"</button>
-    <button
-      title="Horizontal rule"
-      @click="editor?.chain().focus().setHorizontalRule().run()"
-    >—</button>
-    <button
-      title="Insert Mermaid diagram"
-      @click="editor?.chain().focus().insertContent({ type: 'codeBlock', attrs: { language: 'mermaid' }, content: [{ type: 'text', text: 'graph TD\n  A --> B' }] }).run()"
-    >⬡ Mermaid</button>
+    <!-- Blocks -->
+    <button :class="{ active: editor.isActive('codeBlock') }" title="Code block"
+      @click="editor?.chain().focus().toggleCodeBlock().run()">&lt;/&gt;</button>
+    <button :class="{ active: editor.isActive('blockquote') }" title="Blockquote"
+      @click="editor?.chain().focus().toggleBlockquote().run()">"</button>
+    <button title="Horizontal rule"
+      @click="editor?.chain().focus().setHorizontalRule().run()">—</button>
+    <button title="Insert Mermaid diagram"
+      @click="editor?.chain().focus().insertContent({ type: 'codeBlock', attrs: { language: 'mermaid' }, content: [{ type: 'text', text: 'graph TD\n  A --> B' }] }).run()">⬡ Mermaid</button>
 
     <div class="format-toolbar__sep" />
 
-    <button title="Insert Image" @click="insertImage">🖼</button>
-    <button :class="{ active: editor.isActive('link') }" title="Link" @click="toggleLink">🔗</button>
+    <!-- Media & links -->
+    <button title="Insert image (or paste/drop)" @click="emit('insertImage')">🖼 图片</button>
+    <button :class="{ active: editor.isActive('link') }" title="Link" @click="toggleLink">🔗 链接</button>
 
     <div class="format-toolbar__sep" />
 
-    <button title="Insert Table" @click="editor?.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()">⊞ Table</button>
+    <!-- Table insert -->
+    <button title="Insert Table"
+      @click="editor?.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()">⊞ 表格</button>
+
+    <!-- Table operations — only shown when cursor is inside a table -->
+    <template v-if="editor.isActive('table')">
+      <div class="format-toolbar__sep" />
+      <button title="Add column before" @click="editor?.chain().focus().addColumnBefore().run()">←列</button>
+      <button title="Add column after" @click="editor?.chain().focus().addColumnAfter().run()">列→</button>
+      <button title="Delete column" @click="editor?.chain().focus().deleteColumn().run()">删列</button>
+      <button title="Add row above" @click="editor?.chain().focus().addRowBefore().run()">↑行</button>
+      <button title="Add row below" @click="editor?.chain().focus().addRowAfter().run()">行↓</button>
+      <button title="Delete row" @click="editor?.chain().focus().deleteRow().run()">删行</button>
+      <button title="Delete table" class="danger" @click="editor?.chain().focus().deleteTable().run()">🗑</button>
+    </template>
   </div>
 </template>
 
@@ -137,6 +116,11 @@ function toggleLink() {
   background: var(--color-gray-200);
   color: var(--color-gray-900);
   font-weight: 600;
+}
+.format-toolbar button.danger:hover {
+  background: #fff5f5;
+  border-color: #fed7d7;
+  color: #c53030;
 }
 .format-toolbar__sep {
   width: 1px;
