@@ -23,6 +23,7 @@ public class AgentProfileBootstrapInitializer implements ApplicationRunner {
     @Override
     public void run(ApplicationArguments args) {
         agentProfileService.ensureDefaultMainAgentExists();
+        agentProfileService.ensureDocumentWriterAgentExists();
 
         // 迁移历史 workspace 路径问题（双层嵌套 / 错误根目录）
         agentProfileService.migrateLegacyWorkspacePaths();

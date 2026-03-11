@@ -93,6 +93,34 @@ public class AgentProfileService {
     }
 
     @Transactional
+    public void ensureDocumentWriterAgentExists() {
+        if (repository.existsById("document-writer")) {
+            return;
+        }
+
+        String workspacePath = normalizeWorkspacePath("document-writer", null);
+        ensureWorkspaceDirectories(workspacePath);
+
+        AgentProfileEntity documentWriterAgent = AgentProfileEntity.builder()
+                .id("document-writer")
+                .name("document-writer")
+                .displayName("文档写作助手")
+                .workspacePath(workspacePath)
+                .enabled(true)
+                .isDefault(false)
+                .allowedTools("[\"doc_read\",\"doc_insert\",\"web_get\",\"use_skill\"]")
+                .excludedTools("[]")
+                .build();
+
+        try {
+            repository.save(documentWriterAgent);
+            log.info("Bootstrapped document-writer agent profile: workspace={}", workspacePath);
+        } catch (DataIntegrityViolationException ex) {
+            log.debug("Document-writer agent bootstrap skipped due to concurrent initialization", ex);
+        }
+    }
+
+    @Transactional
     public AgentProfileEntity create(CreateAgentProfileRequest request) {
         validateCreateRequest(request);
 
