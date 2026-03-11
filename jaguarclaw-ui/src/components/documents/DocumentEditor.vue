@@ -65,7 +65,7 @@ const editor = useEditor({
     StreamingBlock,
     Placeholder.configure({ placeholder: '开始输入…' }),
     createSlashExtension((action) => {
-      emit('aiAction', action)
+      handleAiAction(action)
     }),
     Image.configure({ allowBase64: true }),
     Link.configure({ openOnClick: false, HTMLAttributes: { class: 'doc-link' } }),

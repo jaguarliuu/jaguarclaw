@@ -14,7 +14,6 @@ const rendered = computed(() => {
 
 <template>
   <NodeViewWrapper class="streaming-block" contenteditable="false">
-    <span class="streaming-block__sparkle">✦</span>
     <div class="streaming-block__content markdown-body" v-html="rendered" />
     <span class="streaming-cursor">▋</span>
   </NodeViewWrapper>
@@ -23,42 +22,15 @@ const rendered = computed(() => {
 <style scoped>
 .streaming-block {
   position: relative;
-  padding: 12px 16px 12px 20px;
-  margin: 8px 0;
-  border-radius: 0 var(--radius-md) var(--radius-md) 0;
-  background: linear-gradient(to right, #fafafe, #ffffff);
+  padding: 2px 0;
+  margin: 0;
   cursor: default;
   user-select: none;
-  overflow: hidden;
-}
-
-/* Gradient left accent */
-.streaming-block::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 3px;
-  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
-  border-radius: 2px 0 0 2px;
-}
-
-/* AI sparkle badge */
-.streaming-block__sparkle {
-  position: absolute;
-  top: 8px;
-  right: 10px;
-  font-size: 10px;
-  color: #a5b4fc;
-  line-height: 1;
-  user-select: none;
-  pointer-events: none;
 }
 
 .streaming-cursor {
   display: inline-block;
-  color: #818cf8;
+  color: var(--color-gray-400, #aaa);
   animation: blink 0.9s step-end infinite;
   font-size: 14px;
   margin-left: 1px;
