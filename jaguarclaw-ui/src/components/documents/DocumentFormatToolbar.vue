@@ -2,7 +2,26 @@
 <script setup lang="ts">
 import type { Editor } from '@tiptap/vue-3'
 
-defineProps<{ editor: Editor | undefined }>()
+const props = defineProps<{ editor: Editor | undefined }>()
+
+function insertImage() {
+  const url = window.prompt('输入图片 URL：')
+  if (url && props.editor) {
+    props.editor.chain().focus().setImage({ src: url }).run()
+  }
+}
+
+function toggleLink() {
+  if (!props.editor) return
+  if (props.editor.isActive('link')) {
+    props.editor.chain().focus().unsetLink().run()
+    return
+  }
+  const url = window.prompt('输入链接 URL：')
+  if (url) {
+    props.editor.chain().focus().setLink({ href: url }).run()
+  }
+}
 </script>
 
 <template>
@@ -74,6 +93,15 @@ defineProps<{ editor: Editor | undefined }>()
       title="Insert Mermaid diagram"
       @click="editor?.chain().focus().insertContent({ type: 'codeBlock', attrs: { language: 'mermaid' }, content: [{ type: 'text', text: 'graph TD\n  A --> B' }] }).run()"
     >⬡ Mermaid</button>
+
+    <div class="format-toolbar__sep" />
+
+    <button title="Insert Image" @click="insertImage">🖼</button>
+    <button :class="{ active: editor.isActive('link') }" title="Link" @click="toggleLink">🔗</button>
+
+    <div class="format-toolbar__sep" />
+
+    <button title="Insert Table" @click="editor?.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()">⊞ Table</button>
   </div>
 </template>
 

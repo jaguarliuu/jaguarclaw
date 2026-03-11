@@ -53,14 +53,23 @@ function handleChildContextMenu(e: MouseEvent, node: DocumentNode) {
 
 <style scoped>
 .tree-node__row {
-  display: flex; align-items: center; gap: 4px;
-  padding: 4px 8px; cursor: pointer; border-radius: var(--radius-sm);
+  display: flex; align-items: center; gap: 2px;
+  padding: 5px 8px 5px 10px; cursor: pointer;
+  border-radius: var(--radius-sm); margin: 0 4px;
   font-size: 13px; color: var(--color-gray-700);
+  user-select: none;
 }
-.tree-node__row:hover { background: var(--color-gray-100); }
-.tree-node__row.active { background: var(--color-gray-200); font-weight: 500; }
-.tree-node__arrow { font-size: 10px; color: var(--color-gray-400); width: 12px; cursor: pointer; }
-.tree-node__icon { font-size: 12px; }
+.tree-node__row:hover { background: var(--sidebar-item-hover-bg); }
+.tree-node__row.active {
+  background: var(--sidebar-item-hover-bg);
+  color: var(--color-primary);
+  font-weight: 500;
+}
+.tree-node__arrow {
+  font-size: 9px; color: var(--color-gray-400); width: 14px;
+  cursor: pointer; flex-shrink: 0; text-align: center;
+}
+.tree-node__icon { font-size: 13px; flex-shrink: 0; }
 .tree-node__title { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.tree-node__children { padding-left: 16px; }
+.tree-node__children { padding-left: 14px; }
 </style>

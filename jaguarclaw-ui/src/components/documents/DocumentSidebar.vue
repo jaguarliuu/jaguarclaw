@@ -73,40 +73,43 @@ function closeContext() {
 
 <style scoped>
 .doc-sidebar {
-  width: var(--sidebar-width, 260px);
+  width: 220px;
   border-right: var(--border);
   display: flex;
   flex-direction: column;
-  background: var(--color-gray-50);
+  background: var(--sidebar-panel-bg);
   overflow: hidden;
   flex-shrink: 0;
 }
 .doc-sidebar__header {
   display: flex; align-items: center; justify-content: space-between;
-  padding: var(--space-3) var(--space-4);
+  padding: 10px 12px 10px 16px;
   border-bottom: var(--border);
   flex-shrink: 0;
 }
 .doc-sidebar__title {
-  font-size: 12px; font-weight: 600;
-  color: var(--color-gray-500); text-transform: uppercase; letter-spacing: 0.05em;
+  font-size: 13px; font-weight: 600;
+  color: var(--color-gray-800);
 }
 .doc-sidebar__new {
+  width: 24px; height: 24px;
+  display: flex; align-items: center; justify-content: center;
   background: none; border: none; cursor: pointer;
-  font-size: 18px; color: var(--color-gray-500); padding: 0 4px; line-height: 1;
+  color: var(--color-gray-500); border-radius: var(--radius-sm);
+  font-size: 16px; line-height: 1;
 }
-.doc-sidebar__new:hover { color: var(--color-gray-900); }
-.doc-sidebar__tree { flex: 1; overflow-y: auto; padding: var(--space-2) 0; }
+.doc-sidebar__new:hover { background: var(--sidebar-item-hover-bg); color: var(--color-gray-900); }
+.doc-sidebar__tree { flex: 1; overflow-y: auto; padding: 6px 0; }
 .doc-context-menu {
-  position: fixed; z-index: 100;
+  position: fixed; z-index: 200;
   background: var(--color-white); border: var(--border); border-radius: var(--radius-md);
-  box-shadow: var(--shadow-md); padding: var(--space-1) 0; min-width: 140px;
+  box-shadow: var(--shadow-md); padding: 4px 0; min-width: 140px;
 }
 .doc-context-menu button {
   display: block; width: 100%; text-align: left;
-  padding: var(--space-2) var(--space-3); font-size: 13px;
-  background: none; border: none; cursor: pointer;
+  padding: 6px 12px; font-size: 13px; font-family: var(--font-ui);
+  background: none; border: none; cursor: pointer; color: var(--color-gray-700);
 }
 .doc-context-menu button:hover { background: var(--color-gray-100); }
-.doc-context-menu button.danger { color: #e53e3e; }
+.doc-context-menu button.danger { color: var(--color-error); }
 </style>

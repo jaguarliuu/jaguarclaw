@@ -3,6 +3,9 @@ import { useEditor, EditorContent } from '@tiptap/vue-3'
 import { BubbleMenuPlugin } from '@tiptap/extension-bubble-menu'
 import StarterKit from '@tiptap/starter-kit'
 import Placeholder from '@tiptap/extension-placeholder'
+import Image from '@tiptap/extension-image'
+import Link from '@tiptap/extension-link'
+import { Table, TableRow, TableHeader, TableCell } from '@tiptap/extension-table'
 import { watch, onBeforeUnmount, onMounted, ref, nextTick } from 'vue'
 import type { Document } from '@/types'
 import DocumentBubbleMenu from './DocumentBubbleMenu.vue'
@@ -31,6 +34,12 @@ const editor = useEditor({
     createSlashExtension((action) => {
       emit('aiAction', action)
     }),
+    Image.configure({ allowBase64: true }),
+    Link.configure({ openOnClick: false, HTMLAttributes: { class: 'doc-link' } }),
+    Table.configure({ resizable: false }),
+    TableRow,
+    TableHeader,
+    TableCell,
   ],
   editorProps: {
     attributes: { class: 'doc-editor__prose' },
@@ -172,8 +181,16 @@ defineExpose({ insertChunk })
   border-radius: 3px; font-family: var(--font-mono); font-size: 13px;
 }
 :global(.doc-editor__prose pre) {
-  background: var(--color-gray-900); color: var(--color-gray-100);
+  background: var(--color-gray-50); color: var(--color-gray-800);
+  border: 1px solid var(--color-gray-200);
   padding: 16px; border-radius: var(--radius-md); overflow-x: auto; margin: 12px 0;
+  font-family: var(--font-mono); font-size: 13px; line-height: 1.6;
+}
+:global(.doc-editor__prose pre code) {
+  background: transparent; color: inherit; padding: 0; font-size: inherit;
+}
+:global(.doc-editor__prose pre[data-language="mermaid"]) {
+  background: #f0f4ff; border-color: #c7d2fe;
 }
 :global(.doc-editor__prose blockquote) {
   border-left: 3px solid var(--color-gray-300); padding-left: 12px;
@@ -185,4 +202,34 @@ defineExpose({ insertChunk })
 }
 :global(.doc-editor__prose strong) { font-weight: 600; }
 :global(.doc-editor__prose hr) { border: none; border-top: var(--border); margin: 20px 0; }
+:global(.doc-editor__prose img) {
+  max-width: 100%; border-radius: var(--radius-md); margin: 8px 0; cursor: pointer;
+  border: 2px solid transparent;
+}
+:global(.doc-editor__prose img.ProseMirror-selectednode) {
+  border-color: var(--color-primary, #6366f1);
+}
+:global(.doc-link) {
+  color: #6366f1; text-decoration: underline; cursor: pointer;
+}
+:global(.doc-link:hover) { color: #4f46e5; }
+:global(.doc-editor__prose table) {
+  border-collapse: collapse; width: 100%; margin: 12px 0; font-size: 14px;
+}
+:global(.doc-editor__prose th, .doc-editor__prose td) {
+  border: 1px solid var(--color-gray-200); padding: 8px 12px; min-width: 80px;
+  position: relative; vertical-align: top;
+}
+:global(.doc-editor__prose th) {
+  background: var(--color-gray-50); font-weight: 600; text-align: left;
+}
+:global(.doc-editor__prose .selectedCell:after) {
+  background: rgba(99, 102, 241, 0.1);
+  content: ""; left: 0; right: 0; top: 0; bottom: 0;
+  pointer-events: none; position: absolute; z-index: 2;
+}
+:global(.doc-editor__prose .column-resize-handle) {
+  background-color: #6366f1; bottom: -2px; position: absolute; right: -2px;
+  pointer-events: none; top: 0; width: 4px;
+}
 </style>
