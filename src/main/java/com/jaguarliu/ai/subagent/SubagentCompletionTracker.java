@@ -38,17 +38,33 @@ public class SubagentCompletionTracker {
     /**
      * 标记子代理完成
      *
+     * NOTE: 故意不从 pending 移除 future，避免竞态条件：
+     * 若子代理在主循环调用 getFuture() 前就已完成，remove() 会导致 getFuture()
+     * 返回 null，屏障将误判为"tracking lost"。保留 future 使 getFuture() 始终
+     * 能找到它，already-completed 的 future.get() 会立即返回。
+     * cleanup() 由屏障在获取结果后显式调用，负责最终的 map 清理。
+     *
      * @param subRunId 子运行 ID
      * @param result   完成结果
      */
     public void complete(String subRunId, SubagentResult result) {
-        CompletableFuture<SubagentResult> future = pending.remove(subRunId);
+        CompletableFuture<SubagentResult> future = pending.get(subRunId);
         if (future != null) {
             future.complete(result);
             log.debug("Completed pending subagent: subRunId={}, status={}", subRunId, result.status());
         } else {
-            log.debug("No pending future for subRunId={} (may have timed out or already completed)", subRunId);
+            log.warn("No pending future for subRunId={} (not registered or already cleaned up)", subRunId);
         }
+    }
+
+    /**
+     * 清理子代理的 CompletableFuture（由屏障在取得结果后调用）
+     *
+     * @param subRunId 子运行 ID
+     */
+    public void cleanup(String subRunId) {
+        pending.remove(subRunId);
+        log.debug("Cleaned up future for subRunId={}", subRunId);
     }
 
     /**

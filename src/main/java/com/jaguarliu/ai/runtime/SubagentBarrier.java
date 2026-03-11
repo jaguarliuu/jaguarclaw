@@ -77,13 +77,16 @@ public class SubagentBarrier {
             try {
                 SubagentCompletionTracker.SubagentResult result =
                         future.get(perSubagentTimeoutSeconds, TimeUnit.SECONDS);
+                subagentCompletionTracker.cleanup(subRunId);
                 results.add(result);
                 log.info("Subagent completed: subRunId={}, status={}", subRunId, result.status());
             } catch (TimeoutException e) {
+                subagentCompletionTracker.cleanup(subRunId);
                 log.warn("Timed out waiting for subagent: subRunId={}", subRunId);
                 results.add(new SubagentCompletionTracker.SubagentResult(
                         subRunId, "unknown", "timeout", null, "Timed out waiting for result", 0));
             } catch (Exception e) {
+                subagentCompletionTracker.cleanup(subRunId);
                 log.error("Error waiting for subagent: subRunId={}", subRunId, e);
                 results.add(new SubagentCompletionTracker.SubagentResult(
                         subRunId, "unknown", "error", null, "Error: " + e.getMessage(), 0));

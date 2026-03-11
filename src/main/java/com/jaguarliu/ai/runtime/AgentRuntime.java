@@ -115,6 +115,9 @@ public class AgentRuntime {
             if (context.isMaxStepsReached()) {
                 log.warn("Loop reached max steps: runId={}, maxSteps={}",
                         context.getRunId(), context.getConfig().getMaxSteps());
+                // Wait for any pending subagents before the final summarization step,
+                // so the LLM can incorporate their results into the response.
+                waitForPendingSubagentsIntoMessages(pendingSubRunIds, context, messages);
                 StepResult finalResult = executeSingleStep(context, messages);
                 return finalResult.content();
             }
@@ -204,6 +207,8 @@ public class AgentRuntime {
             }
 
             if (shouldStopOnHitlReject) {
+                // Wait for any pending subagents so their results are captured before exiting.
+                waitForPendingSubagentsIntoMessages(pendingSubRunIds, context, messages);
                 String rejectedTool = rejectedToolName != null ? rejectedToolName : "unknown";
                 String stopMessage = "Tool call was rejected by user (" + rejectedTool + "). Execution stopped.";
                 messages.add(LlmRequest.Message.assistant(stopMessage));
@@ -218,6 +223,8 @@ public class AgentRuntime {
             } else {
                 consecutiveFailedRounds++;
                 if (consecutiveFailedRounds >= 3) {
+                    // Wait for any pending subagents before stopping due to repeated failures.
+                    waitForPendingSubagentsIntoMessages(pendingSubRunIds, context, messages);
                     String stopMessage = "Stopped after " + consecutiveFailedRounds
                             + " consecutive tool rounds with no successful results.";
                     messages.add(LlmRequest.Message.assistant(stopMessage));
@@ -232,6 +239,25 @@ public class AgentRuntime {
         }
     }
 
+
+    /**
+     * 如果有待完成的子代理，等待它们全部完成并将结果注入消息列表。
+     * 用于 doExecuteLoop 的各提前退出路径，确保主 Agent 不会在子代理完成前就结束。
+     */
+    private void waitForPendingSubagentsIntoMessages(
+            List<String> pendingSubRunIds,
+            RunContext context,
+            List<LlmRequest.Message> messages) {
+        if (pendingSubRunIds.isEmpty() || !context.isMain()) {
+            return;
+        }
+        log.info("Waiting for {} pending subagents before loop exit: runId={}",
+                pendingSubRunIds.size(), context.getRunId());
+        String subagentResultsSummary = subagentBarrier.waitForCompletion(pendingSubRunIds, context);
+        pendingSubRunIds.clear();
+        messages.add(LlmRequest.Message.user(subagentResultsSummary));
+        log.info("Subagent results injected before loop exit: runId={}", context.getRunId());
+    }
 
     /**
      * 执行单步 LLM 调用
