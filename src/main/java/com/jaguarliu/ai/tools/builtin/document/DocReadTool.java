@@ -4,13 +4,13 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jaguarliu.ai.document.DocumentEntity;
 import com.jaguarliu.ai.document.DocumentService;
-import com.jaguarliu.ai.gateway.security.ConnectionPrincipal;
 import com.jaguarliu.ai.gateway.ws.ConnectionManager;
 import com.jaguarliu.ai.tools.Tool;
 import com.jaguarliu.ai.tools.ToolDefinition;
 import com.jaguarliu.ai.tools.ToolExecutionContext;
 import com.jaguarliu.ai.tools.ToolResult;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
 
@@ -22,14 +22,14 @@ import java.util.stream.Collectors;
  * 文档读取工具
  * 读取当前正在编辑的文档内容（标题 + 文本）
  */
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class DocReadTool implements Tool {
 
     private final DocumentService documentService;
     private final ConnectionManager connectionManager;
-
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private final ObjectMapper objectMapper;
 
     @Override
     public ToolDefinition getDefinition() {
@@ -46,6 +46,7 @@ public class DocReadTool implements Tool {
                         ),
                         "required", List.of("doc_id")
                 ))
+                .hitl(false)
                 .build();
     }
 
@@ -58,7 +59,10 @@ public class DocReadTool implements Tool {
             }
 
             ToolExecutionContext ctx = ToolExecutionContext.current();
-            String ownerId = resolveOwnerId(ctx);
+            String ownerId = DocumentToolSupport.resolveOwnerId(ctx, connectionManager);
+            if ("local-default".equals(ownerId)) {
+                log.warn("doc_read: could not resolve ownerId from context, falling back to 'local-default'. docId={}", docId);
+            }
 
             try {
                 DocumentEntity doc = documentService.get(docId, ownerId);
@@ -70,16 +74,6 @@ public class DocReadTool implements Tool {
         });
     }
 
-    private String resolveOwnerId(ToolExecutionContext ctx) {
-        if (ctx != null && ctx.getConnectionId() != null) {
-            ConnectionPrincipal principal = connectionManager.getPrincipal(ctx.getConnectionId());
-            if (principal != null && principal.getPrincipalId() != null) {
-                return principal.getPrincipalId();
-            }
-        }
-        return "local-default";
-    }
-
     /**
      * 从 TipTap JSON 中提取纯文本。
      * 若解析失败则返回原始字符串。
@@ -89,7 +83,7 @@ public class DocReadTool implements Tool {
             return "";
         }
         try {
-            JsonNode root = MAPPER.readTree(content);
+            JsonNode root = objectMapper.readTree(content);
             List<JsonNode> textNodes = root.findValues("text");
             String joined = textNodes.stream()
                     .map(JsonNode::asText)

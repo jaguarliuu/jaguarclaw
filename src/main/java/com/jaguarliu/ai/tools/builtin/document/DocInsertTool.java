@@ -4,7 +4,6 @@ import com.jaguarliu.ai.document.DocumentEntity;
 import com.jaguarliu.ai.document.DocumentService;
 import com.jaguarliu.ai.gateway.events.AgentEvent;
 import com.jaguarliu.ai.gateway.events.EventBus;
-import com.jaguarliu.ai.gateway.security.ConnectionPrincipal;
 import com.jaguarliu.ai.gateway.ws.ConnectionManager;
 import com.jaguarliu.ai.tools.Tool;
 import com.jaguarliu.ai.tools.ToolDefinition;
@@ -50,6 +49,7 @@ public class DocInsertTool implements Tool {
                         ),
                         "required", List.of("doc_id", "content")
                 ))
+                .hitl(false)
                 .build();
     }
 
@@ -69,7 +69,7 @@ public class DocInsertTool implements Tool {
             ToolExecutionContext ctx = ToolExecutionContext.current();
             String connectionId = ctx != null ? ctx.getConnectionId() : null;
             String runId = ctx != null ? ctx.getRunId() : null;
-            String ownerId = resolveOwnerId(ctx, connectionId);
+            String ownerId = DocumentToolSupport.resolveOwnerId(ctx, connectionManager);
 
             // Publish real-time event to the editor
             if (connectionId != null && runId != null) {
@@ -79,35 +79,18 @@ public class DocInsertTool implements Tool {
                         "connectionId={}, runId={}", connectionId, runId);
             }
 
-            // Best-effort DB persistence — the frontend will re-save the TipTap state on its own
+            // Best-effort DB persistence — only update wordCount; pass null content so
+            // we never corrupt the TipTap JSON that the frontend editor owns.
             try {
                 DocumentEntity doc = documentService.get(docId, ownerId);
-                String existing = doc.getContent();
-                // Append the new content as plain text after the existing content.
-                // TipTap JSON cannot be naively appended; we store a simple concatenation
-                // that the editor will overwrite on next save. This keeps the DB reasonably
-                // up-to-date without attempting full TipTap JSON manipulation.
-                String appended = (existing == null || existing.isBlank() || "{}".equals(existing.trim()))
-                        ? content
-                        : existing + "\n\n" + content;
                 int wordCount = doc.getWordCount() + estimateWordCount(content);
-                documentService.update(docId, null, appended, wordCount, ownerId);
+                documentService.update(docId, null, null, wordCount, ownerId);
             } catch (Exception e) {
-                log.warn("doc_insert: failed to persist content to DB (non-fatal): {}", e.getMessage());
+                log.warn("doc_insert: failed to update wordCount in DB (non-fatal): {}", e.getMessage());
             }
 
             return ToolResult.success("内容已插入文档");
         });
-    }
-
-    private String resolveOwnerId(ToolExecutionContext ctx, String connectionId) {
-        if (connectionId != null) {
-            ConnectionPrincipal principal = connectionManager.getPrincipal(connectionId);
-            if (principal != null && principal.getPrincipalId() != null) {
-                return principal.getPrincipalId();
-            }
-        }
-        return "local-default";
     }
 
     /**
