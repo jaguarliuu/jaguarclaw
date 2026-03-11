@@ -68,7 +68,9 @@ public class AgentEvent {
         // P2 扩展占位：上下文压缩通知
         CONTEXT_COMPACTED("context.compacted"),
         // 文档内容插入事件（document-writer agent 实时推送）
-        DOC_CONTENT_INSERT("doc.content.insert");
+        DOC_CONTENT_INSERT("doc.content.insert"),
+        // 文档节点插入事件（draw_mermaid / draw_chart 工具推送 TipTap 节点）
+        DOC_NODE_INSERT("doc.node.insert");
 
         private final String value;
 
@@ -522,6 +524,25 @@ public class AgentEvent {
     @AllArgsConstructor
     public static class DocContentInsertData {
         private String content;
+    }
+
+    /**
+     * 创建 doc.node.insert 事件（draw_mermaid / draw_chart 工具向编辑器插入 TipTap 节点）
+     */
+    public static AgentEvent docNodeInsert(String connectionId, String runId, String docId, Object node) {
+        return AgentEvent.builder()
+                .type(EventType.DOC_NODE_INSERT)
+                .connectionId(connectionId)
+                .runId(runId)
+                .data(new DocNodeInsertData(docId, node))
+                .build();
+    }
+
+    @Data
+    @AllArgsConstructor
+    public static class DocNodeInsertData {
+        private String docId;
+        private Object node;
     }
 
 }

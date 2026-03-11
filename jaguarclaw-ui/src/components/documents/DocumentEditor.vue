@@ -1,17 +1,42 @@
 <script setup lang="ts">
 import { useEditor, EditorContent, VueNodeViewRenderer } from '@tiptap/vue-3'
-import { Node } from '@tiptap/core'
+import { Node, Extension } from '@tiptap/core'
 import { BubbleMenuPlugin } from '@tiptap/extension-bubble-menu'
 import StarterKit from '@tiptap/starter-kit'
-import CodeBlock from '@tiptap/extension-code-block'
+import { CodeBlockLowlight } from '@tiptap/extension-code-block-lowlight'
+import { Color } from '@tiptap/extension-color'
+import { TextStyle } from '@tiptap/extension-text-style'
+import { createLowlight, all } from 'lowlight'
 import Placeholder from '@tiptap/extension-placeholder'
 import Image from '@tiptap/extension-image'
 import Link from '@tiptap/extension-link'
 import { Table, TableRow, TableHeader, TableCell } from '@tiptap/extension-table'
+
+const lowlight = createLowlight(all)
+
+/** Adds backgroundColor to tableCell and tableHeader without touching the node spec */
+const TableCellBackground = Extension.create({
+  name: 'tableCellBackground',
+  addGlobalAttributes() {
+    return [{
+      types: ['tableCell', 'tableHeader'],
+      attributes: {
+        backgroundColor: {
+          default: null,
+          parseHTML: el => (el as HTMLElement).style.backgroundColor || null,
+          renderHTML: attrs => attrs.backgroundColor
+            ? { style: `background-color: ${attrs.backgroundColor}` }
+            : {},
+        },
+      },
+    }]
+  },
+})
 import { watch, onBeforeUnmount, onMounted, ref, nextTick } from 'vue'
 import { marked } from 'marked'
 import MermaidBlockView from './MermaidBlockView.vue'
 import StreamingBlockView from './StreamingBlockView.vue'
+import ChartBlockView from './ChartBlockView.vue'
 import type { Document } from '@/types'
 import DocumentBubbleMenu from './DocumentBubbleMenu.vue'
 import DocumentFormatToolbar from './DocumentFormatToolbar.vue'
@@ -40,7 +65,7 @@ const aiPromptX = ref(0)
 const aiPromptY = ref(0)
 const aiPromptSelection = ref<string | undefined>(undefined)
 
-const MermaidCodeBlock = CodeBlock.extend({
+const MermaidCodeBlock = CodeBlockLowlight.configure({ lowlight }).extend({
   addNodeView() {
     return VueNodeViewRenderer(MermaidBlockView as any)
   }
@@ -58,11 +83,26 @@ const StreamingBlock = Node.create({
   addNodeView() { return VueNodeViewRenderer(StreamingBlockView as any) },
 })
 
+const ChartBlock = Node.create({
+  name: 'chartBlock',
+  group: 'block',
+  atom: true,
+  addAttributes() {
+    return { spec: { default: '' } }
+  },
+  parseHTML() { return [{ tag: 'div[data-chart-block]' }] },
+  renderHTML({ HTMLAttributes }) { return ['div', { 'data-chart-block': '', ...HTMLAttributes }] },
+  addNodeView() { return VueNodeViewRenderer(ChartBlockView as any) },
+})
+
 const editor = useEditor({
   extensions: [
     StarterKit.configure({ codeBlock: false }),
     MermaidCodeBlock,
     StreamingBlock,
+    ChartBlock,
+    TextStyle,
+    Color,
     Placeholder.configure({ placeholder: '开始输入…' }),
     createSlashExtension((action) => {
       handleAiAction(action)
@@ -73,6 +113,7 @@ const editor = useEditor({
     TableRow,
     TableHeader,
     TableCell,
+    TableCellBackground,
   ],
   editorProps: {
     attributes: { class: 'doc-editor__prose' },
@@ -256,7 +297,11 @@ function onImageFileSelected(e: Event) {
   ;(e.target as HTMLInputElement).value = ''
 }
 
-defineExpose({ insertChunk, insertMarkdown, insertStreamingBlock, updateStreamingBlock, finalizeStreamingBlock, removeStreamingBlock, openImageFilePicker })
+function insertNode(node: any) {
+  editor.value?.commands.insertContent(node)
+}
+
+defineExpose({ insertChunk, insertMarkdown, insertStreamingBlock, updateStreamingBlock, finalizeStreamingBlock, removeStreamingBlock, openImageFilePicker, insertNode })
 </script>
 
 <template>
@@ -517,21 +562,28 @@ defineExpose({ insertChunk, insertMarkdown, insertStreamingBlock, updateStreamin
   cursor: pointer;
 }
 :global(.doc-link:hover) { color: #4f46e5; }
+:global(.doc-editor__prose .tableWrapper) {
+  overflow-x: auto;
+  margin: 12px 0;
+}
 :global(.doc-editor__prose table) {
   border-collapse: collapse;
+  table-layout: fixed;
   width: 100%;
-  margin: 12px 0;
+  margin: 0;
+  overflow: hidden;
   font-size: 14px;
 }
 :global(.doc-editor__prose th, .doc-editor__prose td) {
-  border: 1px solid var(--color-gray-200);
+  border: 1px solid #d1d5db;
+  box-sizing: border-box;
   padding: 8px 12px;
   min-width: 80px;
   position: relative;
   vertical-align: top;
 }
 :global(.doc-editor__prose th) {
-  background: var(--color-gray-50);
+  background: #f9fafb;
   font-weight: 600;
   text-align: left;
 }
@@ -552,4 +604,28 @@ defineExpose({ insertChunk, insertMarkdown, insertStreamingBlock, updateStreamin
   top: 0;
   width: 4px;
 }
+
+/* ── Syntax highlighting (lowlight / highlight.js token classes) ───────────── */
+:global(.hljs-keyword),
+:global(.hljs-built_in),
+:global(.hljs-type)           { color: #cf222e; }
+:global(.hljs-literal)        { color: #0550ae; }
+:global(.hljs-number)         { color: #0550ae; }
+:global(.hljs-string),
+:global(.hljs-regexp),
+:global(.hljs-template-string){ color: #0a3069; }
+:global(.hljs-comment)        { color: #6e7781; font-style: italic; }
+:global(.hljs-title),
+:global(.hljs-title\.function),
+:global(.hljs-title\.class)   { color: #8250df; }
+:global(.hljs-attr),
+:global(.hljs-attribute)      { color: #116329; }
+:global(.hljs-variable),
+:global(.hljs-params)         { color: #953800; }
+:global(.hljs-tag),
+:global(.hljs-name)           { color: #116329; }
+:global(.hljs-punctuation),
+:global(.hljs-operator)       { color: #6e7781; }
+:global(.hljs-meta)           { color: #6e7781; }
+:global(.hljs-symbol)         { color: #0550ae; }
 </style>

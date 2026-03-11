@@ -10,6 +10,39 @@ const props = defineProps<{
 }>()
 
 const isMermaid = computed(() => props.node.attrs.language === 'mermaid')
+
+// ── Copy button (non-mermaid blocks) ─────────────────────────────────────────
+const cbCopied = ref(false)
+let cbTimer: ReturnType<typeof setTimeout> | null = null
+function cbCopy() {
+  navigator.clipboard.writeText(props.node.textContent ?? '').then(() => {
+    cbCopied.value = true
+    if (cbTimer) clearTimeout(cbTimer)
+    cbTimer = setTimeout(() => { cbCopied.value = false }, 2000)
+  })
+}
+
+// ── Language selector (non-mermaid blocks) ────────────────────────────────────
+const langEditing = ref(false)
+const langInputRef = ref<HTMLInputElement | null>(null)
+const langDraft = ref('')
+
+function startLangEdit() {
+  langDraft.value = props.node.attrs.language || ''
+  langEditing.value = true
+  nextTick(() => langInputRef.value?.focus())
+}
+
+function confirmLang() {
+  langEditing.value = false
+  const lang = langDraft.value.trim().toLowerCase()
+  props.updateAttributes({ language: lang || null })
+}
+
+function onLangKeydown(e: KeyboardEvent) {
+  if (e.key === 'Enter') confirmLang()
+  if (e.key === 'Escape') langEditing.value = false
+}
 const rawSvg = ref('')       // mermaid output, unmodified
 const renderError = ref('')
 const showCode = ref(false)
@@ -144,8 +177,10 @@ let counter = 0
 mermaid.initialize({ startOnLoad: false, theme: 'neutral', securityLevel: 'loose' })
 
 async function renderMermaid() {
-  const code = props.node.textContent?.trim()
-  if (!code) { rawSvg.value = ''; renderError.value = ''; return }
+  const rawCode = props.node.textContent?.trim()
+  if (!rawCode) { rawSvg.value = ''; renderError.value = ''; return }
+  // Strip HTML tags before passing to mermaid — <br> etc. break the diagram type detector
+  const code = rawCode.replace(/<br\s*\/?>/gi, ' ').replace(/<[^>]*>/g, '')
   try {
     const id = `mmd-${Date.now()}-${++counter}`
     const { svg } = await mermaid.render(id, code)
@@ -168,6 +203,8 @@ async function renderMermaid() {
   } catch (e: any) {
     renderError.value = e?.message?.split('\n')[0] || String(e)
     rawSvg.value = ''
+    // Auto-switch to code view so user can see and fix the problematic code
+    showCode.value = true
   }
 }
 
@@ -240,11 +277,43 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
       </div>
 
       <!-- Code view (always in DOM for NodeViewContent) -->
-      <pre v-show="showCode" class="mmd-src"><NodeViewContent as="code" /></pre>
+      <div v-show="showCode">
+        <div v-if="renderError" class="mmd-parse-error">⚠ 渲染失败：{{ renderError }}</div>
+        <pre class="mmd-src"><NodeViewContent as="code" /></pre>
+      </div>
     </template>
 
     <!-- Normal code block -->
-    <pre v-else><NodeViewContent as="code" /></pre>
+    <div v-else class="cb-wrap">
+      <div class="cb-header">
+        <input
+          v-if="langEditing"
+          ref="langInputRef"
+          v-model="langDraft"
+          class="cb-lang-input"
+          placeholder="js / python / sql…"
+          @blur="confirmLang"
+          @keydown="onLangKeydown"
+        />
+        <span
+          v-else
+          class="cb-lang cb-lang--click"
+          :title="node.attrs.language ? '点击修改语言' : '点击设置语言以启用高亮'"
+          @click="startLangEdit"
+        >{{ node.attrs.language || '纯文本  ✎' }}</span>
+        <button class="cb-copy" :class="{ copied: cbCopied }" @click="cbCopy">
+          <template v-if="!cbCopied">
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="4" y="4" width="7" height="7" rx="1.2"/>
+              <path d="M8 4V2.8A1.2 1.2 0 0 0 6.8 1.6H2.8A1.2 1.2 0 0 0 1.6 2.8v4A1.2 1.2 0 0 0 2.8 8H4"/>
+            </svg>
+            复制
+          </template>
+          <template v-else>✓ 已复制</template>
+        </button>
+      </div>
+      <pre class="cb-src"><NodeViewContent as="code" /></pre>
+    </div>
 
   </NodeViewWrapper>
 
@@ -327,6 +396,12 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
   padding: 12px 16px; border-radius: var(--radius-md); overflow-x: auto;
   font-family: var(--font-mono); font-size: 13px; line-height: 1.6; margin: 0;
 }
+.mmd-parse-error {
+  background: #fff5f5; border: 1px solid #fed7d7; color: #c53030;
+  border-radius: var(--radius-md); padding: 6px 12px;
+  font-size: 12px; font-family: var(--font-mono);
+  margin-bottom: 6px;
+}
 .mmd-src :deep(code) { background: transparent; color: inherit; padding: 0; }
 
 pre {
@@ -368,4 +443,85 @@ pre :deep(code) { background: transparent; color: inherit; padding: 0; }
   background: rgba(255,255,255,0.85); padding: 3px 10px;
   border-radius: 100px; pointer-events: none; white-space: nowrap;
 }
+
+/* ── Regular code block ─────────────────────────────────────────────────────── */
+.cb-wrap {
+  margin: 0;
+  border: 1px solid var(--color-gray-200);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--color-gray-50);
+}
+
+.cb-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 12px 4px 14px;
+  border-bottom: 1px solid var(--color-gray-200);
+  background: var(--color-gray-100);
+}
+
+.cb-lang {
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--color-gray-500);
+  text-transform: lowercase;
+}
+
+.cb-lang--click {
+  cursor: pointer;
+  border-radius: 3px;
+  padding: 1px 4px;
+  margin: -1px -4px;
+  transition: background 80ms;
+}
+.cb-lang--click:hover {
+  background: var(--color-gray-200);
+  color: var(--color-gray-700);
+}
+
+.cb-lang-input {
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--color-gray-700);
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--color-gray-400);
+  outline: none;
+  width: 130px;
+  padding: 0 2px;
+  line-height: 1.4;
+}
+
+.cb-copy {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-family: var(--font-ui);
+  color: var(--color-gray-400);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  transition: background 80ms, color 80ms;
+}
+.cb-copy:hover { background: var(--color-gray-200); color: var(--color-gray-700); }
+.cb-copy.copied { color: #16a34a; }
+
+.cb-src {
+  margin: 0;
+  padding: 14px 16px;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.6;
+  overflow-x: auto;
+  color: var(--color-gray-800);
+}
+.cb-src :deep(code) { background: transparent; color: inherit; padding: 0; }
 </style>

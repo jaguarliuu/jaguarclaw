@@ -91,7 +91,8 @@ public class EventBus {
                  HEARTBEAT_NOTIFY,
                  TOKEN_USAGE,
                  CONTEXT_COMPACTED,
-                 DOC_CONTENT_INSERT -> false;
+                 DOC_CONTENT_INSERT,
+                 DOC_NODE_INSERT -> false;
         };
     }
 

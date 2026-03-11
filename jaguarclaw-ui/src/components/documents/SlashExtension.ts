@@ -2,6 +2,7 @@ import { Extension } from '@tiptap/core'
 import { Suggestion } from '@tiptap/suggestion'
 import { createApp, type App } from 'vue'
 import DocumentSlashMenu, { type SlashMenuItem } from './DocumentSlashMenu.vue'
+import { CHART_PRESETS } from './chartPresets'
 
 export type SlashAiActionCallback = (action: string) => void
 
@@ -70,6 +71,17 @@ function getItems(editor: any, query: string, onAiAction: SlashAiActionCallback)
           })
           .run(),
     },
+    ...Object.entries(CHART_PRESETS).map(([key, preset]) => ({
+      label: preset.label,
+      description: `插入${preset.label}`,
+      icon: '◈',
+      action: () =>
+        editor
+          .chain()
+          .focus()
+          .insertContent({ type: 'chartBlock', attrs: { spec: JSON.stringify(preset.spec) } })
+          .run(),
+    })),
   ]
 
   const aiItems: SlashMenuItem[] = [

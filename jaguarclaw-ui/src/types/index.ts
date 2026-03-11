@@ -175,6 +175,7 @@ export interface RpcEventPayloadMap {
   'heartbeat.notify': HeartbeatNotifyPayload
   'context.compacted': unknown
   'doc.content.insert': { content: string }
+  'doc.node.insert': { docId: string; node: any }
 }
 
 // 用 AgentEventType 约束事件名，并用映射表推断 payload 类型
@@ -207,6 +208,7 @@ export type AgentEventType =
   | 'run.outcome'
   | 'context.compacted'
   | 'doc.content.insert'
+  | 'doc.node.insert'
 
 // Tool Event Payloads
 export interface ToolCallPayload {

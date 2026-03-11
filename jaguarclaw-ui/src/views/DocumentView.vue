@@ -1,9 +1,10 @@
 <!-- src/views/DocumentView.vue -->
 <script setup lang="ts">
-import { onMounted, ref, watch, computed } from 'vue'
+import { onMounted, onUnmounted, ref, watch, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useDocuments } from '@/composables/useDocuments'
-import type { DocumentNode } from '@/types'
+import { useWebSocket } from '@/composables/useWebSocket'
+import type { DocumentNode, RpcEvent } from '@/types'
 import DocumentSidebar from '@/components/documents/DocumentSidebar.vue'
 import DocumentEditor from '@/components/documents/DocumentEditor.vue'
 import DocumentAiIndicator from '@/components/documents/DocumentAiIndicator.vue'
@@ -17,14 +18,30 @@ const {
   aiAssist, stopAiStream,
 } = useDocuments()
 
+const { onEvent } = useWebSocket()
+
 const showAiIndicator = ref(false)
 const editorRef = ref<InstanceType<typeof DocumentEditor> | null>(null)
 // Cast readonly tree from composable to mutable for child component prop
 const mutableTree = computed(() => tree.value as DocumentNode[])
 
+let nodeInsertUnsub: (() => void) | null = null
+
 onMounted(async () => {
   await loadTree()
   if (props.id) await loadDocument(props.id)
+
+  // Persistent subscription for agent-inserted nodes (draw_mermaid / draw_chart tools)
+  nodeInsertUnsub = onEvent('doc.node.insert', (event: RpcEvent) => {
+    if (event.payload && typeof event.payload === 'object' && 'node' in event.payload) {
+      const { node } = event.payload as { docId: string; node: any }
+      editorRef.value?.insertNode(node)
+    }
+  })
+})
+
+onUnmounted(() => {
+  nodeInsertUnsub?.()
 })
 
 watch(() => props.id, async (id) => {
@@ -54,12 +71,12 @@ function onChange(title: string, content: string, wordCount: number) {
   scheduleSave(currentDoc.value.id, title, content, wordCount)
 }
 
-async function onAiAction(action: string, selection?: string) {
+async function onAiAction(action: string, selection?: string, userPrompt?: string) {
   if (!currentDoc.value) return
   showAiIndicator.value = true
   editorRef.value?.insertStreamingBlock()
   try {
-    await aiAssist(currentDoc.value.id, action as any, selection, undefined, undefined, (fullContent) => {
+    await aiAssist(currentDoc.value.id, action as any, selection, undefined, userPrompt, (fullContent) => {
       editorRef.value?.updateStreamingBlock(fullContent)
     })
   } catch (e) {

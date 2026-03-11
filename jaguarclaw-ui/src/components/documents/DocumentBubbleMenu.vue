@@ -4,7 +4,7 @@ defineEmits<{ action: [action: string] }>()
 </script>
 
 <template>
-  <div class="bubble-menu">
+  <div class="bubble-menu" @mousedown.prevent>
     <button :disabled="aiStreaming" @click="$emit('action', 'rewrite')">改写</button>
     <button :disabled="aiStreaming" @click="$emit('action', 'optimize')">优化</button>
     <button :disabled="aiStreaming" @click="$emit('action', 'translate')">翻译</button>
