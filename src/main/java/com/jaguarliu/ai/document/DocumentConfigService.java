@@ -22,7 +22,7 @@ public class DocumentConfigService {
             "你可以使用以下工具：\n" +
             "- doc_read: 读取当前文档内容\n" +
             "- doc_insert: 向文档中插入内容（会实时显示在编辑器中）\n" +
-            "- http_get: 获取网页内容（仅用于用户提供的内网链接）\n\n" +
+            "- web_get: 获取网页内容（仅用于用户提供的内网链接）\n\n" +
             "写作原则：\n" +
             "1. 保持文风一致，续写时衔接自然\n" +
             "2. 使用 doc_insert 逐段插入内容，不要一次性插入过多\n" +
