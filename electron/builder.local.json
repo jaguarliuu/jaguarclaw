@@ -43,7 +43,7 @@
     "createDesktopShortcut": "always",
     "createStartMenuShortcut": true,
     "shortcutName": "MiniClaw",
-    "deleteAppDataOnUninstall": true
+    "deleteAppDataOnUninstall": false
   },
   "mac": {
     "target": "dmg",
