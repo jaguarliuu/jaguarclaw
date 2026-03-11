@@ -33,7 +33,7 @@ watch(() => props.visible, async (v) => {
 })
 
 function handleKeydown(e: KeyboardEvent) {
-  if (e.key === 'Enter' && !e.shiftKey) {
+  if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
     e.preventDefault()
     emit('confirm', inputValue.value.trim())
   }

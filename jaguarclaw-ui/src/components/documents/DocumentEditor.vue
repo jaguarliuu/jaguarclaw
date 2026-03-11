@@ -82,11 +82,7 @@ const editor = useEditor({
       if (!imageItem) return false
       const file = imageItem.getAsFile()
       if (!file) return false
-      const reader = new FileReader()
-      reader.onload = () => {
-        editor.value?.chain().focus().setImage({ src: reader.result as string }).run()
-      }
-      reader.readAsDataURL(file)
+      uploadDocImage(file)
       return true
     },
   },
@@ -238,14 +234,25 @@ function openImageFilePicker() {
   imageFileInput.value?.click()
 }
 
+async function uploadDocImage(file: File) {
+  if (!editor.value) return
+  const ext = file.name.split('.').pop()?.toLowerCase() ?? 'png'
+  const filename = `paste.${ext}`
+  const formData = new FormData()
+  formData.append('file', file, filename)
+  try {
+    const res = await fetch('/api/doc-images', { method: 'POST', body: formData })
+    if (!res.ok) throw new Error(await res.text())
+    const { url } = await res.json()
+    editor.value.chain().focus().setImage({ src: url }).run()
+  } catch (e) {
+    console.error('Image upload failed:', e)
+  }
+}
+
 function onImageFileSelected(e: Event) {
   const file = (e.target as HTMLInputElement).files?.[0]
-  if (!file || !editor.value) return
-  const reader = new FileReader()
-  reader.onload = () => {
-    editor.value?.chain().focus().setImage({ src: reader.result as string }).run()
-  }
-  reader.readAsDataURL(file)
+  if (file) uploadDocImage(file)
   ;(e.target as HTMLInputElement).value = ''
 }
 
