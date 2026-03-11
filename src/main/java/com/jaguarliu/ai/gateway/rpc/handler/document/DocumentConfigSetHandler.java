@@ -1,7 +1,5 @@
 package com.jaguarliu.ai.gateway.rpc.handler.document;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jaguarliu.ai.document.DocumentConfigService;
 import com.jaguarliu.ai.gateway.rpc.RpcHandler;
 import com.jaguarliu.ai.gateway.rpc.model.RpcRequest;
@@ -20,7 +18,6 @@ import java.util.Map;
 public class DocumentConfigSetHandler implements RpcHandler {
 
     private final DocumentConfigService documentConfigService;
-    private final ObjectMapper objectMapper;
 
     @Override
     public String getMethod() { return "document.config.set"; }
@@ -28,9 +25,11 @@ public class DocumentConfigSetHandler implements RpcHandler {
     @Override
     public Mono<RpcResponse> handle(String connectionId, RpcRequest request) {
         return Mono.fromCallable(() -> {
-            Map<String, Object> params = objectMapper.convertValue(
-                request.getPayload(), new TypeReference<Map<String, Object>>() {});
-            String prompt = (String) params.get("systemPrompt");
+            String prompt = null;
+            if (request.getPayload() instanceof Map<?, ?> params) {
+                Object raw = params.get("systemPrompt");
+                if (raw instanceof String s) prompt = s;
+            }
             if (prompt == null || prompt.isBlank())
                 return RpcResponse.error(request.getId(), "INVALID_PARAMS", "systemPrompt is required");
 

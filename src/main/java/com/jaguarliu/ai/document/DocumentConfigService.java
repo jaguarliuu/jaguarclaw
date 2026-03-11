@@ -1,5 +1,6 @@
 package com.jaguarliu.ai.document;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -28,6 +29,9 @@ public class DocumentConfigService {
             "3. 需要了解文档现状时先调用 doc_read\n" +
             "4. 不使用任何其他工具，不执行任何系统命令";
 
+    private static final String KEY_SYSTEM_PROMPT = "systemPrompt";
+    private static final TypeReference<Map<String, String>> CONFIG_TYPE = new TypeReference<>() {};
+
     private final ObjectMapper objectMapper;
     private final Map<String, String> cache = new ConcurrentHashMap<>();
 
@@ -36,13 +40,13 @@ public class DocumentConfigService {
     }
 
     public String getSystemPrompt() {
-        if (cache.containsKey("systemPrompt")) return cache.get("systemPrompt");
+        if (cache.containsKey(KEY_SYSTEM_PROMPT)) return cache.get(KEY_SYSTEM_PROMPT);
         try {
             Path p = configFilePath();
             if (Files.exists(p)) {
-                Map<?, ?> data = objectMapper.readValue(p.toFile(), Map.class);
-                String prompt = (String) data.get("systemPrompt");
-                if (prompt != null) { cache.put("systemPrompt", prompt); return prompt; }
+                Map<String, String> data = objectMapper.readValue(p.toFile(), CONFIG_TYPE);
+                String prompt = data.get(KEY_SYSTEM_PROMPT);
+                if (prompt != null) { cache.put(KEY_SYSTEM_PROMPT, prompt); return prompt; }
             }
         } catch (IOException e) {
             log.warn("Failed to read document-writer config: {}", e.getMessage());
@@ -51,13 +55,14 @@ public class DocumentConfigService {
     }
 
     public void setSystemPrompt(String prompt) {
-        cache.put("systemPrompt", prompt);
+        cache.put(KEY_SYSTEM_PROMPT, prompt);
         try {
             Path p = configFilePath();
             Files.createDirectories(p.getParent());
-            objectMapper.writeValue(p.toFile(), Map.of("systemPrompt", prompt));
+            objectMapper.writeValue(p.toFile(), Map.of(KEY_SYSTEM_PROMPT, prompt));
         } catch (IOException e) {
             log.error("Failed to persist document-writer config: {}", e.getMessage());
+            throw new RuntimeException("Failed to persist document-writer config", e);
         }
     }
 }

@@ -297,8 +297,8 @@ public class AgentEvent {
      */
     public static AgentEvent docContentInsert(String connectionId, String runId, String content) {
         return AgentEvent.builder()
-                .connectionId(connectionId)
                 .type(EventType.DOC_CONTENT_INSERT)
+                .connectionId(connectionId)
                 .runId(runId)
                 .data(new DocContentInsertData(content))
                 .build();
