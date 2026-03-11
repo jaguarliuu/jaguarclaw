@@ -150,11 +150,14 @@ try {
 
   // Step 6: electron-builder
   console.log('\n=== Step 6: Building Electron installer ===');
+  const isLocal = process.argv.includes('--local');
+  const configArg = isLocal ? ' --config builder.local.json' : '';
   const publishArg = process.argv.includes('--publish') ? ' --publish always' : '';
-  run(`npx electron-builder${publishArg}`, ELECTRON_DIR);
+  run(`npx electron-builder${configArg}${publishArg}`, ELECTRON_DIR);
 
+  const outDir = isLocal ? path.join(ELECTRON_DIR, 'dist') : path.join(ELECTRON_DIR, 'release');
   console.log('\n=== Build complete! ===');
-  console.log(`Installer is in: ${path.join(ELECTRON_DIR, 'release')}`);
+  console.log(`Installer is in: ${outDir}`);
 } catch (err) {
   console.error('\nBuild failed:', err.message);
   process.exit(1);

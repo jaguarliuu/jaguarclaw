@@ -13,6 +13,7 @@
     "download-jre": "node scripts/download-jre.js",
     "download-jre-win": "node scripts/download-jre.js --win",
     "build": "node scripts/build.js",
+    "build:local": "node scripts/build.js --local",
     "release": "electron-builder --publish always"
   },
   "dependencies": {
