@@ -86,12 +86,20 @@ async function onDocAiDiscard() {
   if (currentDoc.value) await loadDocument(currentDoc.value.id)
 }
 async function onDocAiSettings() {
-  aiSystemPrompt.value = await getConfig()
-  showAiSettings.value = true
+  try {
+    aiSystemPrompt.value = await getConfig()
+    showAiSettings.value = true
+  } catch (e) {
+    showToast({ type: 'error', title: '加载设置失败', message: String(e) })
+  }
 }
 
 async function onDocAiSettingsSave(prompt: string) {
-  await setConfig(prompt)
+  try {
+    await setConfig(prompt)
+  } catch (e) {
+    showToast({ type: 'error', title: '保存设置失败', message: String(e) })
+  }
 }
 // ─────────────────────────────────────────────────────────────────────────────
 const {
