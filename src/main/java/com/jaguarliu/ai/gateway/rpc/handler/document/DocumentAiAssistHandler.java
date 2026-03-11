@@ -57,6 +57,7 @@ public class DocumentAiAssistHandler implements RpcHandler {
                 String docId     = (String) p.get("docId");
                 String action    = (String) p.get("action");
                 String selection = (String) p.get("selection");
+                String userPrompt = (String) p.get("userPrompt");
 
                 if (docId == null || docId.isBlank())
                     return Mono.just(RpcResponse.error(request.getId(), "INVALID_PARAMS", "docId is required"));
@@ -71,7 +72,7 @@ public class DocumentAiAssistHandler implements RpcHandler {
                 var doc = documentService.get(docId, ownerId);
 
                 String systemPrompt = documentConfigService.getSystemPrompt();
-                String userMessage = buildUserMessage(action, doc.getContent(), selection);
+                String userMessage = buildUserMessage(action, doc.getContent(), selection, userPrompt);
 
                 String runId = "doc-assist-" + UUID.randomUUID();
                 String sessionId = "doc-session-" + docId;
@@ -114,16 +115,22 @@ public class DocumentAiAssistHandler implements RpcHandler {
         });
     }
 
-    private String buildUserMessage(String action, String docContent, String selection) {
+    private String buildUserMessage(String action, String docContent, String selection, String userPrompt) {
         String target = (selection != null && !selection.isBlank()) ? selection : docContent;
-        return switch (action) {
-            case "continue"  -> "请续写以下内容：\n\n" + target;
-            case "optimize"  -> "请润色以下文本：\n\n" + target;
-            case "rewrite"   -> "请改写以下文本：\n\n" + target;
-            case "summarize" -> "请总结以下内容的核心要点：\n\n" + target;
-            case "translate" -> "请翻译以下内容：\n\n" + target;
-            default          -> target;
+        String base = switch (action) {
+            case "continue"  -> "请续写以下内容";
+            case "optimize"  -> "请润色以下文本";
+            case "rewrite"   -> "请改写以下文本";
+            case "summarize" -> "请总结以下内容的核心要点";
+            case "translate" -> "请翻译以下内容";
+            default          -> action;
         };
+        StringBuilder sb = new StringBuilder(base);
+        if (userPrompt != null && !userPrompt.isBlank()) {
+            sb.append("。具体要求：").append(userPrompt);
+        }
+        sb.append("：\n\n").append(target);
+        return sb.toString();
     }
 
     private String resolveOwner(String cid) {
