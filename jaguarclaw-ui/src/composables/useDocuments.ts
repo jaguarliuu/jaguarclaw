@@ -108,9 +108,10 @@ export function useDocuments() {
 
     aiUnsubInsert = onEvent('doc.content.insert', (event: RpcEvent) => {
       if (event.runId === streamRunId) {
-        const chunk = (event.data as { content: string })?.content
-          ?? (event.payload as { content: string })?.content
-        if (chunk) onChunk?.(chunk)
+        if (event.payload && typeof event.payload === 'object' && 'content' in event.payload) {
+          const chunk = (event.payload as { content: string }).content
+          if (chunk) onChunk?.(chunk)
+        }
       }
     })
 
@@ -120,6 +121,8 @@ export function useDocuments() {
         aiUnsubDelta?.()
         aiUnsubEnd?.()
         aiUnsubInsert?.()
+        aiUnsubDelta = null
+        aiUnsubEnd = null
         aiUnsubInsert = null
       }
     })
