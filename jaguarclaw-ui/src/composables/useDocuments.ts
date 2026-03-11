@@ -8,7 +8,8 @@ const currentDoc = ref<Document | null>(null)
 const loading = ref(false)
 const saving = ref(false)
 const aiStreaming = ref(false)
-const aiStreamContent = ref('')
+const aiStreamContent = ref('')   // assistant.delta text (for status bar)
+const docInsertContent = ref('')  // doc.content.insert text (for streaming block)
 const aiStatusText = ref('')
 const error = ref<string | null>(null)
 
@@ -85,10 +86,12 @@ export function useDocuments() {
     action: 'continue' | 'optimize' | 'rewrite' | 'summarize' | 'translate',
     selection?: string,
     onChunk?: (chunk: string) => void,
-    userPrompt?: string
+    userPrompt?: string,
+    onDocInsert?: (fullContent: string) => void
   ): Promise<string> {
     aiStreaming.value = true
     aiStreamContent.value = ''
+    docInsertContent.value = ''
     aiStatusText.value = ''
     aiUnsubDelta?.()
     aiUnsubEnd?.()
@@ -113,7 +116,10 @@ export function useDocuments() {
       if (event.runId === streamRunId) {
         if (event.payload && typeof event.payload === 'object' && 'content' in event.payload) {
           const chunk = (event.payload as { content: string }).content
-          if (chunk) onChunk?.(chunk)
+          if (chunk) {
+            docInsertContent.value += chunk
+            onDocInsert?.(docInsertContent.value)
+          }
         }
       }
     })
@@ -141,6 +147,7 @@ export function useDocuments() {
   function stopAiStream() {
     aiStreaming.value = false
     aiStreamContent.value = ''
+    docInsertContent.value = ''
     aiStatusText.value = ''
     aiUnsubDelta?.(); aiUnsubEnd?.(); aiUnsubError?.(); aiUnsubInsert?.()
     aiUnsubDelta = null; aiUnsubEnd = null; aiUnsubError = null; aiUnsubInsert = null
@@ -162,6 +169,7 @@ export function useDocuments() {
     saving: readonly(saving),
     aiStreaming: readonly(aiStreaming),
     aiStreamContent: readonly(aiStreamContent),
+    docInsertContent: readonly(docInsertContent),
     aiStatusText: readonly(aiStatusText),
     error: readonly(error),
     loadTree,

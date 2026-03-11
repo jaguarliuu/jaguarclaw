@@ -12,7 +12,7 @@ const props = defineProps<{ id?: string }>()
 const router = useRouter()
 
 const {
-  tree, currentDoc, saving, aiStreaming, aiStreamContent,
+  tree, currentDoc, saving, aiStreaming, docInsertContent,
   loadTree, loadDocument, createDocument, scheduleSave, deleteDocument,
   aiAssist, stopAiStream,
 } = useDocuments()
@@ -57,8 +57,11 @@ function onChange(title: string, content: string, wordCount: number) {
 async function onAiAction(action: string, selection?: string) {
   if (!currentDoc.value) return
   showAiIndicator.value = true
+  editorRef.value?.insertStreamingBlock()
   try {
-    await aiAssist(currentDoc.value.id, action as any, selection)
+    await aiAssist(currentDoc.value.id, action as any, selection, undefined, undefined, (fullContent) => {
+      editorRef.value?.updateStreamingBlock(fullContent)
+    })
   } catch (e) {
     console.error('AI assist failed:', e)
     showAiIndicator.value = false
@@ -67,12 +70,13 @@ async function onAiAction(action: string, selection?: string) {
 
 function onAiKeep() {
   showAiIndicator.value = false
-  if (aiStreamContent.value) editorRef.value?.insertMarkdown(aiStreamContent.value)
+  editorRef.value?.finalizeStreamingBlock(docInsertContent.value)
   stopAiStream()
 }
 
 async function onAiDiscard() {
   showAiIndicator.value = false
+  editorRef.value?.removeStreamingBlock()
   stopAiStream()
   // Reload from server to discard AI-inserted content
   if (currentDoc.value) await loadDocument(currentDoc.value.id)
@@ -100,7 +104,6 @@ async function onAiDiscard() {
       <DocumentAiIndicator
         v-if="showAiIndicator"
         :streaming="aiStreaming"
-        :content="aiStreamContent"
         @keep="onAiKeep"
         @discard="onAiDiscard"
       />

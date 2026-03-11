@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { useEditor, EditorContent, VueNodeViewRenderer } from '@tiptap/vue-3'
+import { Node } from '@tiptap/core'
 import { BubbleMenuPlugin } from '@tiptap/extension-bubble-menu'
 import StarterKit from '@tiptap/starter-kit'
 import CodeBlock from '@tiptap/extension-code-block'
@@ -10,6 +11,7 @@ import { Table, TableRow, TableHeader, TableCell } from '@tiptap/extension-table
 import { watch, onBeforeUnmount, onMounted, ref, nextTick } from 'vue'
 import { marked } from 'marked'
 import MermaidBlockView from './MermaidBlockView.vue'
+import StreamingBlockView from './StreamingBlockView.vue'
 import type { Document } from '@/types'
 import DocumentBubbleMenu from './DocumentBubbleMenu.vue'
 import DocumentFormatToolbar from './DocumentFormatToolbar.vue'
@@ -44,10 +46,23 @@ const MermaidCodeBlock = CodeBlock.extend({
   }
 })
 
+const StreamingBlock = Node.create({
+  name: 'streamingBlock',
+  group: 'block',
+  atom: true,
+  addAttributes() {
+    return { content: { default: '' } }
+  },
+  parseHTML() { return [{ tag: 'div[data-streaming-block]' }] },
+  renderHTML({ HTMLAttributes }) { return ['div', { 'data-streaming-block': '', ...HTMLAttributes }] },
+  addNodeView() { return VueNodeViewRenderer(StreamingBlockView as any) },
+})
+
 const editor = useEditor({
   extensions: [
     StarterKit.configure({ codeBlock: false }),
     MermaidCodeBlock,
+    StreamingBlock,
     Placeholder.configure({ placeholder: '开始输入…' }),
     createSlashExtension((action) => {
       emit('aiAction', action)
@@ -159,6 +174,66 @@ function insertMarkdown(markdown: string) {
   editor.value.chain().focus().insertContent(html).run()
 }
 
+// ── Streaming block ────────────────────────────────────────────────────────
+
+function insertStreamingBlock() {
+  editor.value?.chain().focus()
+    .insertContent({ type: 'streamingBlock', attrs: { content: '' } })
+    .run()
+}
+
+function updateStreamingBlock(content: string) {
+  if (!editor.value) return
+  const { state, view } = editor.value
+  state.doc.descendants((node, pos) => {
+    if (node.type.name === 'streamingBlock') {
+      const tr = state.tr.setNodeMarkup(pos, undefined, { content })
+      tr.setMeta('addToHistory', false)
+      view.dispatch(tr)
+      return false
+    }
+  })
+}
+
+function finalizeStreamingBlock(markdown: string) {
+  if (!editor.value) return
+  const { state } = editor.value
+  let blockPos: number | null = null
+  let blockEnd: number | null = null
+  state.doc.descendants((node, pos) => {
+    if (node.type.name === 'streamingBlock' && blockPos === null) {
+      blockPos = pos
+      blockEnd = pos + node.nodeSize
+    }
+  })
+  if (blockPos === null) return
+  if (!markdown.trim()) {
+    editor.value.chain().command(({ tr }) => { tr.delete(blockPos!, blockEnd!); return true }).run()
+    return
+  }
+  const html = marked.parse(markdown) as string
+  editor.value.chain()
+    .command(({ tr }) => { tr.delete(blockPos!, blockEnd!); return true })
+    .insertContentAt(blockPos!, html)
+    .run()
+}
+
+function removeStreamingBlock() {
+  if (!editor.value) return
+  const { state } = editor.value
+  let blockPos: number | null = null
+  let blockEnd: number | null = null
+  state.doc.descendants((node, pos) => {
+    if (node.type.name === 'streamingBlock' && blockPos === null) {
+      blockPos = pos
+      blockEnd = pos + node.nodeSize
+    }
+  })
+  if (blockPos !== null) {
+    editor.value.chain().command(({ tr }) => { tr.delete(blockPos!, blockEnd!); return true }).run()
+  }
+}
+
 function openImageFilePicker() {
   imageFileInput.value?.click()
 }
@@ -174,7 +249,7 @@ function onImageFileSelected(e: Event) {
   ;(e.target as HTMLInputElement).value = ''
 }
 
-defineExpose({ insertChunk, insertMarkdown, openImageFilePicker })
+defineExpose({ insertChunk, insertMarkdown, insertStreamingBlock, updateStreamingBlock, finalizeStreamingBlock, removeStreamingBlock, openImageFilePicker })
 </script>
 
 <template>

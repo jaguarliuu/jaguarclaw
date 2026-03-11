@@ -40,7 +40,7 @@ const docId = computed(() => route.params.id as string | undefined)
 
 const {
   tree: docTree, currentDoc, saving: docSaving, aiStreaming: docAiStreaming,
-  aiStatusText: docAiStatusText, aiStreamContent: docAiStreamContent,
+  aiStatusText: docAiStatusText, docInsertContent: docAiInsertContent,
   loadTree, loadDocument, createDocument, scheduleSave, deleteDocument, aiAssist, stopAiStream,
   getConfig, setConfig,
 } = useDocuments()
@@ -75,20 +75,21 @@ function onDocChange(title: string, content: string, wordCount: number) {
 async function onDocAiAction(action: string, selection?: string, userPrompt?: string) {
   if (!currentDoc.value) return
   showAiIndicator.value = true
+  docEditorRef.value?.insertStreamingBlock()
   try {
-    await aiAssist(currentDoc.value.id, action as any, selection, undefined, userPrompt)
+    await aiAssist(currentDoc.value.id, action as any, selection, undefined, userPrompt, (fullContent) => {
+      docEditorRef.value?.updateStreamingBlock(fullContent)
+    })
   } catch (e) { console.error('AI assist failed:', e); showAiIndicator.value = false }
 }
 function onDocAiKeep() {
   showAiIndicator.value = false
-  if (docAiStreamContent.value) {
-    docEditorRef.value?.insertMarkdown(docAiStreamContent.value)
-  }
+  docEditorRef.value?.finalizeStreamingBlock(docAiInsertContent.value)
   stopAiStream()
 }
 async function onDocAiDiscard() {
   showAiIndicator.value = false; stopAiStream()
-  if (currentDoc.value) await loadDocument(currentDoc.value.id)
+  docEditorRef.value?.removeStreamingBlock()
 }
 async function onDocAiSettings() {
   try {
@@ -365,7 +366,6 @@ async function handleInstallAction() {
         <DocumentAiIndicator
           v-if="showAiIndicator"
           :streaming="docAiStreaming"
-          :content="docAiStreamContent"
           @keep="onDocAiKeep"
           @discard="onDocAiDiscard"
         />
