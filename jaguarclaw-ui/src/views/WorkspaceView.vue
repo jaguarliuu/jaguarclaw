@@ -71,13 +71,13 @@ function onDocChange(title: string, content: string, wordCount: number) {
   if (!currentDoc.value) return
   scheduleSave(currentDoc.value.id, title, content, wordCount)
 }
-async function onDocAiAction(action: string, selection?: string) {
+async function onDocAiAction(action: string, selection?: string, userPrompt?: string) {
   if (!currentDoc.value) return
   showAiIndicator.value = true
   try {
     await aiAssist(currentDoc.value.id, action as any, selection, (chunk) => {
       docEditorRef.value?.insertChunk(chunk)
-    })
+    }, userPrompt)
   } catch (e) { console.error('AI assist failed:', e); showAiIndicator.value = false }
 }
 function onDocAiKeep() { showAiIndicator.value = false; stopAiStream() }

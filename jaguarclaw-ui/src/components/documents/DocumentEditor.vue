@@ -11,6 +11,7 @@ import type { Document } from '@/types'
 import DocumentBubbleMenu from './DocumentBubbleMenu.vue'
 import DocumentFormatToolbar from './DocumentFormatToolbar.vue'
 import { createSlashExtension } from './SlashExtension'
+import DocumentAiPromptBubble from './DocumentAiPromptBubble.vue'
 
 const props = defineProps<{
   document: Document | null
@@ -20,12 +21,18 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   change: [title: string, content: string, wordCount: number]
-  aiAction: [action: string, selection?: string]
+  aiAction: [action: string, selection?: string, userPrompt?: string]
   aiSettings: []
 }>()
 
 const titleValue = ref(props.document?.title ?? '')
 const bubbleMenuRef = ref<HTMLElement | null>(null)
+
+const aiPromptVisible = ref(false)
+const aiPromptAction = ref('')
+const aiPromptX = ref(0)
+const aiPromptY = ref(0)
+const aiPromptSelection = ref<string | undefined>(undefined)
 
 const editor = useEditor({
   extensions: [
@@ -91,8 +98,31 @@ function onTitleInput(e: Event) {
 function handleAiAction(action: string) {
   if (!editor.value) return
   const { from, to, empty } = editor.value.state.selection
-  const selection = empty ? undefined : editor.value.state.doc.textBetween(from, to)
-  emit('aiAction', action, selection)
+  aiPromptSelection.value = empty ? undefined : editor.value.state.doc.textBetween(from, to)
+
+  // Get cursor DOM coordinates for bubble positioning
+  try {
+    const coords = editor.value.view.coordsAtPos(from)
+    // Position below cursor, clamped to viewport
+    aiPromptX.value = Math.min(coords.left, window.innerWidth - 340)
+    aiPromptY.value = Math.min(coords.bottom + 8, window.innerHeight - 120)
+  } catch {
+    // Fallback: center-ish position
+    aiPromptX.value = Math.max(window.innerWidth / 2 - 180, 16)
+    aiPromptY.value = 200
+  }
+
+  aiPromptAction.value = action
+  aiPromptVisible.value = true
+}
+
+function handleAiPromptConfirm(userPrompt: string) {
+  aiPromptVisible.value = false
+  emit('aiAction', aiPromptAction.value, aiPromptSelection.value, userPrompt || undefined)
+}
+
+function handleAiPromptCancel() {
+  aiPromptVisible.value = false
 }
 
 function insertChunk(text: string) {
@@ -129,6 +159,15 @@ defineExpose({ insertChunk })
     <div class="doc-editor__body">
       <EditorContent :editor="editor" />
     </div>
+
+    <DocumentAiPromptBubble
+      :visible="aiPromptVisible"
+      :action="aiPromptAction"
+      :x="aiPromptX"
+      :y="aiPromptY"
+      @confirm="handleAiPromptConfirm"
+      @cancel="handleAiPromptCancel"
+    />
   </div>
   <div v-else class="doc-editor__empty">
     <div class="doc-editor__empty-icon">📄</div>

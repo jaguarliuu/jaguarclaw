@@ -84,7 +84,8 @@ export function useDocuments() {
     docId: string,
     action: 'continue' | 'optimize' | 'rewrite' | 'summarize' | 'translate',
     selection?: string,
-    onChunk?: (chunk: string) => void
+    onChunk?: (chunk: string) => void,
+    userPrompt?: string
   ): Promise<string> {
     aiStreaming.value = true
     aiStreamContent.value = ''
@@ -94,7 +95,7 @@ export function useDocuments() {
     aiUnsubError?.()
     aiUnsubInsert?.()
 
-    const result = await request<{ streamRunId: string }>('document.ai.assist', { docId, action, selection })
+    const result = await request<{ streamRunId: string }>('document.ai.assist', { docId, action, selection, userPrompt })
     const streamRunId = result.streamRunId
 
     aiUnsubDelta = onEvent('assistant.delta', (event: RpcEvent) => {
