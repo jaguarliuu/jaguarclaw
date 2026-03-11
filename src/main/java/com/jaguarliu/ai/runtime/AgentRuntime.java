@@ -207,8 +207,16 @@ public class AgentRuntime {
             }
 
             if (shouldStopOnHitlReject) {
-                // Wait for any pending subagents so their results are captured before exiting.
+                // 如果有待完成的子代理，先等待它们完成并注入结果。
+                // 注入后让 LLM 汇总子代理结果，而非返回硬编码的拒绝消息。
+                boolean hadPendingSubagents = !pendingSubRunIds.isEmpty() && context.isMain();
                 waitForPendingSubagentsIntoMessages(pendingSubRunIds, context, messages);
+                if (hadPendingSubagents) {
+                    log.info("HITL rejected with subagent results, doing final LLM summary: runId={}",
+                            context.getRunId());
+                    StepResult summary = executeSingleStep(context, messages);
+                    return summary.content();
+                }
                 String rejectedTool = rejectedToolName != null ? rejectedToolName : "unknown";
                 String stopMessage = "Tool call was rejected by user (" + rejectedTool + "). Execution stopped.";
                 messages.add(LlmRequest.Message.assistant(stopMessage));

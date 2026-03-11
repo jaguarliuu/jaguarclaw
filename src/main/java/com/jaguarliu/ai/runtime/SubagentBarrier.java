@@ -24,6 +24,7 @@ import java.util.concurrent.TimeoutException;
 public class SubagentBarrier {
 
     private final SubagentCompletionTracker subagentCompletionTracker;
+    private final CancellationManager cancellationManager;
 
     /**
      * 等待所有已 spawn 的子代理完成，并构建结果摘要。
@@ -43,12 +44,16 @@ public class SubagentBarrier {
         for (int i = 0; i < subRunIds.size(); i++) {
             String subRunId = subRunIds.get(i);
 
-            // 父运行取消：将剩余全部标记为 cancelled
+            // 父运行取消：向所有剩余子代理传播取消信号，并立即退出等待
             if (context.isAborted()) {
                 log.info("Subagent barrier aborted by cancellation: runId={}", context.getRunId());
                 for (int j = i; j < subRunIds.size(); j++) {
+                    String pendingSubRunId = subRunIds.get(j);
+                    cancellationManager.requestCancel(pendingSubRunId);
+                    subagentCompletionTracker.cleanup(pendingSubRunId);
+                    log.info("Propagated cancellation to subagent: subRunId={}", pendingSubRunId);
                     results.add(new SubagentCompletionTracker.SubagentResult(
-                            subRunIds.get(j), "unknown", "cancelled", null, "Parent run cancelled", 0));
+                            pendingSubRunId, "unknown", "cancelled", null, "Parent run cancelled", 0));
                 }
                 break;
             }

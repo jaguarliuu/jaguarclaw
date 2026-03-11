@@ -200,16 +200,16 @@ public class SubagentService {
             // 7. lifecycle.end
             runService.updateStatus(runId, RunStatus.DONE);
 
-            // 8. Announce 回传（如果启用）
-            if (request.isAnnounce()) {
-                announceService.announce(connectionId, subRun, subSession, response, null, startTime);
-            }
-
-            // 9. 完成跟踪 future（通知主循环）
+            // 8. 完成跟踪 future（先通知主循环，让主 Agent 可以立即开始汇总）
             long durationMs = Duration.between(startTime, LocalDateTime.now()).toMillis();
             completionTracker.complete(runId, new SubagentCompletionTracker.SubagentResult(
                     runId, task, "completed", response, null, durationMs
             ));
+
+            // 9. Announce 回传（后发 WebSocket 事件，使其与主 Agent 汇总结果的时序对齐）
+            if (request.isAnnounce()) {
+                announceService.announce(connectionId, subRun, subSession, response, null, startTime);
+            }
 
             log.info("Subagent run completed: runId={}, response length={}", runId, response.length());
 
@@ -247,18 +247,18 @@ public class SubagentService {
                 errorMessage
         ));
 
-        // 即使失败也回传（包含错误信息）
-        if (request.isAnnounce()) {
-            announceService.announce(connectionId, subRun, subSession, null, errorMessage, startTime);
-        }
-
-        // 完成跟踪 future（通知主循环）
+        // 完成跟踪 future（先通知主循环）
         long durationMs = startTime != null
                 ? Duration.between(startTime, LocalDateTime.now()).toMillis()
                 : 0;
         completionTracker.complete(subRun.getId(), new SubagentCompletionTracker.SubagentResult(
                 subRun.getId(), request.getTask(), "failed", null, errorMessage, durationMs
         ));
+
+        // 即使失败也回传（包含错误信息）
+        if (request.isAnnounce()) {
+            announceService.announce(connectionId, subRun, subSession, null, errorMessage, startTime);
+        }
     }
 
     /**
