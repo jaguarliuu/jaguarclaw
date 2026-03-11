@@ -18,6 +18,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   change: [title: string, content: string, wordCount: number]
   aiAction: [action: string, selection?: string]
+  aiSettings: []
 }>()
 
 const titleValue = ref(props.document?.title ?? '')
@@ -105,6 +106,7 @@ defineExpose({ insertChunk })
         <button @click="handleAiAction('continue')" :disabled="aiStreaming">续写</button>
         <button @click="handleAiAction('optimize')" :disabled="aiStreaming">润色全文</button>
         <button @click="handleAiAction('summarize')" :disabled="aiStreaming">总结</button>
+        <button @click="emit('aiSettings')" style="margin-left: 8px">⚙ AI 设置</button>
         <span class="doc-editor__save-status">{{ saving ? '保存中…' : '已保存' }}</span>
       </div>
     </div>

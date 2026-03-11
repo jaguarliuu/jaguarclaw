@@ -23,6 +23,7 @@ import DocumentSidebar from '@/components/documents/DocumentSidebar.vue'
 import DocumentEditor from '@/components/documents/DocumentEditor.vue'
 import DocumentAiIndicator from '@/components/documents/DocumentAiIndicator.vue'
 import DocumentStatusBar from '@/components/documents/DocumentStatusBar.vue'
+import DocumentAiSettingsPopover from '@/components/documents/DocumentAiSettingsPopover.vue'
 import { useArtifact } from '@/composables/useArtifact'
 import { useHeartbeat } from '@/composables/useHeartbeat'
 
@@ -40,11 +41,14 @@ const docId = computed(() => route.params.id as string | undefined)
 const {
   tree: docTree, currentDoc, saving: docSaving, aiStreaming: docAiStreaming, aiStatusText: docAiStatusText,
   loadTree, loadDocument, createDocument, scheduleSave, deleteDocument, aiAssist, stopAiStream,
+  getConfig, setConfig,
 } = useDocuments()
 
 const showAiIndicator = ref(false)
 const docEditorRef = ref<InstanceType<typeof DocumentEditor> | null>(null)
 const mutableDocTree = computed(() => docTree.value as DocumentNode[])
+const showAiSettings = ref(false)
+const aiSystemPrompt = ref('')
 
 watch(isDocumentMode, async (on) => {
   if (on) await loadTree()
@@ -80,6 +84,14 @@ function onDocAiKeep() { showAiIndicator.value = false; stopAiStream() }
 async function onDocAiDiscard() {
   showAiIndicator.value = false; stopAiStream()
   if (currentDoc.value) await loadDocument(currentDoc.value.id)
+}
+async function onDocAiSettings() {
+  aiSystemPrompt.value = await getConfig()
+  showAiSettings.value = true
+}
+
+async function onDocAiSettingsSave(prompt: string) {
+  await setConfig(prompt)
 }
 // ─────────────────────────────────────────────────────────────────────────────
 const {
@@ -335,12 +347,18 @@ async function handleInstallAction() {
           :ai-streaming="docAiStreaming"
           @change="onDocChange"
           @ai-action="onDocAiAction"
+          @ai-settings="onDocAiSettings"
         />
         <DocumentAiIndicator
           v-if="showAiIndicator"
           :streaming="docAiStreaming"
           @keep="onDocAiKeep"
           @discard="onDocAiDiscard"
+        />
+        <DocumentAiSettingsPopover
+          v-model="showAiSettings"
+          :system-prompt="aiSystemPrompt"
+          @save="onDocAiSettingsSave"
         />
       </div>
     </template>

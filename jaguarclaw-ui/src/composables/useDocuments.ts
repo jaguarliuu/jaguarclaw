@@ -142,6 +142,15 @@ export function useDocuments() {
     aiUnsubInsert = null
   }
 
+  async function getConfig(): Promise<string> {
+    const result = await request<{ systemPrompt: string }>('document.config.get', {})
+    return result.systemPrompt
+  }
+
+  async function setConfig(systemPrompt: string): Promise<void> {
+    await request('document.config.set', { systemPrompt })
+  }
+
   return {
     tree: readonly(tree),
     currentDoc: readonly(currentDoc),
@@ -158,6 +167,8 @@ export function useDocuments() {
     deleteDocument,
     aiAssist,
     stopAiStream,
+    getConfig,
+    setConfig,
   }
 }
 
