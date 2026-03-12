@@ -216,6 +216,8 @@ export default {
         securityBadge: 'Security',
         deliveryTools: 'Delivery Tools',
         deliveryToolsDesc: 'Configure send_email and send_webhook tool visibility and targets',
+        trustedReadPaths: 'Trusted Read Paths',
+        trustedReadPathsDesc: 'Allow agents to read files outside the workspace without confirmation',
       },
       errors: {
         failedToSave: 'Failed to save',
@@ -760,6 +762,17 @@ export default {
       empty: 'No custom domains added',
       placeholder: 'example.com',
       addBtn: '+ Add',
+      saveBtn: 'Save Changes',
+    },
+    trustedPaths: {
+      title: 'Trusted Read Paths',
+      subtitle: 'Agents can read files from these directories without confirmation',
+      pathsLabel: 'CONFIGURED PATHS',
+      pathsHelp: 'Add absolute paths — reading files inside them will be allowed automatically',
+      empty: 'No paths configured — reading files outside the workspace will require confirmation',
+      placeholder: '/home/user/docs or D:\\projects',
+      addBtn: '+ Add',
+      browseBtn: 'Browse...',
       saveBtn: 'Save Changes',
     },
     commandSafety: {

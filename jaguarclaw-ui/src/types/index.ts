@@ -524,6 +524,7 @@ export interface ToolConfig {
     alwaysConfirmTools: string[]
     dangerousKeywords: string[]
   }
+  trustedReadPaths: string[]
   delivery: {
     email: EmailDeliveryConfig
     webhook: WebhookDeliveryConfig

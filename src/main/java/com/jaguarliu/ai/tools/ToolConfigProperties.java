@@ -53,6 +53,12 @@ public class ToolConfigProperties {
      */
     private List<String> dangerousKeywords = new ArrayList<>();
 
+    /**
+     * 用户配置的可信读取目录（绝对路径列表）
+     * agent 可以读取这些目录下的任意文件，无需 HITL 确认
+     */
+    private List<String> trustedReadPaths = new ArrayList<>();
+
     private Integer timeout = 60;
 
     /**

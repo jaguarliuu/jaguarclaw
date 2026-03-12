@@ -4,6 +4,7 @@ import com.jaguarliu.ai.agents.context.AgentWorkspaceResolver;
 import com.jaguarliu.ai.gateway.events.EventBus;
 import com.jaguarliu.ai.llm.model.ToolCall;
 import com.jaguarliu.ai.session.SessionFileService;
+import com.jaguarliu.ai.tools.ToolConfigProperties;
 import com.jaguarliu.ai.tools.ToolDispatcher;
 import com.jaguarliu.ai.tools.ToolRegistry;
 import com.jaguarliu.ai.tools.ToolResult;
@@ -49,6 +50,9 @@ class ToolExecutorTest {
 
     @Mock
     private AgentWorkspaceResolver agentWorkspaceResolver;
+
+    @Mock
+    private ToolConfigProperties toolConfigProperties;
 
     @InjectMocks
     private ToolExecutor toolExecutor;

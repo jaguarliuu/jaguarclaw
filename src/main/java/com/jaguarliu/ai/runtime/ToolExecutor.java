@@ -6,6 +6,7 @@ import com.jaguarliu.ai.gateway.events.AgentEvent;
 import com.jaguarliu.ai.gateway.events.EventBus;
 import com.jaguarliu.ai.llm.model.ToolCall;
 import com.jaguarliu.ai.session.SessionFileService;
+import com.jaguarliu.ai.tools.ToolConfigProperties;
 import com.jaguarliu.ai.tools.ToolDispatcher;
 import com.jaguarliu.ai.tools.ToolExecutionContext;
 import com.jaguarliu.ai.tools.ToolRegistry;
@@ -18,6 +19,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -55,8 +57,10 @@ public class ToolExecutor {
     private final EventBus eventBus;
     private final SessionFileService sessionFileService;
     private final AgentWorkspaceResolver agentWorkspaceResolver;
+    private final ToolConfigProperties toolConfigProperties;
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final Set<String> READ_TOOLS = Set.of("read_file", "read_docx", "read_xlsx");
 
     /**
      * 执行工具调用列表
@@ -103,7 +107,12 @@ public class ToolExecutor {
 
         // 定时任务运行时跳过所有 HITL 确认
         boolean isScheduledRun = "scheduled".equals(context.getRunKind());
-        boolean requiresHitl = !isScheduledRun && toolDispatcher.requiresHitl(toolName, confirmBefore, arguments);
+        boolean requiresHitl = !isScheduledRun && (
+                toolDispatcher.requiresHitl(toolName, confirmBefore, arguments) ||
+                requiresPathApproval(toolName, arguments, context));
+
+        // 本次调用批准的额外读取路径（路径级 HITL 批准后有效）
+        Set<Path> approvedReadPaths = new HashSet<>();
 
         if (requiresHitl) {
             log.info("Tool requires HITL confirmation: name={}, callId={}", toolName, callId);
@@ -144,6 +153,16 @@ public class ToolExecutor {
                 arguments = decision.getModifiedArguments();
                 log.info("Using modified arguments for tool: name={}, callId={}", toolName, callId);
             }
+
+            // 收集本次批准的路径（路径级 HITL）
+            if (READ_TOOLS.contains(toolName)) {
+                String pathArg = (String) arguments.get("path");
+                if (pathArg != null) {
+                    try {
+                        approvedReadPaths.add(Path.of(pathArg).toAbsolutePath().normalize());
+                    } catch (Exception ignored) {}
+                }
+            }
         }
 
         if (context.isAborted()) {
@@ -159,7 +178,7 @@ public class ToolExecutor {
                 arguments));
 
         // 设置工具执行上下文
-        setupToolExecutionContext(context);
+        setupToolExecutionContext(context, approvedReadPaths);
 
         // 执行工具
         ToolResult result;
@@ -226,7 +245,7 @@ public class ToolExecutor {
     /**
      * 设置工具执行上下文
      */
-    private void setupToolExecutionContext(RunContext context) {
+    private void setupToolExecutionContext(RunContext context, Set<Path> approvedReadPaths) {
         ToolExecutionContext.Builder builder = ToolExecutionContext.builder()
                 .runId(context.getRunId())
                 .sessionId(context.getSessionId())
@@ -244,7 +263,56 @@ public class ToolExecutor {
             log.debug("Added skill resource path to tool context: {}", context.getSkillBasePath());
         }
 
+        // 注入用户配置的可信读取目录（B 方案）
+        for (String trusted : toolConfigProperties.getTrustedReadPaths()) {
+            try {
+                builder.addAllowedPath(Path.of(trusted).toAbsolutePath().normalize());
+            } catch (Exception e) {
+                log.warn("Invalid trusted read path ignored: {}", trusted);
+            }
+        }
+
+        // 注入 HITL 批准的路径（C 方案，本次执行有效）
+        for (Path p : approvedReadPaths) {
+            builder.addAllowedPath(p);
+        }
+
         ToolExecutionContext.set(builder.build());
+    }
+
+    /**
+     * 判断此次读取工具调用是否需要路径级 HITL 确认。
+     * 条件：read_file / read_docx / read_xlsx + 绝对路径 + 不在 workspace + 不在可信目录
+     */
+    private boolean requiresPathApproval(String toolName, Map<String, Object> arguments, RunContext context) {
+        if (!READ_TOOLS.contains(toolName)) return false;
+        String pathArg = (String) arguments.get("path");
+        if (pathArg == null) return false;
+
+        Path path;
+        try {
+            path = Path.of(pathArg);
+        } catch (Exception e) {
+            return false;
+        }
+        if (!path.isAbsolute()) return false;
+
+        Path normalized = path.normalize();
+
+        // 检查 agent workspace
+        try {
+            Path workspace = agentWorkspaceResolver.resolveAgentWorkspace(context.getAgentId());
+            if (normalized.startsWith(workspace)) return false;
+        } catch (Exception ignored) {}
+
+        // 检查可信目录列表
+        for (String trusted : toolConfigProperties.getTrustedReadPaths()) {
+            try {
+                if (normalized.startsWith(Path.of(trusted).toAbsolutePath().normalize())) return false;
+            } catch (Exception ignored) {}
+        }
+
+        return true; // 需要 HITL 确认
     }
 
     /**

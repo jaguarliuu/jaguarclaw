@@ -64,6 +64,8 @@ public class ToolConfigService {
         hitl.put("dangerousKeywords", properties.getDangerousKeywords());
         result.put("hitl", hitl);
 
+        result.put("trustedReadPaths", properties.getTrustedReadPaths());
+
         Map<String, Object> delivery = new LinkedHashMap<>();
 
         // Email tool configuration
@@ -149,6 +151,12 @@ public class ToolConfigService {
                     properties.setDangerousKeywords(keywords != null ? new ArrayList<>(keywords) : new ArrayList<>());
                 }
             }
+        }
+
+        // 更新可信读取目录
+        if (params.containsKey("trustedReadPaths")) {
+            List<String> paths = (List<String>) params.get("trustedReadPaths");
+            properties.setTrustedReadPaths(paths != null ? new ArrayList<>(paths) : new ArrayList<>());
         }
 
         // 更新 Email 工具配置
@@ -322,6 +330,14 @@ public class ToolConfigService {
                 }
             }
 
+            if (config.containsKey("trustedReadPaths")) {
+                @SuppressWarnings("unchecked")
+                List<String> paths = (List<String>) config.get("trustedReadPaths");
+                if (paths != null) {
+                    properties.setTrustedReadPaths(new ArrayList<>(paths));
+                }
+            }
+
             if (deliveryConfig != null && deliveryConfig.containsKey("email")) {
                 @SuppressWarnings("unchecked")
                 Map<String, Object> email = (Map<String, Object>) deliveryConfig.get("email");
@@ -430,6 +446,8 @@ public class ToolConfigService {
             hitl.put("alwaysConfirmTools", properties.getAlwaysConfirmTools());
             hitl.put("dangerousKeywords", properties.getDangerousKeywords());
             config.put("hitl", hitl);
+
+            config.put("trustedReadPaths", properties.getTrustedReadPaths());
 
             ToolConfigProperties.EmailToolConfig email = properties.getEmail();
             Map<String, Object> delivery = new LinkedHashMap<>();

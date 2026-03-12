@@ -32,6 +32,7 @@ export function useToolConfig() {
       alwaysConfirmTools: string[]
       dangerousKeywords: string[]
     }
+    trustedReadPaths?: string[]
     delivery?: {
       email: {
         enabled: boolean

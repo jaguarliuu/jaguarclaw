@@ -7,12 +7,13 @@ import TrustedDomainsModal from './modals/TrustedDomainsModal.vue'
 import SearchProvidersModal from './modals/SearchProvidersModal.vue'
 import CommandSafetyModal from './modals/CommandSafetyModal.vue'
 import DeliveryConfigModal from './modals/DeliveryConfigModal.vue'
+import TrustedPathsModal from './modals/TrustedPathsModal.vue'
 
 const { config, loading, error, getConfig, saveConfig } = useToolConfig()
 const { t } = useI18n()
 
 // Modal state
-const activeModal = ref<'domains' | 'providers' | 'safety' | 'delivery' | null>(null)
+const activeModal = ref<'domains' | 'providers' | 'safety' | 'delivery' | 'paths' | null>(null)
 
 // Save state
 const saving = ref(false)
@@ -46,6 +47,12 @@ const deliverySummary = computed(() => {
   const webhookCount = webhook?.endpoints?.length || 0
   const webhookStatus = webhook?.enabled ? `enabled (${webhookCount} endpoints)` : 'disabled'
   return `Email: ${emailStatus}, Webhook: ${webhookStatus}`
+})
+
+const pathsSummary = computed(() => {
+  if (!config.value) return ''
+  const n = config.value.trustedReadPaths?.length || 0
+  return n === 0 ? 'No paths configured' : `${n} ${n === 1 ? 'path' : 'paths'} configured`
 })
 
 function currentDelivery() {
@@ -124,6 +131,7 @@ async function handleSaveDomains(domains: string[]) {
         alwaysConfirmTools: Array.from(config.value?.hitl?.alwaysConfirmTools || []),
         dangerousKeywords: Array.from(config.value?.hitl?.dangerousKeywords || [])
       },
+      trustedReadPaths: Array.from(config.value?.trustedReadPaths || []),
       delivery: currentDeliveryForSave()
     })
     await getConfig()
@@ -149,6 +157,7 @@ async function handleSaveProviders(providers: { type: string; apiKey: string; en
         alwaysConfirmTools: Array.from(config.value?.hitl?.alwaysConfirmTools || []),
         dangerousKeywords: Array.from(config.value?.hitl?.dangerousKeywords || [])
       },
+      trustedReadPaths: Array.from(config.value?.trustedReadPaths || []),
       delivery: currentDeliveryForSave()
     })
     await getConfig()
@@ -175,6 +184,7 @@ async function handleSaveSafety(data: { alwaysConfirmTools: string[]; dangerousK
         enabled: p.enabled
       })) || [],
       hitl: data,
+      trustedReadPaths: Array.from(config.value?.trustedReadPaths || []),
       delivery: currentDeliveryForSave()
     })
     await getConfig()
@@ -225,7 +235,38 @@ async function handleSaveDelivery(data: {
         alwaysConfirmTools: Array.from(config.value?.hitl?.alwaysConfirmTools || []),
         dangerousKeywords: Array.from(config.value?.hitl?.dangerousKeywords || [])
       },
+      trustedReadPaths: Array.from(config.value?.trustedReadPaths || []),
       delivery: data
+    })
+    await getConfig()
+    saveSuccess.value = true
+    activeModal.value = null
+    setTimeout(() => { saveSuccess.value = false }, 3000)
+  } catch (e) {
+    saveError.value = e instanceof Error ? e.message : t('sections.tools.errors.failedToSave')
+  } finally {
+    saving.value = false
+  }
+}
+
+async function handleSavePaths(paths: string[]) {
+  saving.value = true
+  saveError.value = null
+  saveSuccess.value = false
+  try {
+    await saveConfig({
+      userDomains: Array.from(config.value?.trustedDomains.user || []),
+      searchProviders: config.value?.searchProviders.map(p => ({
+        type: p.type,
+        apiKey: '',
+        enabled: p.enabled
+      })) || [],
+      hitl: {
+        alwaysConfirmTools: Array.from(config.value?.hitl?.alwaysConfirmTools || []),
+        dangerousKeywords: Array.from(config.value?.hitl?.dangerousKeywords || [])
+      },
+      trustedReadPaths: paths,
+      delivery: currentDeliveryForSave()
     })
     await getConfig()
     saveSuccess.value = true
@@ -298,6 +339,13 @@ onMounted(async () => {
           :summary="deliverySummary"
           @click="activeModal = 'delivery'"
         />
+
+        <ConfigCard
+          :title="t('sections.tools.cards.trustedReadPaths')"
+          :description="t('sections.tools.cards.trustedReadPathsDesc')"
+          :summary="pathsSummary"
+          @click="activeModal = 'paths'"
+        />
       </div>
     </template>
 
@@ -338,6 +386,13 @@ onMounted(async () => {
       :webhook="currentDeliveryForModal().webhook"
       @close="activeModal = null"
       @save="handleSaveDelivery"
+    />
+
+    <TrustedPathsModal
+      v-if="activeModal === 'paths' && config"
+      :paths="Array.from(config.trustedReadPaths || [])"
+      @close="activeModal = null"
+      @save="handleSavePaths"
     />
   </div>
 </template>

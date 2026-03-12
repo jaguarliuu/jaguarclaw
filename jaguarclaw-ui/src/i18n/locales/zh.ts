@@ -215,6 +215,8 @@ export default {
         securityBadge: '安全',
         deliveryTools: '投递工具',
         deliveryToolsDesc: '配置 send_email 和 send_webhook 工具的可见性与目标',
+        trustedReadPaths: '可信读取目录',
+        trustedReadPathsDesc: '允许 agent 读取 workspace 外的指定目录，无需每次确认',
       },
       errors: {
         failedToSave: '保存失败',
@@ -759,6 +761,17 @@ export default {
       empty: '暂无自定义域名',
       placeholder: 'example.com',
       addBtn: '+ 添加',
+      saveBtn: '保存更改',
+    },
+    trustedPaths: {
+      title: '可信读取目录',
+      subtitle: 'agent 可以直接读取这些目录下的文件，无需每次弹窗确认',
+      pathsLabel: '已配置目录',
+      pathsHelp: '添加绝对路径，agent 读取其中的文件时将自动放行',
+      empty: '暂无配置目录——读取 workspace 外文件时将弹窗确认',
+      placeholder: '/home/user/docs 或 D:\\projects',
+      addBtn: '+ 添加',
+      browseBtn: '浏览文件夹...',
       saveBtn: '保存更改',
     },
     commandSafety: {
