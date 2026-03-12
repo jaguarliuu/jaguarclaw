@@ -17,6 +17,7 @@ import org.springframework.stereotype.Component;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * 定时任务执行器
@@ -26,6 +27,24 @@ import java.util.Map;
 @Component
 @RequiredArgsConstructor
 public class ScheduledTaskExecutor {
+
+    private static final String EMAIL_AUTO_DELIVERY_INSTRUCTION = """
+
+            IMPORTANT: This scheduled task already has automatic email delivery configured.
+            Do not call send_email yourself.
+            Return only the final email body content.
+            Return the final email body as clean HTML using tags like <h1>, <h2>, <p>, <ul>, <ol>, <li>, <table>, <tr>, <th>, <td> when helpful.
+            Do not wrap the result in Markdown fences.
+            Do not add meta commentary about sending email.
+            """;
+
+    private static final String WEBHOOK_AUTO_DELIVERY_INSTRUCTION = """
+
+            IMPORTANT: This scheduled task already has automatic webhook delivery configured.
+            Do not call send_webhook yourself.
+            Return only the final payload content to be delivered.
+            Do not add meta commentary about sending the webhook.
+            """;
 
     private final SessionService sessionService;
     private final RunService runService;
@@ -44,6 +63,8 @@ public class ScheduledTaskExecutor {
     public void execute(ScheduledTaskEntity task) {
         log.info("Scheduled task executing: name={}, id={}", task.getName(), task.getId());
         try {
+            String executionPrompt = buildExecutionPrompt(task);
+
             // 1. 创建专用会话（scheduled kind，不在主列表显示）
             SessionEntity session = sessionService.createScheduledSession("[Scheduled] " + task.getName());
 
@@ -55,14 +76,15 @@ public class ScheduledTaskExecutor {
             messageService.saveUserMessage(session.getId(), run.getId(), task.getPrompt());
 
             // 4. 构建消息上下文（无历史）
-            List<LlmRequest.Message> messages = contextBuilder.buildMessages(List.of(), task.getPrompt());
+            List<LlmRequest.Message> messages = contextBuilder.buildMessages(List.of(), executionPrompt);
 
             // 5. 构建 scheduled RunContext（runKind = "scheduled"，跳过 HITL）
             RunContext context = RunContext.createScheduled(
                     run.getId(), session.getId(), loopConfig, cancellationManager);
+            context.setAgentDeniedTools(resolveAutoDeliveryDeniedTools(task));
 
             // 6. 执行 Agent 循环
-            String response = agentRuntime.executeLoopWithContext(context, messages, task.getPrompt());
+            String response = agentRuntime.executeLoopWithContext(context, messages, executionPrompt);
 
             // 7. 保存助手消息
             messageService.saveAssistantMessage(session.getId(), run.getId(), response);
@@ -97,8 +119,8 @@ public class ScheduledTaskExecutor {
         try {
             if ("email".equals(task.getTargetType())) {
                 String subject = success
-                        ? "[JaguarClaw] " + task.getName() + " - 执行完成"
-                        : "[JaguarClaw] " + task.getName() + " - 执行失败";
+                        ? task.getName()
+                        : task.getName() + " - 执行失败";
                 String body = success ? result : "任务执行失败：\n" + error;
                 deliveryToolService.sendEmail(task.getEmailTo(), subject, body, task.getEmailCc());
             } else if ("webhook".equals(task.getTargetType())) {
@@ -113,5 +135,25 @@ public class ScheduledTaskExecutor {
         } catch (Exception e) {
             log.error("Failed to push scheduled task result to delivery target: {}", e.getMessage());
         }
+    }
+
+    private String buildExecutionPrompt(ScheduledTaskEntity task) {
+        if ("email".equals(task.getTargetType())) {
+            return task.getPrompt() + EMAIL_AUTO_DELIVERY_INSTRUCTION;
+        }
+        if ("webhook".equals(task.getTargetType())) {
+            return task.getPrompt() + WEBHOOK_AUTO_DELIVERY_INSTRUCTION;
+        }
+        return task.getPrompt();
+    }
+
+    private Set<String> resolveAutoDeliveryDeniedTools(ScheduledTaskEntity task) {
+        if ("email".equals(task.getTargetType())) {
+            return Set.of("send_email");
+        }
+        if ("webhook".equals(task.getTargetType())) {
+            return Set.of("send_webhook");
+        }
+        return Set.of();
     }
 }

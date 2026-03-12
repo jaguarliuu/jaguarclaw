@@ -11,6 +11,10 @@ import jakarta.mail.internet.InternetAddress;
 import jakarta.mail.internet.MimeMessage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.commonmark.ext.gfm.tables.TablesExtension;
+import org.commonmark.node.Node;
+import org.commonmark.parser.Parser;
+import org.commonmark.renderer.html.HtmlRenderer;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 
@@ -23,6 +27,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.regex.Pattern;
 
 @Slf4j
 @Service
@@ -30,6 +35,15 @@ import java.util.Properties;
 public class DeliveryToolService {
 
     private static final int MAX_RESPONSE_LENGTH = 32000;
+    private static final Pattern HTML_TAG_PATTERN = Pattern.compile("<[a-zA-Z][^>]*>");
+    private static final List<org.commonmark.Extension> MARKDOWN_EXTENSIONS = List.of(TablesExtension.create());
+    private static final Parser MARKDOWN_PARSER = Parser.builder()
+            .extensions(MARKDOWN_EXTENSIONS)
+            .build();
+    private static final HtmlRenderer MARKDOWN_RENDERER = HtmlRenderer.builder()
+            .extensions(MARKDOWN_EXTENSIONS)
+            .softbreak("<br />\n")
+            .build();
 
     private final ToolConfigProperties toolConfigProperties;
     private final ToolConfigService toolConfigService;
@@ -94,8 +108,7 @@ public class DeliveryToolService {
             }
             message.setSubject(subject, "UTF-8");
 
-            boolean looksLikeHtml = body != null && body.contains("<") && body.contains(">");
-            String htmlBody = looksLikeHtml ? body : escapeHtml(body);
+            String htmlBody = renderEmailBody(body);
             message.setContent(htmlBody, "text/html; charset=UTF-8");
 
             Transport.send(message);
@@ -105,6 +118,19 @@ public class DeliveryToolService {
             log.error("Failed to send email via delivery tool: {}", e.getMessage(), e);
             throw new RuntimeException("Failed to send email: " + e.getMessage(), e);
         }
+    }
+
+    static String renderEmailBody(String body) {
+        if (body == null || body.isBlank()) {
+            return "";
+        }
+        if (looksLikeHtml(body)) {
+            return body;
+        }
+
+        Node document = MARKDOWN_PARSER.parse(body);
+        String rendered = MARKDOWN_RENDERER.render(document);
+        return rendered == null || rendered.isBlank() ? escapeHtml(body) : rendered;
     }
 
     public String sendWebhook(String target, String payload, String triggerHint) {
@@ -333,7 +359,7 @@ public class DeliveryToolService {
         return normalized;
     }
 
-    private String escapeHtml(String text) {
+    private static String escapeHtml(String text) {
         if (text == null) {
             return "";
         }
@@ -341,6 +367,10 @@ public class DeliveryToolService {
                 .replace("<", "&lt;")
                 .replace(">", "&gt;")
                 .replace("\n", "<br>\n");
+    }
+
+    private static boolean looksLikeHtml(String text) {
+        return text != null && HTML_TAG_PATTERN.matcher(text).find();
     }
 
     private boolean containsIgnoreCase(String source, String token) {
