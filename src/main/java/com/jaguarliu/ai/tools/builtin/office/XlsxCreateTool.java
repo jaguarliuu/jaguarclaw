@@ -1,8 +1,12 @@
 package com.jaguarliu.ai.tools.builtin.office;
 
+import com.jaguarliu.ai.runtime.RuntimeFailureCategories;
 import com.jaguarliu.ai.tools.Tool;
 import com.jaguarliu.ai.tools.ToolDefinition;
 import com.jaguarliu.ai.tools.ToolResult;
+import com.jaguarliu.ai.tools.ToolsProperties;
+import com.jaguarliu.ai.tools.WorkspaceResolver;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.ss.util.CellRangeAddress;
@@ -12,14 +16,17 @@ import reactor.core.publisher.Mono;
 
 import java.io.FileOutputStream;
 import java.nio.file.Files;
-import java.nio.file.Paths;
+import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 @Slf4j
 @Component
+@RequiredArgsConstructor
 public class XlsxCreateTool implements Tool {
+
+    private final ToolsProperties properties;
 
     @Override
     public ToolDefinition getDefinition() {
@@ -29,7 +36,7 @@ public class XlsxCreateTool implements Tool {
             .parameters(Map.of(
                 "type", "object",
                 "properties", Map.of(
-                    "path",   Map.of("type","string","description","Output .xlsx file path"),
+                    "path",   Map.of("type","string","description","Output .xlsx file path (workspace-relative, e.g. \"report.xlsx\")"),
                     "sheets", Map.of("type","array","description",
                         "Array of sheet defs: [{name, freeze_row?, freeze_col?, column_widths?, rows}]. " +
                         "rows is 2D array of cell defs: {value?, formula?, format?, bold?, italic?, bg_color?, fg_color?, align?, border?, colspan?, rowspan?}")
@@ -37,6 +44,8 @@ public class XlsxCreateTool implements Tool {
                 "required", List.of("path","sheets")
             ))
             .hitl(false)
+            .skillScopedOnly(true)
+            .producesFile(true)
             .tags(List.of("office","xlsx"))
             .riskLevel("low")
             .build();
@@ -46,14 +55,22 @@ public class XlsxCreateTool implements Tool {
     @SuppressWarnings("unchecked")
     public Mono<ToolResult> execute(Map<String, Object> arguments) {
         return Mono.fromCallable(() -> {
-            String path = (String) arguments.get("path");
-            if (path == null || path.isBlank()) return ToolResult.error("path is required");
+            String pathArg = (String) arguments.get("path");
+            if (pathArg == null || pathArg.isBlank()) return ToolResult.error("path is required");
 
             List<Map<String, Object>> sheets = (List<Map<String, Object>>) arguments.get("sheets");
             if (sheets == null || sheets.isEmpty()) return ToolResult.error("sheets is required and must not be empty");
 
-            var parent = Paths.get(path).getParent();
-            if (parent != null) Files.createDirectories(parent);
+            // 解析并校验工作区路径安全边界
+            Path workspacePath = WorkspaceResolver.resolveSessionWorkspace(properties);
+            Path filePath = workspacePath.resolve(pathArg).normalize();
+            if (!filePath.startsWith(workspacePath)) {
+                log.warn("create_xlsx path traversal attempt: {}", pathArg);
+                return ToolResult.error("Access denied: path must be within workspace. Attempted: " + pathArg,
+                        RuntimeFailureCategories.HARD_ENVIRONMENT_BLOCK);
+            }
+
+            Files.createDirectories(filePath.getParent() != null ? filePath.getParent() : workspacePath);
 
             try (XSSFWorkbook workbook = new XSSFWorkbook()) {
                 Map<String, XSSFCellStyle> styleCache = new HashMap<>();
@@ -65,11 +82,11 @@ public class XlsxCreateTool implements Tool {
                     log.warn("Formula evaluation partial failure (non-fatal): {}", e.getMessage());
                 }
 
-                try (var fos = new FileOutputStream(path)) {
+                try (var fos = new FileOutputStream(filePath.toFile())) {
                     workbook.write(fos);
                 }
             }
-            return ToolResult.success("Created: " + path);
+            return ToolResult.success("Created: " + pathArg);
         });
     }
 

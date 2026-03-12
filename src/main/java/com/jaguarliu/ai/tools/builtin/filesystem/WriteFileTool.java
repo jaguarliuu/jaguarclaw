@@ -43,6 +43,7 @@ public class WriteFileTool implements Tool {
                         "required", List.of("path", "content")
                 ))
                 .hitl(false)
+                .producesFile(true)
                 .tags(List.of("file", "write", "fs"))
                 .riskLevel("medium")
                 .parameterSummary("path (required): 文件路径 | content (required): 写入内容")

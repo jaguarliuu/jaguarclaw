@@ -44,6 +44,22 @@ public class ToolDefinition {
     @Builder.Default
     private boolean hitl = false;
 
+    /**
+     * 是否仅在 Skill 激活时可见（skill-scoped）。
+     * true 表示该工具不会默认注入到 LLM 提示词中；
+     * 只有当某个 skill 的 allowed-tools 列表明确包含此工具时才可见。
+     */
+    @Builder.Default
+    private boolean skillScopedOnly = false;
+
+    /**
+     * 工具是否会产出文件（写入磁盘）。
+     * true 表示成功执行后应发布 FILE_CREATED 事件，
+     * 让前端为该文件渲染下载按钮。
+     */
+    @Builder.Default
+    private boolean producesFile = false;
+
     // ==================== 渐进式加载字段 ====================
 
     /**

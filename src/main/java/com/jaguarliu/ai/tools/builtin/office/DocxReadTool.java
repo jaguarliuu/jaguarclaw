@@ -1,20 +1,29 @@
 package com.jaguarliu.ai.tools.builtin.office;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.jaguarliu.ai.runtime.RuntimeFailureCategories;
 import com.jaguarliu.ai.tools.Tool;
 import com.jaguarliu.ai.tools.ToolDefinition;
 import com.jaguarliu.ai.tools.ToolResult;
+import com.jaguarliu.ai.tools.ToolsProperties;
+import com.jaguarliu.ai.tools.WorkspaceResolver;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.xwpf.usermodel.*;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
 
 import java.io.FileInputStream;
+import java.nio.file.Path;
 import java.util.*;
 
 @Slf4j
 @Component
+@RequiredArgsConstructor
 public class DocxReadTool implements Tool {
+
+    private final ToolsProperties properties;
+
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     @Override
@@ -24,19 +33,32 @@ public class DocxReadTool implements Tool {
             .description("Read a Word (.docx) file and return its paragraphs and tables as JSON.")
             .parameters(Map.of(
                 "type","object",
-                "properties", Map.of("path", Map.of("type","string","description","Path to .docx file")),
+                "properties", Map.of("path", Map.of("type","string","description","Workspace-relative path to .docx file")),
                 "required", List.of("path")
             ))
-            .hitl(false).tags(List.of("office","docx")).riskLevel("low").build();
+            .hitl(false)
+            .skillScopedOnly(true)
+            .tags(List.of("office","docx"))
+            .riskLevel("low")
+            .build();
     }
 
     @Override
     public Mono<ToolResult> execute(Map<String, Object> arguments) {
         return Mono.fromCallable(() -> {
-            String path = (String) arguments.get("path");
-            if (path == null || path.isBlank()) return ToolResult.error("path is required");
+            String pathArg = (String) arguments.get("path");
+            if (pathArg == null || pathArg.isBlank()) return ToolResult.error("path is required");
 
-            try (var fis = new FileInputStream(path);
+            // 解析并校验工作区路径安全边界
+            Path workspacePath = WorkspaceResolver.resolveSessionWorkspace(properties);
+            Path filePath = workspacePath.resolve(pathArg).normalize();
+            if (!filePath.startsWith(workspacePath)) {
+                log.warn("read_docx path traversal attempt: {}", pathArg);
+                return ToolResult.error("Access denied: path must be within workspace. Attempted: " + pathArg,
+                        RuntimeFailureCategories.HARD_ENVIRONMENT_BLOCK);
+            }
+
+            try (var fis = new FileInputStream(filePath.toFile());
                  XWPFDocument doc = new XWPFDocument(fis)) {
                 List<Map<String, Object>> content = new ArrayList<>();
                 for (IBodyElement el : doc.getBodyElements()) {
@@ -67,7 +89,7 @@ public class DocxReadTool implements Tool {
                 }
                 return ToolResult.success(MAPPER.writeValueAsString(Map.of("content", content)));
             } catch (java.io.FileNotFoundException e) {
-                return ToolResult.error("File not found: " + path);
+                return ToolResult.error("File not found: " + pathArg);
             } catch (java.io.IOException e) {
                 return ToolResult.error("Failed to read file: " + e.getMessage());
             }

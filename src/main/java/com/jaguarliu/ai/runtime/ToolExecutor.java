@@ -15,6 +15,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -172,9 +173,16 @@ public class ToolExecutor {
             result = ToolResult.error("Tool execution returned null");
         }
 
-        // 记录 write_file 成功创建的文件
-        if ("write_file".equals(toolName) && result.isSuccess()) {
-            recordWriteFile(context, arguments);
+        // 记录成功写入文件的工具（write_file 及所有 producesFile=true 的工具）
+        final ToolResult finalResult = result;
+        final Map<String, Object> finalArguments = arguments;
+        if (finalResult.isSuccess()) {
+            toolRegistry.get(toolName).ifPresent(tool -> {
+                var def = tool.getDefinition();
+                if (def != null && def.isProducesFile()) {
+                    recordFileCreated(context, finalArguments);
+                }
+            });
         }
 
         // 发布 tool.result 事件
@@ -240,21 +248,36 @@ public class ToolExecutor {
     }
 
     /**
-     * 记录 write_file 成功创建的文件
+     * 记录文件产出工具成功创建的文件，发布 FILE_CREATED 事件。
+     * 适用于 write_file、create_xlsx、create_docx 等工具。
      */
-    private void recordWriteFile(RunContext context, Map<String, Object> arguments) {
-        String path = (String) arguments.get("path");
-        String content = (String) arguments.get("content");
-        if (path == null) return;
+    private void recordFileCreated(RunContext context, Map<String, Object> arguments) {
+        String pathArg = (String) arguments.get("path");
+        if (pathArg == null) return;
 
-        String fileName = Path.of(path).getFileName().toString();
-        long size = content != null ? content.getBytes(StandardCharsets.UTF_8).length : 0;
+        // 尝试从实际磁盘获取文件大小（适用于二进制文件）
+        long size = 0;
+        try {
+            Path workspace = agentWorkspaceResolver.resolveAgentWorkspace(context.getAgentId());
+            Path filePath = workspace.resolve(pathArg).normalize();
+            if (Files.exists(filePath)) {
+                size = Files.size(filePath);
+            }
+        } catch (Exception e) {
+            // fallback：text 工具通过 content 参数估算大小
+            String content = (String) arguments.get("content");
+            if (content != null) {
+                size = content.getBytes(StandardCharsets.UTF_8).length;
+            }
+        }
+
+        String fileName = Path.of(pathArg).getFileName().toString();
 
         try {
             var entity = sessionFileService.record(
                     context.getSessionId(),
                     context.getRunId(),
-                    path,
+                    pathArg,
                     fileName,
                     size
             );
@@ -264,12 +287,12 @@ public class ToolExecutor {
                     context.getConnectionId(),
                     context.getRunId(),
                     entity.getId(),
-                    path,
+                    pathArg,
                     fileName,
                     size
             ));
         } catch (Exception e) {
-            log.warn("Failed to record write_file: path={}, error={}", path, e.getMessage());
+            log.warn("Failed to record file created: path={}, error={}", pathArg, e.getMessage());
         }
     }
 

@@ -1,8 +1,12 @@
 package com.jaguarliu.ai.tools.builtin.office;
 
+import com.jaguarliu.ai.runtime.RuntimeFailureCategories;
 import com.jaguarliu.ai.tools.Tool;
 import com.jaguarliu.ai.tools.ToolDefinition;
 import com.jaguarliu.ai.tools.ToolResult;
+import com.jaguarliu.ai.tools.ToolsProperties;
+import com.jaguarliu.ai.tools.WorkspaceResolver;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.util.Units;
 import org.apache.poi.wp.usermodel.HeaderFooterType;
@@ -19,7 +23,10 @@ import java.util.Map;
 
 @Slf4j
 @Component
+@RequiredArgsConstructor
 public class DocxCreateTool implements Tool {
+
+    private final ToolsProperties properties;
 
     @Override
     public ToolDefinition getDefinition() {
@@ -32,25 +39,39 @@ public class DocxCreateTool implements Tool {
             .parameters(Map.of(
                 "type","object",
                 "properties", Map.of(
-                    "path",       Map.of("type","string","description","Output .docx file path"),
+                    "path",       Map.of("type","string","description","Output .docx file path (workspace-relative, e.g. \"report.docx\")"),
                     "content",    Map.of("type","array","description","Array of content items (heading/paragraph/table/list/image/page_break)"),
                     "page_setup", Map.of("type","object","description","Optional: {orientation?,header?,footer?}")
                 ),
                 "required", List.of("path","content")
             ))
-            .hitl(false).tags(List.of("office","docx")).riskLevel("low").build();
+            .hitl(false)
+            .skillScopedOnly(true)
+            .producesFile(true)
+            .tags(List.of("office","docx"))
+            .riskLevel("low")
+            .build();
     }
 
     @Override
     @SuppressWarnings("unchecked")
     public Mono<ToolResult> execute(Map<String, Object> arguments) {
         return Mono.fromCallable(() -> {
-            String path = (String) arguments.get("path");
-            if (path == null || path.isBlank()) return ToolResult.error("path is required");
+            String pathArg = (String) arguments.get("path");
+            if (pathArg == null || pathArg.isBlank()) return ToolResult.error("path is required");
             List<Map<String, Object>> content = (List<Map<String, Object>>) arguments.get("content");
             if (content == null) return ToolResult.error("content is required");
 
-            var parent = Paths.get(path).getParent();
+            // 解析并校验工作区路径安全边界
+            Path workspacePath = WorkspaceResolver.resolveSessionWorkspace(properties);
+            Path filePath = workspacePath.resolve(pathArg).normalize();
+            if (!filePath.startsWith(workspacePath)) {
+                log.warn("create_docx path traversal attempt: {}", pathArg);
+                return ToolResult.error("Access denied: path must be within workspace. Attempted: " + pathArg,
+                        RuntimeFailureCategories.HARD_ENVIRONMENT_BLOCK);
+            }
+
+            Path parent = filePath.getParent();
             if (parent != null) Files.createDirectories(parent);
 
             try (XWPFDocument doc = new XWPFDocument()) {
@@ -65,14 +86,14 @@ public class DocxCreateTool implements Tool {
                         case "paragraph"  -> addParagraph(doc, item);
                         case "table"      -> addTable(doc, item);
                         case "list"       -> addList(doc, item);
-                        case "image"      -> addImage(doc, item);
+                        case "image"      -> addImage(doc, item, workspacePath);
                         case "page_break" -> doc.createParagraph().createRun().addBreak(BreakType.PAGE);
                         default -> log.warn("create_docx: unknown type '{}'", type);
                     }
                 }
-                try (var fos = new FileOutputStream(path)) { doc.write(fos); }
+                try (var fos = new FileOutputStream(filePath.toFile())) { doc.write(fos); }
             }
-            return ToolResult.success("Created: " + path);
+            return ToolResult.success("Created: " + pathArg);
         });
     }
 
@@ -125,18 +146,20 @@ public class DocxCreateTool implements Tool {
         }
     }
 
-    private void addImage(XWPFDocument doc, Map<String, Object> item) {
-        String imgPath = str(item.get("path"), null);
-        if (imgPath == null) { log.warn("create_docx image: path is required"); return; }
+    private void addImage(XWPFDocument doc, Map<String, Object> item, Path workspacePath) {
+        String imgPathArg = str(item.get("path"), null);
+        if (imgPathArg == null) { log.warn("create_docx image: path is required"); return; }
         int w = toInt(item.get("width"), 400), h = toInt(item.get("height"), 300);
-        try (InputStream is = new FileInputStream(imgPath)) {
-            String lower = imgPath.toLowerCase();
+        // Resolve image path relative to workspace
+        Path imgPath = workspacePath.resolve(imgPathArg).normalize();
+        try (InputStream is = new FileInputStream(imgPath.toFile())) {
+            String lower = imgPathArg.toLowerCase();
             int type = lower.endsWith(".png") ? XWPFDocument.PICTURE_TYPE_PNG :
                        lower.endsWith(".gif") ? XWPFDocument.PICTURE_TYPE_GIF :
                        XWPFDocument.PICTURE_TYPE_JPEG;
-            doc.createParagraph().createRun().addPicture(is, type, Paths.get(imgPath).getFileName().toString(),
+            doc.createParagraph().createRun().addPicture(is, type, imgPath.getFileName().toString(),
                     Units.toEMU(w), Units.toEMU(h));
-        } catch (Exception e) { log.warn("create_docx: image embed failed {}: {}", imgPath, e.getMessage()); }
+        } catch (Exception e) { log.warn("create_docx: image embed failed {}: {}", imgPathArg, e.getMessage()); }
     }
 
     @SuppressWarnings("unchecked")

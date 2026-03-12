@@ -1,9 +1,13 @@
 package com.jaguarliu.ai.tools.builtin.office;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.jaguarliu.ai.runtime.RuntimeFailureCategories;
 import com.jaguarliu.ai.tools.Tool;
 import com.jaguarliu.ai.tools.ToolDefinition;
 import com.jaguarliu.ai.tools.ToolResult;
+import com.jaguarliu.ai.tools.ToolsProperties;
+import com.jaguarliu.ai.tools.WorkspaceResolver;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
@@ -11,11 +15,16 @@ import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
 
 import java.io.FileInputStream;
+import java.nio.file.Path;
 import java.util.*;
 
 @Slf4j
 @Component
+@RequiredArgsConstructor
 public class XlsxReadTool implements Tool {
+
+    private final ToolsProperties properties;
+
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     @Override
@@ -26,22 +35,35 @@ public class XlsxReadTool implements Tool {
             .parameters(Map.of(
                 "type","object",
                 "properties", Map.of(
-                    "path",  Map.of("type","string","description","Path to .xlsx file"),
+                    "path",  Map.of("type","string","description","Workspace-relative path to .xlsx file"),
                     "sheet", Map.of("type","string","description","Sheet name to read (all sheets if omitted)")
                 ),
                 "required", List.of("path")
             ))
-            .hitl(false).tags(List.of("office","xlsx")).riskLevel("low").build();
+            .hitl(false)
+            .skillScopedOnly(true)
+            .tags(List.of("office","xlsx"))
+            .riskLevel("low")
+            .build();
     }
 
     @Override
     public Mono<ToolResult> execute(Map<String, Object> arguments) {
         return Mono.fromCallable(() -> {
-            String path = (String) arguments.get("path");
-            if (path == null || path.isBlank()) return ToolResult.error("path is required");
+            String pathArg = (String) arguments.get("path");
+            if (pathArg == null || pathArg.isBlank()) return ToolResult.error("path is required");
             String targetSheet = (String) arguments.get("sheet");
 
-            try (var fis = new java.io.FileInputStream(path);
+            // 解析并校验工作区路径安全边界
+            Path workspacePath = WorkspaceResolver.resolveSessionWorkspace(properties);
+            Path filePath = workspacePath.resolve(pathArg).normalize();
+            if (!filePath.startsWith(workspacePath)) {
+                log.warn("read_xlsx path traversal attempt: {}", pathArg);
+                return ToolResult.error("Access denied: path must be within workspace. Attempted: " + pathArg,
+                        RuntimeFailureCategories.HARD_ENVIRONMENT_BLOCK);
+            }
+
+            try (var fis = new FileInputStream(filePath.toFile());
                  XSSFWorkbook wb = new XSSFWorkbook(fis)) {
                 List<String> names = new ArrayList<>();
                 for (int i = 0; i < wb.getNumberOfSheets(); i++) names.add(wb.getSheetName(i));
@@ -64,7 +86,7 @@ public class XlsxReadTool implements Tool {
                 }
                 return ToolResult.success(MAPPER.writeValueAsString(Map.of("sheets", names, "data", data)));
             } catch (java.io.FileNotFoundException e) {
-                return ToolResult.error("File not found: " + path);
+                return ToolResult.error("File not found: " + pathArg);
             }
         });
     }

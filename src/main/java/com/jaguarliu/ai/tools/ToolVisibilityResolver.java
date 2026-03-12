@@ -141,6 +141,13 @@ public final class ToolVisibilityResolver {
             }
 
             String toolName = tool.getName();
+
+            // skill-scoped 工具：仅当某 skill 的 allowed-tools 明确包含时才可见
+            ToolDefinition def = tool.getDefinition();
+            if (def != null && def.isSkillScopedOnly() && !contains(req.skillAllowedTools(), toolName)) {
+                continue;
+            }
+
             if (!passesAllowFilter(toolName, req.agentAllowedTools())) {
                 continue;
             }

@@ -1,6 +1,7 @@
 package com.jaguarliu.ai.tools.builtin.office;
 
 import com.jaguarliu.ai.tools.ToolResult;
+import com.jaguarliu.ai.tools.ToolsProperties;
 import org.apache.poi.xwpf.usermodel.*;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -11,32 +12,38 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.*;
 
 class DocxCreateToolTest {
-    private final DocxCreateTool tool = new DocxCreateTool();
 
-    @Test void missingPath_error() {
-        assertFalse(tool.execute(Map.of("content", List.of())).block().isSuccess());
+    @TempDir
+    Path tmp;
+
+    private DocxCreateTool tool() {
+        ToolsProperties props = new ToolsProperties();
+        props.setWorkspace(tmp.toString());
+        return new DocxCreateTool(props);
     }
 
-    @Test void headingAndParagraph(@TempDir Path tmp) throws Exception {
-        String path = tmp.resolve("t.docx").toString();
-        ToolResult r = tool.execute(Map.of(
-            "path", path,
+    @Test void missingPath_error() {
+        assertFalse(tool().execute(Map.of("content", List.of())).block().isSuccess());
+    }
+
+    @Test void headingAndParagraph() throws Exception {
+        ToolResult r = tool().execute(Map.of(
+            "path", "t.docx",
             "content", List.of(
                 Map.of("type","heading","level",1,"text","Title"),
                 Map.of("type","paragraph","text","Body text.")
             )
         )).block();
         assertTrue(r.isSuccess(), r.getContent());
-        try (XWPFDocument doc = new XWPFDocument(new FileInputStream(path))) {
+        try (XWPFDocument doc = new XWPFDocument(new FileInputStream(tmp.resolve("t.docx").toFile()))) {
             assertTrue(doc.getParagraphs().size() >= 2);
             assertEquals("Title", doc.getParagraphs().get(0).getText());
         }
     }
 
-    @Test void tableWithHeaderAndRows(@TempDir Path tmp) throws Exception {
-        String path = tmp.resolve("t.docx").toString();
-        ToolResult r = tool.execute(Map.of(
-            "path", path,
+    @Test void tableWithHeaderAndRows() throws Exception {
+        ToolResult r = tool().execute(Map.of(
+            "path", "t.docx",
             "content", List.of(Map.of(
                 "type","table",
                 "header", List.of("Name","Score"),
@@ -44,7 +51,7 @@ class DocxCreateToolTest {
             ))
         )).block();
         assertTrue(r.isSuccess());
-        try (XWPFDocument doc = new XWPFDocument(new FileInputStream(path))) {
+        try (XWPFDocument doc = new XWPFDocument(new FileInputStream(tmp.resolve("t.docx").toFile()))) {
             assertEquals(1, doc.getTables().size());
             XWPFTable t = doc.getTables().get(0);
             assertEquals(3, t.getNumberOfRows());
@@ -53,27 +60,25 @@ class DocxCreateToolTest {
         }
     }
 
-    @Test void listItems(@TempDir Path tmp) throws Exception {
-        String path = tmp.resolve("t.docx").toString();
-        ToolResult r = tool.execute(Map.of(
-            "path", path,
+    @Test void listItems() throws Exception {
+        ToolResult r = tool().execute(Map.of(
+            "path", "t.docx",
             "content", List.of(Map.of("type","list","items",List.of("A","B"),"ordered",false))
         )).block();
         assertTrue(r.isSuccess());
-        try (XWPFDocument doc = new XWPFDocument(new FileInputStream(path))) {
+        try (XWPFDocument doc = new XWPFDocument(new FileInputStream(tmp.resolve("t.docx").toFile()))) {
             assertTrue(doc.getParagraphs().size() >= 2);
         }
     }
 
-    @Test void headerAndFooter(@TempDir Path tmp) throws Exception {
-        String path = tmp.resolve("t.docx").toString();
-        ToolResult r = tool.execute(Map.of(
-            "path", path,
+    @Test void headerAndFooter() throws Exception {
+        ToolResult r = tool().execute(Map.of(
+            "path", "t.docx",
             "page_setup", Map.of("header","Company","footer","Page {n}"),
             "content", List.of(Map.of("type","paragraph","text","Body"))
         )).block();
         assertTrue(r.isSuccess());
-        try (XWPFDocument doc = new XWPFDocument(new FileInputStream(path))) {
+        try (XWPFDocument doc = new XWPFDocument(new FileInputStream(tmp.resolve("t.docx").toFile()))) {
             assertFalse(doc.getHeaderList().isEmpty());
             assertTrue(doc.getHeaderList().get(0).getText().contains("Company"));
         }

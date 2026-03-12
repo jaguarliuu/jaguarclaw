@@ -91,7 +91,7 @@ Use the `create_xlsx` tool. Provide the full workbook as a JSON spec.
 ### Example call
 ```json
 {
-  "path": "/workspace/model.xlsx",
+  "path": "model.xlsx",
   "sheets": [{
     "name": "Summary",
     "freeze_row": 1,
@@ -111,7 +111,7 @@ Use the `create_xlsx` tool. Provide the full workbook as a JSON spec.
 Use `read_xlsx` to read an existing file before editing.
 
 ```json
-{"path": "/workspace/data.xlsx", "sheet": "Sheet1"}
+{"path": "data.xlsx", "sheet": "Sheet1"}
 ```
 
 Returns `{"sheets": [...], "data": {"Sheet1": [[...], ...]}}`.

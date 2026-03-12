@@ -37,7 +37,7 @@ Use `{n}` in footer for page number field.
 
 ```json
 {
-  "path": "/workspace/report.docx",
+  "path": "report.docx",
   "page_setup": {"orientation":"portrait","header":"ACME Corp","footer":"Page {n}"},
   "content": [
     {"type":"heading","level":1,"text":"Annual Report 2025"},
@@ -52,7 +52,7 @@ Use `{n}` in footer for page number field.
 ## Reading Existing Documents
 
 ```json
-{"path": "/workspace/doc.docx"}
+{"path": "doc.docx"}
 ```
 Returns `{"content": [{type, text/rows, ...}, ...]}`.
 
