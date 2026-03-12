@@ -1,4 +1,4 @@
-const { app, BrowserWindow, dialog, ipcMain } = require('electron');
+const { app, BrowserWindow, dialog, ipcMain, Tray, Menu, nativeImage } = require('electron');
 const { spawn, execSync, execFileSync } = require('child_process');
 const path = require('path');
 const http = require('http');
@@ -13,6 +13,8 @@ let mainWindow = null;
 let splashWindow = null;
 let javaProcess = null;
 let serverPort = null;
+let tray = null;
+let isQuitting = false;
 let javaErrorLogs = [];  // 收集 Java 错误日志
 let startupLogs = [];
 const STARTUP_TOTAL_STEPS = 6;
@@ -922,8 +924,81 @@ function createMainWindow(port) {
 
   mainWindow.loadURL(`http://localhost:${port}`);
 
+  // Intercept the close button — ask the user what to do
+  mainWindow.on('close', (event) => {
+    if (isQuitting) return; // app.quit() was called, let it through
+
+    event.preventDefault();
+
+    dialog
+      .showMessageBox(mainWindow, {
+        type: 'question',
+        title: APP_DISPLAY_NAME,
+        message: '关闭窗口',
+        detail: '请选择关闭方式：',
+        buttons: ['最小化到托盘', '退出程序'],
+        defaultId: 0,
+        cancelId: 0,
+        noLink: true,
+      })
+      .then(({ response }) => {
+        if (response === 1) {
+          // User chose "退出程序"
+          isQuitting = true;
+          app.quit();
+        } else {
+          // User chose "最小化到托盘"
+          mainWindow.hide();
+          if (!tray) createTray();
+        }
+      });
+  });
+
   mainWindow.on('closed', () => {
     mainWindow = null;
+  });
+}
+
+function createTray() {
+  const iconPath = path.join(resourcesPath, 'icon.png');
+  let trayIcon = nativeImage.createFromPath(iconPath);
+
+  // On Windows, a 16×16 ICO looks better; resize if the source is large
+  if (process.platform === 'win32' && !trayIcon.isEmpty()) {
+    trayIcon = trayIcon.resize({ width: 16, height: 16 });
+  }
+
+  tray = new Tray(trayIcon);
+  tray.setToolTip(APP_DISPLAY_NAME);
+
+  const contextMenu = Menu.buildFromTemplate([
+    {
+      label: '显示主界面',
+      click: () => {
+        if (mainWindow) {
+          mainWindow.show();
+          mainWindow.focus();
+        }
+      },
+    },
+    { type: 'separator' },
+    {
+      label: '退出程序',
+      click: () => {
+        isQuitting = true;
+        app.quit();
+      },
+    },
+  ]);
+
+  tray.setContextMenu(contextMenu);
+
+  // Single-click on tray icon restores the window
+  tray.on('click', () => {
+    if (mainWindow) {
+      mainWindow.show();
+      mainWindow.focus();
+    }
   });
 }
 
@@ -1202,12 +1277,21 @@ app.whenReady().then(async () => {
 });
 
 app.on('window-all-closed', () => {
-  appendDesktopLog('info', 'All windows closed; shutting down application');
-  killJavaProcess();
-  app.quit();
+  // On macOS, keep the app running even when all windows are closed (standard macOS behavior).
+  // On other platforms, only quit if the user explicitly chose to exit.
+  if (process.platform !== 'darwin' && !tray) {
+    appendDesktopLog('info', 'All windows closed; shutting down application');
+    killJavaProcess();
+    app.quit();
+  }
 });
 
 app.on('before-quit', () => {
+  isQuitting = true;
   appendDesktopLog('info', 'Application is quitting');
   killJavaProcess();
+  if (tray) {
+    tray.destroy();
+    tray = null;
+  }
 });
