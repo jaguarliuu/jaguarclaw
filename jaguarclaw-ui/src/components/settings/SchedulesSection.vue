@@ -42,6 +42,8 @@ const targetTypeOptions = computed<SelectOption<string>[]>(() => [
   { label: 'Webhook', value: 'webhook' },
   { label: 'Email', value: 'email' }
 ])
+const EMAIL_SPLIT_PATTERN = /[,，;\n；]+/
+const EMAIL_ADDRESS_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 function resetForm() {
   editingTaskId.value = null
@@ -119,7 +121,27 @@ function formatTime(dateStr: string | null): string {
   return d.toLocaleString()
 }
 
+function normalizeEmailList(value: string): string | undefined {
+  const emails = value
+    .split(EMAIL_SPLIT_PATTERN)
+    .map((item) => item.trim())
+    .filter(Boolean)
+  return emails.length > 0 ? emails.join(',') : undefined
+}
+
+function hasInvalidEmailList(value: string): boolean {
+  const emails = value
+    .split(EMAIL_SPLIT_PATTERN)
+    .map((item) => item.trim())
+    .filter(Boolean)
+
+  return emails.some((email) => !EMAIL_ADDRESS_PATTERN.test(email))
+}
+
 async function handleSubmit() {
+  const normalizedEmailTo = normalizeEmailList(formEmailTo.value)
+  const normalizedEmailCc = normalizeEmailList(formEmailCc.value)
+
   if (!formName.value.trim()) {
     formError.value = t('sections.schedules.errors.nameRequired')
     return
@@ -140,8 +162,12 @@ async function handleSubmit() {
     formError.value = 'Webhook target alias is required'
     return
   }
-  if (isEmailTarget.value && !formEmailTo.value.trim()) {
+  if (isEmailTarget.value && !normalizedEmailTo) {
     formError.value = t('sections.schedules.errors.emailToRequired')
+    return
+  }
+  if (isEmailTarget.value && (hasInvalidEmailList(formEmailTo.value) || hasInvalidEmailList(formEmailCc.value))) {
+    formError.value = t('sections.schedules.errors.invalidEmailList')
     return
   }
 
@@ -154,8 +180,8 @@ async function handleSubmit() {
       prompt: formPrompt.value.trim(),
       targetRef: formTargetType.value === 'email' ? 'email-default' : formTargetRef.value.trim(),
       targetType: formTargetType.value,
-      emailTo: isEmailTarget.value ? formEmailTo.value.trim() : undefined,
-      emailCc: isEmailTarget.value && formEmailCc.value.trim() ? formEmailCc.value.trim() : undefined
+      emailTo: isEmailTarget.value ? normalizedEmailTo : undefined,
+      emailCc: isEmailTarget.value ? normalizedEmailCc : undefined
     }
 
     if (isEditing.value && editingTaskId.value) {
@@ -299,6 +325,7 @@ onMounted(() => {
             <input v-model="formEmailCc" class="form-input" :placeholder="t('sections.schedules.fields.ccPlaceholder')" />
           </div>
         </div>
+        <div class="form-hint">{{ t('sections.schedules.fields.multiAddressHint') }}</div>
       </template>
 
       <div v-if="formError" class="form-error">{{ formError }}</div>
@@ -544,6 +571,13 @@ onMounted(() => {
   display: flex;
   gap: 8px;
   justify-content: flex-end;
+}
+
+.form-hint {
+  margin-top: -4px;
+  margin-bottom: 12px;
+  color: var(--color-gray-dark);
+  font-size: 12px;
 }
 
 .cancel-btn {
