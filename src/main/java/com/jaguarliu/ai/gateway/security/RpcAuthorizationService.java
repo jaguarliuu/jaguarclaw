@@ -44,6 +44,7 @@ public class RpcAuthorizationService {
             "subagent.stop",
             "soul.save",
             "schedule.create",
+            "schedule.update",
             "schedule.delete",
             "schedule.toggle",
             "schedule.run",

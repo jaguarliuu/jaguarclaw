@@ -6,11 +6,12 @@ import Select from '@/components/common/Select.vue'
 import type { SelectOption } from '@/components/common/Select.vue'
 import type { DeliveryTargetType, ScheduleInfo } from '@/types'
 
-const { schedules, loading, error, loadSchedules, createSchedule, removeSchedule, toggleSchedule, runSchedule } = useSchedules()
+const { schedules, loading, error, loadSchedules, createSchedule, updateSchedule, removeSchedule, toggleSchedule, runSchedule } = useSchedules()
 const { t } = useI18n()
 
 // Form state
 const showForm = ref(false)
+const editingTaskId = ref<string | null>(null)
 const formName = ref('')
 const formCron = ref('')
 const formPrompt = ref('')
@@ -18,12 +19,14 @@ const formTargetType = ref<DeliveryTargetType>('webhook')
 const formTargetRef = ref('')
 const formEmailTo = ref('')
 const formEmailCc = ref('')
+const formEnabled = ref(true)
 const formError = ref<string | null>(null)
 const submitting = ref(false)
 
 // UI state
 const runningTasks = ref<Set<string>>(new Set())
 const confirmDeleteId = ref<string | null>(null)
+const isEditing = computed(() => editingTaskId.value !== null)
 
 // Cron presets
 const cronPresets = computed(() => [
@@ -41,6 +44,7 @@ const targetTypeOptions = computed<SelectOption<string>[]>(() => [
 ])
 
 function resetForm() {
+  editingTaskId.value = null
   formName.value = ''
   formCron.value = ''
   formPrompt.value = ''
@@ -48,11 +52,26 @@ function resetForm() {
   formTargetRef.value = ''
   formEmailTo.value = ''
   formEmailCc.value = ''
+  formEnabled.value = true
   formError.value = null
 }
 
 function openForm() {
   resetForm()
+  showForm.value = true
+}
+
+function editTask(task: ScheduleInfo) {
+  editingTaskId.value = task.id
+  formName.value = task.name
+  formCron.value = task.cronExpr
+  formPrompt.value = task.prompt
+  formTargetType.value = task.targetType
+  formTargetRef.value = task.targetType === 'email' ? '' : task.targetRef
+  formEmailTo.value = task.emailTo ?? ''
+  formEmailCc.value = task.emailCc ?? ''
+  formEnabled.value = task.enabled
+  formError.value = null
   showForm.value = true
 }
 
@@ -129,7 +148,7 @@ async function handleSubmit() {
   submitting.value = true
   formError.value = null
   try {
-    await createSchedule({
+    const payload = {
       name: formName.value.trim(),
       cronExpr: formCron.value.trim(),
       prompt: formPrompt.value.trim(),
@@ -137,10 +156,24 @@ async function handleSubmit() {
       targetType: formTargetType.value,
       emailTo: isEmailTarget.value ? formEmailTo.value.trim() : undefined,
       emailCc: isEmailTarget.value && formEmailCc.value.trim() ? formEmailCc.value.trim() : undefined
-    })
+    }
+
+    if (isEditing.value && editingTaskId.value) {
+      await updateSchedule({
+        id: editingTaskId.value,
+        enabled: formEnabled.value,
+        ...payload
+      })
+    } else {
+      await createSchedule(payload)
+    }
     closeForm()
   } catch (e) {
-    formError.value = e instanceof Error ? e.message : t('sections.schedules.errors.failedToCreate')
+    formError.value = e instanceof Error
+      ? e.message
+      : isEditing.value
+        ? t('sections.schedules.errors.failedToUpdate')
+        : t('sections.schedules.errors.failedToCreate')
   } finally {
     submitting.value = false
   }
@@ -188,7 +221,9 @@ onMounted(() => {
           <h2 class="section-title">{{ t('settings.nav.schedules') }}</h2>
           <p class="section-subtitle">{{ t('sections.schedules.subtitle') }}</p>
         </div>
-        <button class="add-btn" @click="openForm">{{ t('sections.schedules.addBtn') }}</button>
+        <button class="add-btn" @click="showForm ? closeForm() : openForm()">
+          {{ showForm ? t('common.cancel') : t('sections.schedules.addBtn') }}
+        </button>
       </div>
     </header>
 
@@ -205,7 +240,9 @@ onMounted(() => {
 
     <!-- Add Form -->
     <div v-if="showForm" class="form-panel">
-      <h3 class="form-title">{{ t('sections.schedules.formTitle') }}</h3>
+      <h3 class="form-title">
+        {{ isEditing ? t('sections.schedules.editFormTitle') : t('sections.schedules.formTitle') }}
+      </h3>
 
       <div class="form-group">
         <label class="form-label">{{ t('sections.schedules.fields.nameLabel') }}</label>
@@ -269,7 +306,11 @@ onMounted(() => {
       <div class="form-actions">
         <button class="cancel-btn" @click="closeForm">{{ t('common.cancel') }}</button>
         <button class="submit-btn" :disabled="submitting" @click="handleSubmit">
-          {{ submitting ? t('sections.schedules.creatingBtn') : t('sections.schedules.createBtn') }}
+          {{
+            submitting
+              ? (isEditing ? t('sections.schedules.savingBtn') : t('sections.schedules.creatingBtn'))
+              : (isEditing ? t('sections.schedules.saveBtn') : t('sections.schedules.createBtn'))
+          }}
         </button>
       </div>
     </div>
@@ -286,6 +327,12 @@ onMounted(() => {
             <span class="status-dot" :class="getStatusClass(task)" :title="getStatusText(task)" />
           </div>
           <div class="task-actions">
+            <button
+              class="edit-btn"
+              @click="editTask(task)"
+            >
+              {{ t('common.edit') }}
+            </button>
             <button
               class="run-btn"
               :disabled="runningTasks.has(task.id)"
@@ -614,7 +661,7 @@ onMounted(() => {
   gap: 6px;
 }
 
-.run-btn, .toggle-btn, .delete-btn, .confirm-delete-btn, .cancel-delete-btn {
+.edit-btn, .run-btn, .toggle-btn, .delete-btn, .confirm-delete-btn, .cancel-delete-btn {
   padding: 4px 10px;
   border: var(--border);
   border-radius: var(--radius-md);
@@ -624,7 +671,7 @@ onMounted(() => {
   cursor: pointer;
 }
 
-.run-btn:hover, .delete-btn:hover, .cancel-delete-btn:hover {
+.edit-btn:hover, .run-btn:hover, .delete-btn:hover, .cancel-delete-btn:hover {
   background: var(--color-gray-bg);
 }
 

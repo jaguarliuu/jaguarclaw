@@ -1,6 +1,6 @@
 import { ref, readonly } from 'vue'
 import { useWebSocket } from './useWebSocket'
-import type { ScheduleInfo, ScheduleCreatePayload } from '@/types'
+import type { ScheduleInfo, ScheduleCreatePayload, ScheduleUpdatePayload } from '@/types'
 
 const schedules = ref<ScheduleInfo[]>([])
 const loading = ref(false)
@@ -33,6 +33,19 @@ export function useSchedules() {
     } catch (e) {
       console.error('[Schedules] Failed to create schedule:', e)
       error.value = e instanceof Error ? e.message : 'Failed to create schedule'
+      throw e
+    }
+  }
+
+  async function updateSchedule(payload: ScheduleUpdatePayload): Promise<ScheduleInfo> {
+    error.value = null
+    try {
+      const result = await request<ScheduleInfo>('schedule.update', payload)
+      await loadSchedules()
+      return result
+    } catch (e) {
+      console.error('[Schedules] Failed to update schedule:', e)
+      error.value = e instanceof Error ? e.message : 'Failed to update schedule'
       throw e
     }
   }
@@ -79,6 +92,7 @@ export function useSchedules() {
     error: readonly(error),
     loadSchedules,
     createSchedule,
+    updateSchedule,
     removeSchedule,
     toggleSchedule,
     runSchedule

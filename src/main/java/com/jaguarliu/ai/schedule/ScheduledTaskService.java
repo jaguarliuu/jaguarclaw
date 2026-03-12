@@ -38,12 +38,7 @@ public class ScheduledTaskService {
     public ScheduledTaskEntity create(String name, String cronExpr, String prompt,
                                        String targetRef, String targetType,
                                        String emailTo, String emailCc) {
-        if (targetRef == null || targetRef.isBlank()) {
-            throw new IllegalArgumentException("targetRef is required");
-        }
-        if (targetType == null || targetType.isBlank()) {
-            throw new IllegalArgumentException("targetType is required");
-        }
+        validateTaskInput(name, cronExpr, prompt, targetRef, targetType, true);
 
         ScheduledTaskEntity task = ScheduledTaskEntity.builder()
                 .name(name)
@@ -60,6 +55,33 @@ public class ScheduledTaskService {
         scheduleTask(task);
         log.info("Created scheduled task: name={}, cron={}", name, cronExpr);
         return task;
+    }
+
+    public ScheduledTaskEntity update(String id, String name, String cronExpr, String prompt,
+                                      String targetRef, String targetType,
+                                      String emailTo, String emailCc, boolean enabled) {
+        ScheduledTaskEntity task = repository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Scheduled task not found: " + id));
+
+        validateTaskInput(name, cronExpr, prompt, targetRef, targetType, enabled);
+
+        task.setName(name);
+        task.setCronExpr(cronExpr);
+        task.setPrompt(prompt);
+        task.setTargetRef(targetRef);
+        task.setTargetType(targetType);
+        task.setEmailTo(emailTo);
+        task.setEmailCc(emailCc);
+        task.setEnabled(enabled);
+
+        cancelTask(id);
+        ScheduledTaskEntity saved = repository.save(task);
+        if (saved.isEnabled()) {
+            scheduleTask(saved);
+        }
+
+        log.info("Updated scheduled task: name={}, enabled={}", saved.getName(), saved.isEnabled());
+        return saved;
     }
 
     public void delete(String id) {
@@ -124,6 +146,28 @@ public class ScheduledTaskService {
             return "0 " + trimmed;
         }
         return trimmed;
+    }
+
+    private void validateTaskInput(String name, String cronExpr, String prompt,
+                                   String targetRef, String targetType, boolean enabled) {
+        if (name == null || name.isBlank()) {
+            throw new IllegalArgumentException("name is required");
+        }
+        if (cronExpr == null || cronExpr.isBlank()) {
+            throw new IllegalArgumentException("cronExpr is required");
+        }
+        if (prompt == null || prompt.isBlank()) {
+            throw new IllegalArgumentException("prompt is required");
+        }
+        if (targetRef == null || targetRef.isBlank()) {
+            throw new IllegalArgumentException("targetRef is required");
+        }
+        if (targetType == null || targetType.isBlank()) {
+            throw new IllegalArgumentException("targetType is required");
+        }
+        if (enabled) {
+            new CronTrigger(toSpringCron(cronExpr));
+        }
     }
 
     private void cancelTask(String id) {

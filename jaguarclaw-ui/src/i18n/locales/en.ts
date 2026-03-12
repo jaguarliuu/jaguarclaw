@@ -697,6 +697,7 @@ export default {
       empty: 'No scheduled tasks configured yet.',
       emptyHint: 'Create scheduled tasks to automate Agent workflows with cron triggers.',
       formTitle: 'Create Scheduled Task',
+      editFormTitle: 'Edit Scheduled Task',
       fields: {
         nameLabel: 'Name *',
         namePlaceholder: 'e.g. Daily Server Check',
@@ -727,6 +728,8 @@ export default {
       },
       creatingBtn: 'Creating...',
       createBtn: 'Create',
+      savingBtn: 'Saving...',
+      saveBtn: 'Save Changes',
       runningBtn: 'Running...',
       runNowBtn: 'Run Now',
       enabledStatus: 'Enabled',
@@ -747,6 +750,7 @@ export default {
         channelRequired: 'Channel is required',
         emailToRequired: 'Email To is required for email channels',
         failedToCreate: 'Failed to create schedule',
+        failedToUpdate: 'Failed to update schedule',
       },
     },
     placeholder: {
