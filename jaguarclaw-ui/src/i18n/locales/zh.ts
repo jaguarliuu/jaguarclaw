@@ -695,6 +695,7 @@ export default {
       empty: '暂无已配置的定时任务。',
       emptyHint: '创建定时任务以使用 Cron 触发器自动化 Agent 工作流。',
       formTitle: '创建定时任务',
+      editFormTitle: '编辑定时任务',
       fields: {
         nameLabel: '名称 *',
         namePlaceholder: '如 每日服务器巡检',
@@ -726,6 +727,8 @@ export default {
       },
       creatingBtn: '创建中...',
       createBtn: '创建',
+      savingBtn: '保存中...',
+      saveBtn: '保存修改',
       runningBtn: '运行中...',
       runNowBtn: '立即运行',
       enabledStatus: '已启用',
@@ -746,6 +749,7 @@ export default {
         channelRequired: '渠道不能为空',
         emailToRequired: '邮件渠道需要填写收件人',
         failedToCreate: '创建定时任务失败',
+        failedToUpdate: '保存定时任务失败',
       },
     },
     placeholder: {

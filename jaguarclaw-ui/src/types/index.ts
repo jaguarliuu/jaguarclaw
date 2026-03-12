@@ -456,6 +456,11 @@ export interface ScheduleCreatePayload {
   emailCc?: string
 }
 
+export interface ScheduleUpdatePayload extends ScheduleCreatePayload {
+  id: string
+  enabled: boolean
+}
+
 // ==================== LLM Config Types ====================
 
 export interface LlmConfig {

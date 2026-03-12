@@ -51,5 +51,10 @@ class RpcAuthorizationServiceTest {
     void unknownMethodDefaultsToWrite() {
         assertEquals(RpcPermission.WRITE, service.resolveRequiredPermission("unknown.method"));
     }
-}
 
+    @Test
+    @DisplayName("schedule.update 需要 WRITE 权限")
+    void scheduleUpdateRequiresWritePermission() {
+        assertEquals(RpcPermission.WRITE, service.resolveRequiredPermission("schedule.update"));
+    }
+}
