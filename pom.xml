@@ -156,6 +156,20 @@
             <version>0.22.0</version>
         </dependency>
 
+        <!-- Bouncy Castle — Ed25519, X25519, AES-GCM -->
+        <dependency>
+            <groupId>org.bouncycastle</groupId>
+            <artifactId>bcprov-jdk18on</artifactId>
+            <version>1.80</version>
+        </dependency>
+
+        <!-- Lettuce — Redis Pub/Sub client (managed manually, no Spring autoconfigure) -->
+        <dependency>
+            <groupId>io.lettuce</groupId>
+            <artifactId>lettuce-core</artifactId>
+            <version>6.5.0.RELEASE</version>
+        </dependency>
+
         <!-- Test dependencies -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
