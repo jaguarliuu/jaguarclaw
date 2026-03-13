@@ -24,9 +24,10 @@ onMounted(async () => {
   <div class="im-view">
     <!-- Pair request toasts -->
     <ImPairToast
-      v-for="req in pendingPairRequests"
+      v-for="(req, index) in pendingPairRequests"
       :key="req.fromNodeId"
       :request="req"
+      :index="index"
       @accept="respondToPairRequest(req, true)"
       @reject="respondToPairRequest(req, false)"
     />

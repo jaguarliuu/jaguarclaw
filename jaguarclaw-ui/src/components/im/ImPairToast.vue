@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import type { ImPairRequestEvent } from '@/types'
-defineProps<{ request: ImPairRequestEvent }>()
+defineProps<{ request: ImPairRequestEvent; index: number }>()
 const emit = defineEmits<{ accept: []; reject: [] }>()
 </script>
 
 <template>
-  <div class="pair-toast">
+  <div class="pair-toast" :style="{ top: `${16 + index * 84}px` }">
     <div class="pair-info">
       <strong>「{{ request.fromDisplayName }}」</strong> wants to connect
       <span class="fingerprint">{{ request.fromNodeId.slice(0, 8) }}…</span>
