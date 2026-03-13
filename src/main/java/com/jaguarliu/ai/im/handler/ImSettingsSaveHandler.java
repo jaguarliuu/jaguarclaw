@@ -7,7 +7,10 @@ import com.jaguarliu.ai.gateway.rpc.model.RpcResponse;
 import com.jaguarliu.ai.im.config.ImLettuceConfig;
 import com.jaguarliu.ai.im.entity.ImIdentityEntity;
 import com.jaguarliu.ai.im.service.ImIdentityService;
+import com.jaguarliu.ai.im.service.ImMessagingService;
+import com.jaguarliu.ai.im.service.ImPairingService;
 import com.jaguarliu.ai.im.service.ImRegistryService;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
@@ -20,7 +23,20 @@ public class ImSettingsSaveHandler implements RpcHandler {
     private final ImIdentityService identityService;
     private final ImLettuceConfig lettuceConfig;
     private final ImRegistryService registryService;
+    private final ImPairingService pairingService;
+    private final ImMessagingService messagingService;
     private final ObjectMapper objectMapper;
+
+    @PostConstruct
+    void onStartup() {
+        ImIdentityEntity id = identityService.getCached();
+        if (id.getRedisUrl() != null && !id.getRedisUrl().isBlank()) {
+            lettuceConfig.configure(id.getRedisUrl(), id.getRedisPassword());
+            registryService.registerSelf();
+            pairingService.startSubscriptions();
+            messagingService.startSubscriptions();
+        }
+    }
 
     @Override
     public String getMethod() { return "im.settings.save"; }
@@ -42,6 +58,8 @@ public class ImSettingsSaveHandler implements RpcHandler {
             lettuceConfig.configure(id.getRedisUrl(), id.getRedisPassword());
             if (lettuceConfig.isConfigured()) {
                 registryService.registerSelf();
+                pairingService.startSubscriptions();
+                messagingService.startSubscriptions();
             }
 
             return RpcResponse.success(request.getId(), Map.of("ok", true));
