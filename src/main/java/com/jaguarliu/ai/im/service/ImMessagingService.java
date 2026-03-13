@@ -136,9 +136,14 @@ public class ImMessagingService {
             ImContactEntity contact = contactOpt.get();
             if ("blocked".equals(contact.getStatus())) return;
 
+            long ts = ((Number) msg.get("timestamp")).longValue();
+            if (Math.abs(System.currentTimeMillis() - ts) > 5 * 60 * 1000L) {
+                log.warn("IM: rejected stale message (ts={})", ts);
+                return;
+            }
+
             byte[] encryptedKey  = Base64.getDecoder().decode((String) msg.get("encryptedKey"));
             byte[] encryptedBody = Base64.getDecoder().decode((String) msg.get("encryptedBody"));
-            long ts = ((Number) msg.get("timestamp")).longValue();
             byte[] sig = Base64.getDecoder().decode((String) msg.get("signature"));
 
             byte[] senderPubDer = Base64.getDecoder().decode(contact.getPublicKeyEd25519());

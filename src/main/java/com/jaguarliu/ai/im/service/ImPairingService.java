@@ -93,6 +93,11 @@ public class ImPairingService {
             return;
         }
 
+        if (Math.abs(System.currentTimeMillis() - timestamp) > 5 * 60 * 1000L) {
+            log.warn("[IM] rejected stale pair request from {}", fromNodeId);
+            return;
+        }
+
         eventPublisher.broadcast("im.pair_request", Map.of(
             "fromNodeId",      fromNodeId,
             "fromDisplayName", fromDisplayName,
@@ -103,14 +108,48 @@ public class ImPairingService {
         log.info("[IM] PAIR_REQUEST from {} ({})", fromDisplayName, fromNodeId);
     }
 
-    private void handlePairAccept(Map<String, Object> msg) {
+    private void handlePairAccept(Map<String, Object> msg) throws Exception {
         String fromNodeId = (String) msg.get("fromNodeId");
+        String signatureB64 = (String) msg.get("signature");
+        long ts = ((Number) msg.get("timestamp")).longValue();
+
+        Optional<ImContactEntity> contactOpt = contactRepo.findById(fromNodeId);
+        if (contactOpt.isEmpty()) {
+            log.warn("[IM] PAIR_ACCEPT from unknown node {}", fromNodeId);
+            return;
+        }
+        byte[] pubKeyDer = Base64.getDecoder().decode(contactOpt.get().getPublicKeyEd25519());
+        byte[] signedData = (fromNodeId + ":PAIR_ACCEPT:" + ts)
+            .getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        byte[] sig = Base64.getDecoder().decode(signatureB64);
+        if (!crypto.verify(signedData, sig, crypto.ed25519PublicKey(pubKeyDer))) {
+            log.warn("[IM] PAIR_ACCEPT signature invalid from {}", fromNodeId);
+            return;
+        }
+
         eventPublisher.broadcast("im.pair_accepted", Map.of("nodeId", fromNodeId));
         log.info("[IM] PAIR_ACCEPT from {}", fromNodeId);
     }
 
-    private void handlePairReject(Map<String, Object> msg) {
+    private void handlePairReject(Map<String, Object> msg) throws Exception {
         String fromNodeId = (String) msg.get("fromNodeId");
+        String signatureB64 = (String) msg.get("signature");
+        long ts = ((Number) msg.get("timestamp")).longValue();
+
+        Optional<ImContactEntity> contactOpt = contactRepo.findById(fromNodeId);
+        if (contactOpt.isEmpty()) {
+            log.warn("[IM] PAIR_REJECT from unknown node {}", fromNodeId);
+            return;
+        }
+        byte[] pubKeyDer = Base64.getDecoder().decode(contactOpt.get().getPublicKeyEd25519());
+        byte[] signedData = (fromNodeId + ":PAIR_REJECT:" + ts)
+            .getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        byte[] sig = Base64.getDecoder().decode(signatureB64);
+        if (!crypto.verify(signedData, sig, crypto.ed25519PublicKey(pubKeyDer))) {
+            log.warn("[IM] PAIR_REJECT signature invalid from {}", fromNodeId);
+            return;
+        }
+
         contactRepo.deleteById(fromNodeId);
         eventPublisher.broadcast("im.pair_rejected", Map.of("nodeId", fromNodeId));
         log.info("[IM] PAIR_REJECT from {}", fromNodeId);
