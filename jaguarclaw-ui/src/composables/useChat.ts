@@ -77,6 +77,35 @@ const promptedOutcomeKeys = new Set<string>()
 let eventCleanups: (() => void)[] = []
 let isSetup = false
 
+// Token 缓冲区：将每帧内到达的所有 token 合并为一次响应式更新，避免每个 token 都触发渲染
+// key = block.id, value = 本帧待写入的完整内容
+const tokenFlushBuffer = new Map<string, string>()
+let tokenFlushRaf: ReturnType<typeof requestAnimationFrame> | null = null
+
+function flushTokenBuffer() {
+  if (tokenFlushRaf !== null) {
+    cancelAnimationFrame(tokenFlushRaf)
+    tokenFlushRaf = null
+  }
+  if (tokenFlushBuffer.size === 0) return
+  const blocks = streamBlocks.value
+  for (const block of blocks) {
+    if (block.type === 'text' && tokenFlushBuffer.has(block.id)) {
+      block.content = tokenFlushBuffer.get(block.id)!
+      tokenFlushBuffer.delete(block.id)
+    }
+  }
+  tokenFlushBuffer.clear()
+}
+
+function scheduleTokenFlush() {
+  if (tokenFlushRaf !== null) return
+  tokenFlushRaf = requestAnimationFrame(() => {
+    tokenFlushRaf = null
+    flushTokenBuffer()
+  })
+}
+
 const { request, onEvent } = useWebSocket()
 const { confirm } = useConfirm()
 const { showToast } = useToast()
@@ -590,6 +619,9 @@ async function cancelRun() {
     currentRun.value = null
 
     if (streamBlocks.value.length > 0) {
+      // 确保缓冲中尚未写入的 token 先同步提交
+      flushTokenBuffer()
+
       // 保存已有 streamBlocks 为 assistant message（复用深拷贝逻辑）
       const textContent = streamBlocks.value
         .filter((b) => b.type === 'text')
@@ -820,9 +852,11 @@ function setupEventListeners() {
           return
         }
 
-        // 路由到主流
+        // 路由到主流：缓冲 token，每帧批量写入响应式状态（避免每个 token 都触发渲染）
         const textBlock = getOrCreateTextBlock()
-        textBlock.content = (textBlock.content || '') + content
+        const buffered = tokenFlushBuffer.get(textBlock.id) ?? (textBlock.content || '')
+        tokenFlushBuffer.set(textBlock.id, buffered + content)
+        scheduleTokenFlush()
       }
     }),
   )
@@ -1137,6 +1171,9 @@ function setupEventListeners() {
   eventCleanups.push(
     onEvent('lifecycle.end', (event: RpcEvent) => {
       if (currentRun.value && event.runId === currentRun.value.id) {
+        // 确保缓冲中尚未写入的 token 先同步提交
+        flushTokenBuffer()
+
         // 收集所有文本内容（用于简单显示和搜索）
         const textContent = streamBlocks.value
           .filter((b) => b.type === 'text')
@@ -1172,6 +1209,7 @@ function setupEventListeners() {
   eventCleanups.push(
     onEvent('lifecycle.error', (event: RpcEvent) => {
       if (currentRun.value && event.runId === currentRun.value.id) {
+        flushTokenBuffer()
         const errorMsg =
           event.payload && typeof event.payload === 'object' && 'message' in event.payload
             ? (event.payload as { message: string }).message

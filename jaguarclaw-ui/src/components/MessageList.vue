@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, nextTick, computed } from 'vue'
+import { ref, watch, computed } from 'vue'
 import type { Message, StreamBlock } from '@/types'
 import { useMarkdown } from '@/composables/useMarkdown'
 import { useI18n } from '@/i18n'
@@ -34,7 +34,7 @@ const assistantAvatarInitial = computed(() => {
   return label[0]?.toUpperCase() || 'M'
 })
 
-// 渲染文本块的 Markdown
+// 渲染文本块的 Markdown — 仅用于非流式场景
 function renderTextBlock(content: string | undefined): string {
   return render(content || '')
 }
@@ -61,14 +61,28 @@ const indexEntries = computed(() => {
     })
 })
 
-// Auto-scroll on new content
+// Auto-scroll on new content — debounced to one scroll per animation frame
+// Uses a simple length-based watch instead of an expensive .map().join() comparison
+const lastTextBlockLength = computed(() => {
+  const blocks = props.streamBlocks
+  for (let i = blocks.length - 1; i >= 0; i--) {
+    if (blocks[i].type === 'text') return blocks[i].content?.length ?? 0
+  }
+  return 0
+})
+
+let rafScrollPending = false
 watch(
-  () => [props.messages.length, props.streamBlocks.length, props.streamBlocks.map(b => b.type === 'text' ? b.content?.length : b.toolCall?.status).join(',')],
-  async () => {
-    await nextTick()
-    if (containerRef.value) {
-      containerRef.value.scrollTop = containerRef.value.scrollHeight
-    }
+  [() => props.messages.length, () => props.streamBlocks.length, lastTextBlockLength],
+  () => {
+    if (rafScrollPending) return
+    rafScrollPending = true
+    requestAnimationFrame(() => {
+      rafScrollPending = false
+      if (containerRef.value) {
+        containerRef.value.scrollTop = containerRef.value.scrollHeight
+      }
+    })
   }
 )
 </script>
@@ -115,12 +129,11 @@ watch(
 
             <!-- Interleaved blocks -->
             <template v-for="block in streamBlocks" :key="block.id">
-            <!-- Text block -->
+            <!-- Text block: plain text during streaming (no markdown parsing on every token) -->
             <div
               v-if="block.type === 'text' && block.content"
-              class="message-content markdown-body"
-              v-html="renderTextBlock(block.content)"
-            ></div>
+              class="message-content streaming-text"
+            >{{ block.content }}</div>
 
             <!-- Tool block -->
             <ToolCallCard
@@ -278,6 +291,12 @@ watch(
   font-size: 15px;
   line-height: 1.7;
   padding-left: 30px;
+}
+
+/* Streaming text: plain pre-wrap, no markdown parsing overhead */
+.streaming-text {
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .message-content p {
