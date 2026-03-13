@@ -461,6 +461,20 @@ export interface ScheduleUpdatePayload extends ScheduleCreatePayload {
   enabled: boolean
 }
 
+export interface ScheduleRunLog {
+  id: string
+  taskId: string
+  taskName: string
+  triggeredBy: 'scheduled' | 'manual'
+  status: 'running' | 'success' | 'failed'
+  startedAt: string
+  finishedAt: string | null
+  durationMs: number | null
+  errorMessage: string | null
+  sessionId: string | null
+  runId: string | null
+}
+
 // ==================== LLM Config Types ====================
 
 export interface LlmConfig {
