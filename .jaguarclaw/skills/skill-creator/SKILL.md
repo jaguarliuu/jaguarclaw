@@ -260,28 +260,29 @@ At this point, it is time to actually create the skill.
 
 Skip this step only if the skill being developed already exists, and iteration or packaging is needed. In this case, continue to the next step.
 
-When creating a new skill from scratch, always run the `init_skill.py` script. The script conveniently generates a new template skill directory that automatically includes everything a skill requires, making the skill creation process much more efficient and reliable.
+When creating a new skill from scratch, use the `save_skill_file` tool to write the initial `SKILL.md` to the user skill directory (`~/.jaguarclaw/skills/<skill-name>/`). The tool creates the directory automatically and refreshes the skill registry so the skill becomes available immediately.
 
-Usage:
+Example:
 
-```bash
-# Default: Creates skill in ./.jaguarclaw/skills/ (recommended - highest priority)
-scripts/init_skill.py <skill-name>
-
-# Custom path: Specify a different location
-scripts/init_skill.py <skill-name> --path <output-directory>
+```
+save_skill_file({
+  skill_name: "<skill-name>",
+  relative_path: "SKILL.md",
+  content: "---\nname: <skill-name>\ndescription: [TODO]\n---\n\n# <Skill Title>\n\n[TODO: instructions]"
+})
 ```
 
-**Important:** If `--path` is not specified, the skill will be created in `./.jaguarclaw/skills/` relative to the current working directory. This is the **project skills directory** with the highest priority in the skill loading system, and is the recommended location for new skills.
+Use the same tool to add any bundled resource files (`scripts/`, `references/`, `assets/`):
 
-The script:
+```
+save_skill_file({
+  skill_name: "<skill-name>",
+  relative_path: "scripts/helper.py",
+  content: "..."
+})
+```
 
-- Creates the skill directory at the specified path
-- Generates a SKILL.md template with proper frontmatter and TODO placeholders
-- Creates example resource directories: `scripts/`, `references/`, and `assets/`
-- Adds example files in each directory that can be customized or deleted
-
-After initialization, customize or remove the generated SKILL.md and example files as needed.
+**Note:** For developers working directly in the project directory, `scripts/init_skill.py <skill-name> --path ~/.jaguarclaw/skills` can also be used to scaffold the full template structure from the command line.
 
 ### Step 4: Edit the Skill
 
@@ -302,7 +303,7 @@ To begin implementation, start with the reusable resources identified above: `sc
 
 Added scripts must be tested by actually running them to ensure there are no bugs and that the output matches what is expected. If there are many similar scripts, only a representative sample needs to be tested to ensure confidence that they all work while balancing time to completion.
 
-Any example files and directories not needed for the skill should be deleted. The initialization script creates example files in `scripts/`, `references/`, and `assets/` to demonstrate structure, but most skills won't need all of them.
+Use `save_skill_file` to write or update any resource files in the skill directory.
 
 #### Update SKILL.md
 

@@ -5,11 +5,11 @@ Skill Initializer - Creates a new skill from template
 Usage:
     init_skill.py <skill-name> [--path <path>]
 
-If --path is not specified, defaults to ./.jaguarclaw/skills (project skills directory).
-This is the recommended location as it has the highest priority in SkillRegistry.
+If --path is not specified, defaults to ~/.jaguarclaw/skills (user skills directory).
+This is always writable and is loaded by SkillRegistry on every startup.
 
 Examples:
-    init_skill.py my-new-skill                          # Uses default: ./.jaguarclaw/skills
+    init_skill.py my-new-skill                          # Uses default: ~/.jaguarclaw/skills
     init_skill.py my-api-helper --path skills/private  # Custom path
     init_skill.py custom-skill --path /custom/location # Absolute path
 """
@@ -283,7 +283,7 @@ def main():
         print("  - Max 64 characters")
         print("  - Must match directory name exactly")
         print("\nExamples:")
-        print("  init_skill.py my-new-skill                          # Uses default: ./.jaguarclaw/skills")
+        print("  init_skill.py my-new-skill                          # Uses default: ~/.jaguarclaw/skills")
         print("  init_skill.py my-api-helper --path skills/private  # Custom path")
         print("  init_skill.py custom-skill --path /custom/location # Absolute path")
         sys.exit(1)
@@ -295,10 +295,10 @@ def main():
         # Explicit path provided
         path = sys.argv[3]
     else:
-        # Use default: project skills directory (.jaguarclaw/skills in current working directory)
-        # This has the highest priority in SkillRegistry and is the recommended location
-        path = Path.cwd() / '.jaguarclaw' / 'skills'
-        print(f"ℹ️  No --path specified, using default project skills directory: {path}")
+        # Use default: user skills directory (~/.jaguarclaw/skills)
+        # This is always writable and is consistently loaded by SkillRegistry.
+        path = Path.home() / '.jaguarclaw' / 'skills'
+        print(f"ℹ️  No --path specified, using default user skills directory: {path}")
 
     print(f"🚀 Initializing skill: {skill_name}")
     print(f"   Location: {path}")
