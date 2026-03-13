@@ -14,6 +14,11 @@ const emit = defineEmits<{
 // 结果是否展开显示
 const isResultExpanded = ref(false)
 
+// 参数是否展开显示 — HITL 待确认时默认展开，方便用户审查高危命令
+const isArgsExpanded = ref(
+  props.toolCall.requiresConfirm && props.toolCall.status === 'pending'
+)
+
 // 截断阈值
 const RESULT_TRUNCATE_LENGTH = 500
 
@@ -66,8 +71,8 @@ const toolDisplayName = computed(() => {
   return names[props.toolCall.toolName] || props.toolCall.toolName
 })
 
-// 格式化参数为人类可读的形式
-const formattedArgs = computed(() => {
+// 格式化参数为人类可读的形式（展开版：不截断任何内容）
+function buildFormattedArgs(truncate: boolean): string {
   const args = props.toolCall.arguments
   const toolName = props.toolCall.toolName
 
@@ -78,7 +83,9 @@ const formattedArgs = computed(() => {
     case 'write_file': {
       const path = args.path || args.filePath || '未知路径'
       const content = String(args.content || '')
-      const preview = content.length > 100 ? content.substring(0, 100) + '...' : content
+      const preview = truncate && content.length > 100
+        ? content.substring(0, 100) + '...'
+        : content
       return `📝 ${path}\n\n内容:\n${preview}`
     }
 
@@ -91,10 +98,19 @@ const formattedArgs = computed(() => {
       return `🌐 ${args.url || '未知 URL'}`
 
     default:
-      // 其他工具显示简化的 JSON
-      return formatJson(args)
+      return formatJson(args, truncate)
   }
-})
+}
+
+// 格式化参数为人类可读的形式
+const formattedArgs = computed(() => buildFormattedArgs(!isArgsExpanded.value))
+
+const ARGS_TRUNCATE_LENGTH = 300
+const isArgsLong = computed(() => buildFormattedArgs(false).length > ARGS_TRUNCATE_LENGTH)
+
+function toggleArgsExpand() {
+  isArgsExpanded.value = !isArgsExpanded.value
+}
 
 // 结果是否需要截断
 const isResultLong = computed(() => {
@@ -122,12 +138,11 @@ function toggleResultExpand() {
 }
 
 // 简化 JSON 显示
-function formatJson(obj: Record<string, unknown>): string {
+function formatJson(obj: Record<string, unknown>, truncate = true): string {
   const lines: string[] = []
   for (const [key, value] of Object.entries(obj)) {
-    const displayValue = typeof value === 'string'
-      ? (value.length > 80 ? value.substring(0, 80) + '...' : value)
-      : JSON.stringify(value)
+    const raw = typeof value === 'string' ? value : JSON.stringify(value)
+    const displayValue = truncate && raw.length > 80 ? raw.substring(0, 80) + '...' : raw
     lines.push(`${key}: ${displayValue}`)
   }
   return lines.join('\n')
@@ -172,8 +187,14 @@ const downloadFileName = computed(() => {
       <span class="tool-status">{{ statusLabel }}</span>
     </div>
 
-    <div class="tool-args">
+    <div class="tool-args" :class="{ expanded: isArgsExpanded }">
+      <div v-if="isArgsLong" class="args-header">
+        <button class="expand-btn" @click="toggleArgsExpand">
+          {{ isArgsExpanded ? '收起' : '展开全部' }}
+        </button>
+      </div>
       <pre>{{ formattedArgs }}</pre>
+      <div v-if="isArgsLong && !isArgsExpanded" class="truncation-fade"></div>
     </div>
 
     <!-- HITL Confirmation Buttons -->
@@ -269,6 +290,17 @@ const downloadFileName = computed(() => {
   padding: 8px;
   max-height: 120px;
   overflow: auto;
+  position: relative;
+}
+
+.tool-args.expanded {
+  max-height: none;
+}
+
+.args-header {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 4px;
 }
 
 .tool-args pre {
