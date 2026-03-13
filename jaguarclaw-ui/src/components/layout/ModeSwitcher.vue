@@ -8,12 +8,14 @@ const router = useRouter()
 const currentMode = computed(() => {
   if (route.path.startsWith('/settings')) return 'settings'
   if (route.path.startsWith('/documents')) return 'documents'
+  if (route.path.startsWith('/im')) return 'im'
   return 'workspace'
 })
 
-function switchTo(mode: 'workspace' | 'settings' | 'documents') {
+function switchTo(mode: string) {
   if (mode === 'workspace') router.push('/')
   else if (mode === 'settings') router.push('/settings')
+  else if (mode === 'im') router.push('/im')
   else router.push('/documents')
 }
 </script>
@@ -31,6 +33,10 @@ function switchTo(mode: 'workspace' | 'settings' | 'documents') {
     <button class="mode-btn" :class="{ active: currentMode === 'documents' }"
             @click="switchTo('documents')" title="Documents">
       <span class="icon">&#9783;</span>
+    </button>
+    <button class="mode-btn" :class="{ active: currentMode === 'im' }"
+            @click="switchTo('im')" title="IM">
+      <span class="icon">&#9993;</span>
     </button>
     <button
       class="mode-btn"

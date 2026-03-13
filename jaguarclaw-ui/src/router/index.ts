@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import WorkspaceView from '@/views/WorkspaceView.vue'
 import SettingsView from '@/views/SettingsView.vue'
 import SetupWizard from '@/views/SetupWizard.vue'
+import ImView from '@/views/ImView.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -36,6 +37,11 @@ const router = createRouter({
       name: 'document-detail',
       component: WorkspaceView,
       props: true,
+    },
+    {
+      path: '/im',
+      name: 'im',
+      component: ImView,
     },
   ]
 })

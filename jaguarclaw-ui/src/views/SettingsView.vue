@@ -17,6 +17,7 @@ import SchedulesSection from '@/components/settings/SchedulesSection.vue'
 import HeartbeatSection from '@/components/settings/HeartbeatSection.vue'
 import PlaceholderSection from '@/components/settings/PlaceholderSection.vue'
 import AboutSection from '@/components/settings/AboutSection.vue'
+import ImConfigSection from '@/components/settings/ImConfigSection.vue'
 
 const route = useRoute()
 
@@ -45,6 +46,7 @@ const currentSection = computed(() => {
         <SchedulesSection v-else-if="currentSection === 'tasks'" />
         <HeartbeatSection v-else-if="currentSection === 'heartbeat'" />
         <AboutSection v-else-if="currentSection === 'about'" />
+        <ImConfigSection v-else-if="currentSection === 'im'" />
         <PlaceholderSection v-else title="Not Found" message="Section not found" />
       </main>
     </div>
