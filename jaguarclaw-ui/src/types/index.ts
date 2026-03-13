@@ -624,3 +624,54 @@ export interface DocumentNode {
 export interface Document extends Omit<DocumentNode, 'children'> {
   content: string   // TipTap JSON string
 }
+
+// ── IM Types ────────────────────────────────────────────────────────────────
+
+export interface ImSettings {
+  nodeId: string
+  displayName: string
+  redisUrl: string
+  redisConfigured: boolean
+}
+
+export interface ImNode {
+  nodeId: string
+  displayName: string
+  publicKeyEd25519: string
+  publicKeyX25519: string
+  lastSeen: number
+}
+
+export interface ImContact {
+  nodeId: string
+  displayName: string
+  pairedAt: string
+  status: 'active' | 'blocked'
+}
+
+export interface ImConversation {
+  id: string          // peer nodeId
+  displayName: string
+  lastMsg: string
+  lastMsgAt: string | null
+  unreadCount: number
+}
+
+export interface ImMessage {
+  id: string
+  conversationId: string
+  senderNodeId: string
+  isMe: boolean
+  type: 'TEXT' | 'IMAGE' | 'FILE' | 'AGENT_MESSAGE'
+  content: string     // JSON string: { "text": "..." }
+  createdAt: string
+  status: 'sent' | 'delivered' | 'failed'
+}
+
+export interface ImPairRequestEvent {
+  fromNodeId: string
+  fromDisplayName: string
+  fromPubEd25519: string
+  fromPubX25519: string
+  timestamp: number
+}
