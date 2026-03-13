@@ -90,14 +90,16 @@ export function useSchedules() {
   }
 
   async function loadRunHistory(taskId: string): Promise<void> {
-    runHistoryLoading.value.add(taskId)
+    runHistoryLoading.value = new Set(runHistoryLoading.value).add(taskId)
     try {
       const result = await request<ScheduleRunLog[]>('schedule.runs.list', { taskId, limit: 10 })
       runHistory.value = new Map(runHistory.value).set(taskId, result)
     } catch (e) {
       console.error('[Schedules] Failed to load run history:', e)
     } finally {
-      runHistoryLoading.value.delete(taskId)
+      const next = new Set(runHistoryLoading.value)
+      next.delete(taskId)
+      runHistoryLoading.value = next
     }
   }
 

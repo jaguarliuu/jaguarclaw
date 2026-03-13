@@ -6,7 +6,12 @@ import Select from '@/components/common/Select.vue'
 import type { SelectOption } from '@/components/common/Select.vue'
 import type { DeliveryTargetType, ScheduleInfo } from '@/types'
 
-const { schedules, loading, error, loadSchedules, createSchedule, updateSchedule, removeSchedule, toggleSchedule, runSchedule } = useSchedules()
+const {
+  schedules, loading, error,
+  runHistory, runHistoryLoading,
+  loadSchedules, createSchedule, updateSchedule, removeSchedule,
+  toggleSchedule, runSchedule, loadRunHistory
+} = useSchedules()
 const { t } = useI18n()
 
 // Form state
@@ -27,6 +32,19 @@ const submitting = ref(false)
 const runningTasks = ref<Set<string>>(new Set())
 const confirmDeleteId = ref<string | null>(null)
 const isEditing = computed(() => editingTaskId.value !== null)
+
+const expandedHistory = ref<Set<string>>(new Set())
+
+function toggleHistory(taskId: string) {
+  const next = new Set(expandedHistory.value)
+  if (next.has(taskId)) {
+    next.delete(taskId)
+  } else {
+    next.add(taskId)
+    loadRunHistory(taskId)
+  }
+  expandedHistory.value = next
+}
 
 // Cron presets
 const cronPresets = computed(() => [
@@ -214,13 +232,17 @@ async function handleToggle(task: ScheduleInfo) {
 }
 
 async function handleRun(taskId: string) {
-  runningTasks.value.add(taskId)
+  runningTasks.value = new Set(runningTasks.value).add(taskId)
+  // Auto-expand history when running
+  expandedHistory.value = new Set(expandedHistory.value).add(taskId)
   try {
     await runSchedule(taskId)
   } catch {
     // Error handled in composable
   } finally {
-    runningTasks.value.delete(taskId)
+    const next = new Set(runningTasks.value)
+    next.delete(taskId)
+    runningTasks.value = next
   }
 }
 
@@ -232,6 +254,24 @@ async function handleDelete(taskId: string) {
   } finally {
     confirmDeleteId.value = null
   }
+}
+
+function formatDuration(ms: number | null): string {
+  if (ms == null) return '-'
+  if (ms < 1000) return `${ms}ms`
+  return `${(ms / 1000).toFixed(1)}s`
+}
+
+function getRunStatusIcon(status: string): string {
+  if (status === 'running') return '⟳'
+  if (status === 'success') return '✓'
+  return '✗'
+}
+
+function getRunStatusClass(status: string): string {
+  if (status === 'running') return 'run-status-running'
+  if (status === 'success') return 'run-status-success'
+  return 'run-status-failed'
 }
 
 onMounted(() => {
@@ -355,6 +395,13 @@ onMounted(() => {
           </div>
           <div class="task-actions">
             <button
+              class="history-btn"
+              :class="{ active: expandedHistory.has(task.id) }"
+              @click="toggleHistory(task.id)"
+            >
+              {{ t('sections.schedules.historyBtn') }}
+            </button>
+            <button
               class="edit-btn"
               @click="editTask(task)"
             >
@@ -404,6 +451,31 @@ onMounted(() => {
         </div>
         <div v-if="task.lastRunError" class="task-error">
           {{ task.lastRunError }}
+        </div>
+        <!-- Run History -->
+        <div v-if="expandedHistory.has(task.id)" class="run-history">
+          <div v-if="runHistoryLoading.has(task.id)" class="run-history-loading">
+            {{ t('sections.schedules.historyLoading') }}
+          </div>
+          <template v-else>
+            <div v-if="!runHistory.get(task.id)?.length" class="run-history-empty">
+              {{ t('sections.schedules.historyEmpty') }}
+            </div>
+            <div
+              v-for="run in runHistory.get(task.id)"
+              :key="run.id"
+              class="run-entry"
+              :class="getRunStatusClass(run.status)"
+            >
+              <span class="run-status-icon">{{ getRunStatusIcon(run.status) }}</span>
+              <span class="run-trigger">{{ run.triggeredBy }}</span>
+              <span class="run-time">{{ formatTime(run.startedAt) }}</span>
+              <span class="run-duration">{{ formatDuration(run.durationMs) }}</span>
+              <span v-if="run.errorMessage" class="run-error-msg" :title="run.errorMessage">
+                {{ run.errorMessage.length > 60 ? run.errorMessage.substring(0, 60) + '...' : run.errorMessage }}
+              </span>
+            </div>
+          </template>
         </div>
       </div>
     </div>
@@ -823,5 +895,93 @@ onMounted(() => {
   border-radius: var(--radius-md);
   color: #dc2626;
   font-size: 13px;
+}
+
+/* Run History */
+.history-btn {
+  padding: 4px 10px;
+  border: var(--border);
+  border-radius: var(--radius-md);
+  background: var(--color-white);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.history-btn:hover {
+  background: var(--color-gray-bg);
+}
+
+.history-btn.active {
+  background: var(--color-gray-bg);
+  border-color: var(--color-gray-dark);
+}
+
+.run-history {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: var(--border);
+}
+
+.run-history-loading,
+.run-history-empty {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--color-gray-dark);
+  padding: 4px 0;
+}
+
+.run-entry {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  border-bottom: 1px solid var(--color-gray-100, #f3f4f6);
+}
+
+.run-entry:last-child {
+  border-bottom: none;
+}
+
+.run-status-icon {
+  font-size: 14px;
+  width: 16px;
+  text-align: center;
+}
+
+.run-status-running .run-status-icon { color: #f59e0b; }
+.run-status-success .run-status-icon { color: #22c55e; }
+.run-status-failed  .run-status-icon { color: #ef4444; }
+
+.run-trigger {
+  padding: 1px 5px;
+  border-radius: var(--radius-sm);
+  font-size: 10px;
+  font-weight: 500;
+  text-transform: uppercase;
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
+.run-time {
+  color: var(--color-gray-dark);
+  flex: 1;
+}
+
+.run-duration {
+  color: var(--color-gray-dark);
+  min-width: 50px;
+  text-align: right;
+}
+
+.run-error-msg {
+  color: #ef4444;
+  font-size: 11px;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 </style>
