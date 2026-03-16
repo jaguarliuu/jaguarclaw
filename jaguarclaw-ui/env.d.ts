@@ -1,5 +1,18 @@
 /// <reference types="vite/client" />
 
+declare module 'emoji-mart-vue-fast/src' {
+  import { DefineComponent } from 'vue'
+  export const Picker: DefineComponent<Record<string, unknown>>
+  export class EmojiIndex {
+    constructor(data: unknown, options?: unknown)
+  }
+}
+
+declare module 'emoji-mart-vue-fast/data/all.json' {
+  const data: unknown
+  export default data
+}
+
 // Electron API 类型定义
 interface Window {
   electron?: {

@@ -1,5 +1,6 @@
 import { useRouter } from 'vue-router'
 import { useWebSocket } from './useWebSocket'
+import { useIm } from './useIm'
 import type { ToolConfirmRequestPayload, RunOutcomePayload } from '@/types'
 import type { RpcErrorEvent } from './useWebSocket'
 import { useToast } from './useToast'
@@ -13,6 +14,7 @@ export function useNotification() {
 
   const router = useRouter()
   const { onEvent, onRpcError } = useWebSocket()
+  const { activeConversationId } = useIm()
   const { showToast } = useToast()
   const { t } = useI18n()
 
@@ -20,6 +22,53 @@ export function useNotification() {
   if ('Notification' in window && Notification.permission === 'default') {
     Notification.requestPermission()
   }
+
+  // ── IM message notifications ─────────────────────────────────────────
+  onEvent('im.message', (event) => {
+    const msg = event.payload as {
+      conversationId: string
+      messageId: string
+      displayName: string
+      type: string
+      content: string
+    }
+
+    const isOnImView = router.currentRoute.value.path.startsWith('/im')
+    const isActiveConv = msg.conversationId === activeConversationId.value
+    const isHidden = document.visibilityState === 'hidden'
+
+    // Already looking at this conversation — no notification needed
+    if (isOnImView && isActiveConv && !isHidden) return
+
+    let preview = ''
+    if (msg.type === 'TEXT') {
+      try { preview = JSON.parse(msg.content).text ?? '' } catch { preview = msg.content }
+      if (preview.length > 60) preview = preview.slice(0, 60) + '…'
+    } else {
+      try { preview = `[${JSON.parse(msg.content).filename ?? msg.type}]` } catch { preview = `[${msg.type}]` }
+    }
+
+    const title = msg.displayName || 'New Message'
+    const body  = preview
+
+    if (!isHidden && 'Notification' in window && Notification.permission === 'granted') {
+      // Window visible but on another view — use in-app toast
+    }
+
+    if (isHidden && 'Notification' in window && Notification.permission === 'granted') {
+      const n = new Notification(`${title}`, { body, tag: `im-${msg.messageId}` })
+      n.onclick = () => { window.focus(); router.push('/im'); n.close() }
+    } else {
+      showToast({
+        type: 'info',
+        title,
+        message: body,
+        dedupeKey: `im-${msg.messageId}`,
+        dedupeWindowMs: 1000,
+        durationMs: 4000,
+      })
+    }
+  })
 
   onEvent('run.outcome', (event) => {
     const payload = event.payload as RunOutcomePayload | undefined
@@ -119,8 +168,8 @@ function notifySecurityError(
     title: '请求提示',
     message: body,
     dedupeKey: `rpc-${error.code}-${error.method ?? 'unknown'}`,
-    dedupeWindowMs: 3000,
-    durationMs: 4500
+    dedupeWindowMs: 500,
+    durationMs: toastType === 'error' || toastType === 'warning' ? 10000 : 5000,
   })
 
   const isHidden = document.visibilityState === 'hidden'

@@ -632,6 +632,8 @@ export interface ImSettings {
   displayName: string
   redisUrl: string
   redisConfigured: boolean
+  avatarStyle?: string
+  avatarSeed?: string
 }
 
 export interface ImNode {
@@ -640,6 +642,8 @@ export interface ImNode {
   publicKeyEd25519: string
   publicKeyX25519: string
   lastSeen: number
+  avatarStyle?: string
+  avatarSeed?: string
 }
 
 export interface ImContact {
@@ -647,6 +651,8 @@ export interface ImContact {
   displayName: string
   pairedAt: string
   status: 'active' | 'blocked'
+  avatarStyle?: string
+  avatarSeed?: string
 }
 
 export interface ImConversation {
@@ -663,9 +669,14 @@ export interface ImMessage {
   senderNodeId: string
   isMe: boolean
   type: 'TEXT' | 'IMAGE' | 'FILE' | 'AGENT_MESSAGE'
-  content: string     // JSON string: { "text": "..." }
+  content: string     // JSON string: { "text": "..." } or { "filename": "...", "mimeType": "...", "size": N }
   createdAt: string
   status: 'sent' | 'delivered' | 'failed'
+  // File attachment fields (present when type = IMAGE | FILE)
+  fileUrl?: string
+  fileName?: string
+  mimeType?: string
+  fileSize?: number
 }
 
 export interface ImPairRequestEvent {
@@ -673,5 +684,7 @@ export interface ImPairRequestEvent {
   fromDisplayName: string
   fromPubEd25519: string
   fromPubX25519: string
+  fromAvatarStyle?: string
+  fromAvatarSeed?: string
   timestamp: number
 }

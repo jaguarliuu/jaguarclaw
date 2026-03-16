@@ -23,7 +23,7 @@ public class ImConversationsListHandler implements RpcHandler {
                     .id(c.getId())
                     .displayName(c.getDisplayName())
                     .lastMsg(c.getLastMsg())
-                    .lastMsgAt(c.getLastMsgAt() != null ? c.getLastMsgAt().toString() : null)
+                    .lastMsgAt(c.getLastMsgAt() != null ? c.getLastMsgAt().toString() + "Z" : null)
                     .unreadCount(c.getUnreadCount())
                     .build())
                 .toList();

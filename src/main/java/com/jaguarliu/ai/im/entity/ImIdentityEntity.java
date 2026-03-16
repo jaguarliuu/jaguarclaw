@@ -31,6 +31,12 @@ public class ImIdentityEntity {
     @Column(columnDefinition = "TEXT")
     private String redisPassword;
 
+    @Builder.Default
+    private String avatarStyle = "thumbs";
+
+    @Column(columnDefinition = "TEXT")
+    private String avatarSeed;
+
     @Column(nullable = false)
     private LocalDateTime createdAt;
 }

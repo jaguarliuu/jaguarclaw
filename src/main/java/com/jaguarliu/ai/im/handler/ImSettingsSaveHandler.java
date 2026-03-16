@@ -48,11 +48,15 @@ public class ImSettingsSaveHandler implements RpcHandler {
             String displayName = (String) params.get("displayName");
             String redisUrl    = (String) params.get("redisUrl");
             String redisPwd    = (String) params.get("redisPassword");
+            String avatarStyle = (String) params.get("avatarStyle");
+            String avatarSeed  = (String) params.get("avatarSeed");
 
             ImIdentityEntity id = identityService.getCached();
             if (displayName != null && !displayName.isBlank()) id.setDisplayName(displayName);
             if (redisUrl != null) id.setRedisUrl(redisUrl.trim());
             if (redisPwd != null) id.setRedisPassword(redisPwd);
+            if (avatarStyle != null && !avatarStyle.isBlank()) id.setAvatarStyle(avatarStyle);
+            if (avatarSeed != null) id.setAvatarSeed(avatarSeed);
             identityService.save(id);
 
             lettuceConfig.configure(id.getRedisUrl(), id.getRedisPassword());
@@ -60,6 +64,7 @@ public class ImSettingsSaveHandler implements RpcHandler {
                 registryService.registerSelf();
                 pairingService.startSubscriptions();
                 messagingService.startSubscriptions();
+                pairingService.broadcastProfileUpdate();
             }
 
             return RpcResponse.success(request.getId(), Map.of("ok", true));

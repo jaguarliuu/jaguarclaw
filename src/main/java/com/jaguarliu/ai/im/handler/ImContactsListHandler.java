@@ -36,6 +36,8 @@ public class ImContactsListHandler implements RpcHandler {
             .displayName(e.getDisplayName())
             .pairedAt(e.getPairedAt().toString())
             .status(e.getStatus())
+            .avatarStyle(e.getAvatarStyle())
+            .avatarSeed(e.getAvatarSeed())
             .build();
     }
 }

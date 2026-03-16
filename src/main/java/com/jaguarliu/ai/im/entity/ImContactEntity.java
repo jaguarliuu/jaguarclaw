@@ -25,4 +25,9 @@ public class ImContactEntity {
     @Column(nullable = false)
     @Builder.Default
     private String status = "active";  // "active" | "blocked"
+
+    private String avatarStyle;
+
+    @Column(columnDefinition = "TEXT")
+    private String avatarSeed;
 }

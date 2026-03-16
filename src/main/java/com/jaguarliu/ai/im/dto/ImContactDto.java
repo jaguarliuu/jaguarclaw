@@ -6,4 +6,6 @@ public class ImContactDto {
     private String displayName;
     private String pairedAt;
     private String status;
+    private String avatarStyle;
+    private String avatarSeed;
 }

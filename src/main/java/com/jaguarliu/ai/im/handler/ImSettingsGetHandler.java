@@ -27,7 +27,9 @@ public class ImSettingsGetHandler implements RpcHandler {
                 "nodeId",          id.getNodeId(),
                 "displayName",     id.getDisplayName(),
                 "redisUrl",        id.getRedisUrl() != null ? id.getRedisUrl() : "",
-                "redisConfigured", id.getRedisUrl() != null && !id.getRedisUrl().isBlank()
+                "redisConfigured", id.getRedisUrl() != null && !id.getRedisUrl().isBlank(),
+                "avatarStyle",     id.getAvatarStyle() != null ? id.getAvatarStyle() : "thumbs",
+                "avatarSeed",      id.getAvatarSeed() != null ? id.getAvatarSeed() : ""
             ));
         });
     }

@@ -74,6 +74,19 @@ public class ImRegistryService {
         return result;
     }
 
+    /** Get a single node by nodeId from the registry */
+    public Optional<ImNodeDto> getNode(String nodeId) {
+        if (!lettuceConfig.isConfigured()) return Optional.empty();
+        try (StatefulRedisConnection<String, String> conn = lettuceConfig.getClient().get().connect()) {
+            String json = conn.sync().get(NODE_KEY_PREFIX + nodeId);
+            if (json == null) return Optional.empty();
+            return Optional.of(objectMapper.readValue(json, ImNodeDto.class));
+        } catch (Exception e) {
+            log.warn("[IM] Failed to get node {}", nodeId, e);
+            return Optional.empty();
+        }
+    }
+
     private ImNodeDto buildSelfDto(ImIdentityEntity identity) {
         return ImNodeDto.builder()
             .nodeId(identity.getNodeId())
@@ -81,6 +94,8 @@ public class ImRegistryService {
             .publicKeyEd25519(identity.getPublicKeyEd25519())
             .publicKeyX25519(identity.getPublicKeyX25519())
             .lastSeen(System.currentTimeMillis())
+            .avatarStyle(identity.getAvatarStyle())
+            .avatarSeed(identity.getAvatarSeed())
             .build();
     }
 }

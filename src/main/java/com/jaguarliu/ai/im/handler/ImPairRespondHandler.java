@@ -24,10 +24,12 @@ public class ImPairRespondHandler implements RpcHandler {
             String fromDisplayName = (String) p.get("fromDisplayName");
             String fromPubEd25519  = (String) p.get("fromPubEd25519");
             String fromPubX25519   = (String) p.get("fromPubX25519");
+            String fromAvatarStyle = (String) p.getOrDefault("fromAvatarStyle", "thumbs");
+            String fromAvatarSeed  = (String) p.getOrDefault("fromAvatarSeed", "");
             boolean accept = Boolean.TRUE.equals(p.get("accept"));
 
             pairingService.respondToPairRequest(fromNodeId, fromDisplayName,
-                fromPubEd25519, fromPubX25519, accept);
+                fromPubEd25519, fromPubX25519, fromAvatarStyle, fromAvatarSeed, accept);
             return RpcResponse.success(request.getId(), Map.of("ok", true));
         });
     }

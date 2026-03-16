@@ -11,4 +11,6 @@ public class ImNodeDto {
     private String publicKeyEd25519;
     private String publicKeyX25519;
     private Long lastSeen;
+    private String avatarStyle;
+    private String avatarSeed;
 }

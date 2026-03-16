@@ -11,10 +11,12 @@ const { toasts, dismissToast } = useToast()
       :key="toast.id"
       class="toast"
       :class="`toast-${toast.type}`"
-      @click="dismissToast(toast.id)"
     >
-      <div v-if="toast.title" class="toast-title">{{ toast.title }}</div>
-      <div class="toast-message">{{ toast.message }}</div>
+      <div class="toast-body">
+        <div v-if="toast.title" class="toast-title">{{ toast.title }}</div>
+        <div class="toast-message">{{ toast.message }}</div>
+      </div>
+      <button class="toast-close" @click="dismissToast(toast.id)" aria-label="Dismiss">×</button>
     </div>
   </div>
 </template>
@@ -39,9 +41,26 @@ const { toasts, dismissToast } = useToast()
   background: var(--color-white);
   box-shadow: var(--shadow-md);
   padding: 10px 12px;
-  cursor: pointer;
   pointer-events: auto;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
 }
+
+.toast-body { flex: 1; min-width: 0; }
+
+.toast-close {
+  flex-shrink: 0;
+  width: 20px; height: 20px;
+  border: none; background: none;
+  color: var(--color-gray-400);
+  font-size: 16px; line-height: 1;
+  cursor: pointer; padding: 0;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: var(--radius-sm);
+  transition: color var(--duration-fast), background var(--duration-fast);
+}
+.toast-close:hover { color: var(--color-black); background: var(--color-gray-100); }
 
 .toast-title {
   font-weight: 600;
