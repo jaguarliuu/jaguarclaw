@@ -1171,6 +1171,27 @@ ipcMain.handle('app:openPath', async (_event, payload) => {
   return { target, path: resolved, success: !result, error: result || null };
 });
 
+// ── Single-instance lock ─────────────────────────────────────────────────────
+// If another instance is already running, focus it and quit this one.
+const gotTheLock = app.requestSingleInstanceLock();
+
+if (!gotTheLock) {
+  // A primary instance is already running; it will receive 'second-instance' and
+  // bring itself to the foreground. Exit this process immediately.
+  app.exit(0);
+} else {
+  app.on('second-instance', () => {
+    // Restore and focus whichever window is currently visible.
+    // During startup the splash is shown; after startup the main window is shown.
+    const target = mainWindow || splashWindow;
+    if (target && !target.isDestroyed()) {
+      if (target.isMinimized()) target.restore();
+      if (!target.isVisible()) target.show();
+      target.focus();
+    }
+  });
+}
+
 app.whenReady().then(async () => {
   try {
     // 确保目录存在

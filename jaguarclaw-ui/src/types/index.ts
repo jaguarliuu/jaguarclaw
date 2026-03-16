@@ -461,6 +461,20 @@ export interface ScheduleUpdatePayload extends ScheduleCreatePayload {
   enabled: boolean
 }
 
+export interface ScheduleRunLog {
+  id: string
+  taskId: string
+  taskName: string
+  triggeredBy: 'scheduled' | 'manual'
+  status: 'running' | 'success' | 'failed'
+  startedAt: string
+  finishedAt: string | null
+  durationMs: number | null
+  errorMessage: string | null
+  sessionId: string | null
+  runId: string | null
+}
+
 // ==================== LLM Config Types ====================
 
 export interface LlmConfig {
@@ -609,4 +623,68 @@ export interface DocumentNode {
 
 export interface Document extends Omit<DocumentNode, 'children'> {
   content: string   // TipTap JSON string
+}
+
+// ── IM Types ────────────────────────────────────────────────────────────────
+
+export interface ImSettings {
+  nodeId: string
+  displayName: string
+  redisUrl: string
+  redisConfigured: boolean
+  avatarStyle?: string
+  avatarSeed?: string
+}
+
+export interface ImNode {
+  nodeId: string
+  displayName: string
+  publicKeyEd25519: string
+  publicKeyX25519: string
+  lastSeen: number
+  avatarStyle?: string
+  avatarSeed?: string
+}
+
+export interface ImContact {
+  nodeId: string
+  displayName: string
+  pairedAt: string
+  status: 'active' | 'blocked'
+  avatarStyle?: string
+  avatarSeed?: string
+}
+
+export interface ImConversation {
+  id: string          // peer nodeId
+  displayName: string
+  lastMsg: string
+  lastMsgAt: string | null
+  unreadCount: number
+}
+
+export interface ImMessage {
+  id: string
+  conversationId: string
+  senderNodeId: string
+  isMe: boolean
+  type: 'TEXT' | 'IMAGE' | 'FILE' | 'AGENT_MESSAGE'
+  content: string     // JSON string: { "text": "..." } or { "filename": "...", "mimeType": "...", "size": N }
+  createdAt: string
+  status: 'sent' | 'delivered' | 'failed'
+  // File attachment fields (present when type = IMAGE | FILE)
+  fileUrl?: string
+  fileName?: string
+  mimeType?: string
+  fileSize?: number
+}
+
+export interface ImPairRequestEvent {
+  fromNodeId: string
+  fromDisplayName: string
+  fromPubEd25519: string
+  fromPubX25519: string
+  fromAvatarStyle?: string
+  fromAvatarSeed?: string
+  timestamp: number
 }

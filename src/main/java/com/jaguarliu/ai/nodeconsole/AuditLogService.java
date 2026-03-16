@@ -153,6 +153,33 @@ public class AuditLogService {
         return auditLogRepository.findAllByOrderByCreatedAtDesc(pageable);
     }
 
+    /**
+     * 记录定时任务执行事件
+     * eventType = "SCHEDULE_EXECUTION"
+     */
+    public void logScheduleExecution(String taskId, String taskName, String triggeredBy,
+                                      String sessionId, String runId,
+                                      String resultStatus, String resultSummary, long durationMs) {
+        AuditLogEntity entity = AuditLogEntity.builder()
+                .eventType("SCHEDULE_EXECUTION")
+                .sessionId(sessionId)
+                .runId(runId)
+                .toolName(taskName != null && taskName.length() > 50 ? taskName.substring(0, 50) : taskName)
+                .command(triggeredBy)
+                .resultStatus(resultStatus)
+                .resultSummary(truncate(resultSummary))
+                .durationMs((int) durationMs)
+                .hitlRequired(false)
+                .build();
+
+        try {
+            auditLogRepository.save(entity);
+            log.debug("Schedule audit log recorded: task={}, status={}", taskName, resultStatus);
+        } catch (Exception e) {
+            log.error("Failed to record schedule audit log: task={}", taskName, e);
+        }
+    }
+
     private String truncate(String text) {
         if (text == null) return null;
         if (text.length() <= MAX_SUMMARY_LENGTH) return text;

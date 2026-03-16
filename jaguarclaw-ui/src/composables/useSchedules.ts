@@ -1,10 +1,12 @@
 import { ref, readonly } from 'vue'
 import { useWebSocket } from './useWebSocket'
-import type { ScheduleInfo, ScheduleCreatePayload, ScheduleUpdatePayload } from '@/types'
+import type { ScheduleInfo, ScheduleCreatePayload, ScheduleUpdatePayload, ScheduleRunLog } from '@/types'
 
 const schedules = ref<ScheduleInfo[]>([])
 const loading = ref(false)
 const error = ref<string | null>(null)
+const runHistory = ref<Map<string, ScheduleRunLog[]>>(new Map())
+const runHistoryLoading = ref<Set<string>>(new Set())
 
 export function useSchedules() {
   const { request } = useWebSocket()
@@ -78,6 +80,7 @@ export function useSchedules() {
     error.value = null
     try {
       await request<{ success: boolean }>('schedule.run', { id })
+      await loadRunHistory(id)
       await loadSchedules()
     } catch (e) {
       console.error('[Schedules] Failed to run schedule:', e)
@@ -86,15 +89,32 @@ export function useSchedules() {
     }
   }
 
+  async function loadRunHistory(taskId: string): Promise<void> {
+    runHistoryLoading.value = new Set(runHistoryLoading.value).add(taskId)
+    try {
+      const result = await request<ScheduleRunLog[]>('schedule.runs.list', { taskId, limit: 10 })
+      runHistory.value = new Map(runHistory.value).set(taskId, result)
+    } catch (e) {
+      console.error('[Schedules] Failed to load run history:', e)
+    } finally {
+      const next = new Set(runHistoryLoading.value)
+      next.delete(taskId)
+      runHistoryLoading.value = next
+    }
+  }
+
   return {
     schedules: readonly(schedules),
     loading: readonly(loading),
     error: readonly(error),
+    runHistory: readonly(runHistory),
+    runHistoryLoading: readonly(runHistoryLoading),
     loadSchedules,
     createSchedule,
     updateSchedule,
     removeSchedule,
     toggleSchedule,
-    runSchedule
+    runSchedule,
+    loadRunHistory
   }
 }

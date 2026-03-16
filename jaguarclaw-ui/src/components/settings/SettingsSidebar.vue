@@ -26,6 +26,7 @@ const groups = computed(() => [
     label: t('settings.groups.integration'),
     items: [
       { id: 'nodes',       label: t('settings.nav.nodes') },
+      { id: 'im',          label: 'IM' },
     ]
   },
   {

@@ -109,8 +109,7 @@ public class ScheduledTaskService {
     public void runNow(String id) {
         ScheduledTaskEntity task = repository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Scheduled task not found: " + id));
-        // 在新线程中执行，不阻塞调用方
-        new Thread(() -> executor.execute(task), "schedule-manual-" + task.getName()).start();
+        new Thread(() -> executor.execute(task, "manual"), "schedule-manual-" + task.getName()).start();
         log.info("Manual run triggered for scheduled task: name={}", task.getName());
     }
 

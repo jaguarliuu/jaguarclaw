@@ -2,6 +2,7 @@ package com.jaguarliu.ai.schedule;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jaguarliu.ai.llm.model.LlmRequest;
+import com.jaguarliu.ai.nodeconsole.AuditLogService;
 import com.jaguarliu.ai.runtime.*;
 import com.jaguarliu.ai.session.MessageService;
 import com.jaguarliu.ai.session.RunService;
@@ -56,62 +57,95 @@ public class ScheduledTaskExecutor {
     private final LoopConfig loopConfig;
     private final ScheduledTaskRepository repository;
     private final ObjectMapper objectMapper;
+    private final ScheduleRunLogService runLogService;
+    private final AuditLogService auditLogService;
 
     /**
      * 执行定时任务
      */
     public void execute(ScheduledTaskEntity task) {
-        log.info("Scheduled task executing: name={}, id={}", task.getName(), task.getId());
+        execute(task, "scheduled");
+    }
+
+    public void execute(ScheduledTaskEntity task, String triggeredBy) {
+        log.info("Scheduled task executing: name={}, id={}, triggeredBy={}", task.getName(), task.getId(), triggeredBy);
+        long startMs = System.currentTimeMillis();
+
+        // Write RUNNING record immediately
+        ScheduleRunLogEntity runLog = runLogService.start(task.getId(), task.getName(), triggeredBy, null, null);
+
         try {
             String executionPrompt = buildExecutionPrompt(task);
 
-            // 1. 创建专用会话（scheduled kind，不在主列表显示）
+            // 1. Create dedicated session
             SessionEntity session = sessionService.createScheduledSession("[Scheduled] " + task.getName());
 
-            // 2. 创建 run
+            // 2. Create run
             RunEntity run = runService.create(session.getId(), task.getPrompt());
             runService.updateStatus(run.getId(), RunStatus.RUNNING);
 
-            // 3. 保存用户消息
+            // 3. Save user message
             messageService.saveUserMessage(session.getId(), run.getId(), task.getPrompt());
 
-            // 4. 构建消息上下文（无历史）
+            // 4. Build message context (no history)
             List<LlmRequest.Message> messages = contextBuilder.buildMessages(List.of(), executionPrompt);
 
-            // 5. 构建 scheduled RunContext（runKind = "scheduled"，跳过 HITL）
+            // 5. Build scheduled RunContext (runKind = "scheduled", skip HITL)
             RunContext context = RunContext.createScheduled(
                     run.getId(), session.getId(), loopConfig, cancellationManager);
             context.setAgentDeniedTools(resolveAutoDeliveryDeniedTools(task));
 
-            // 6. 执行 Agent 循环
+            // 6. Execute agent loop
             String response = agentRuntime.executeLoopWithContext(context, messages, executionPrompt);
 
-            // 7. 保存助手消息
+            // 7. Save assistant message
             messageService.saveAssistantMessage(session.getId(), run.getId(), response);
             runService.updateStatus(run.getId(), RunStatus.DONE);
 
-            // 8. 推送结果到目标
+            // 8. Push result to target
             pushToDeliveryTarget(task, response, true, null);
 
-            // 9. 更新任务状态
+            // 9. Update task status
             task.setLastRunAt(LocalDateTime.now());
             task.setLastRunSuccess(true);
             task.setLastRunError(null);
             repository.save(task);
+
+            // 10. Complete run log
+            runLogService.complete(runLog, session.getId(), run.getId());
+
+            // 11. Write audit log
+            long durationMs = System.currentTimeMillis() - startMs;
+            auditLogService.logScheduleExecution(
+                    task.getId(), task.getName(), triggeredBy,
+                    session.getId(), run.getId(),
+                    "SUCCESS", "Task completed successfully", durationMs);
 
             log.info("Scheduled task completed: name={}, id={}", task.getName(), task.getId());
 
         } catch (Exception e) {
             log.error("Scheduled task failed: name={}, error={}", task.getName(), e.getMessage(), e);
 
-            // 推送错误到目标
-            pushToDeliveryTarget(task, null, false, e.getMessage());
+            String errorMsg = e.getMessage() != null ? e.getMessage() : e.getClass().getName();
 
-            // 更新任务状态
+            // Push error to target
+            pushToDeliveryTarget(task, null, false, errorMsg);
+
+            // Update task status
             task.setLastRunAt(LocalDateTime.now());
             task.setLastRunSuccess(false);
-            task.setLastRunError(e.getMessage());
+            task.setLastRunError(errorMsg);
             repository.save(task);
+
+            // Mark run log as failed
+            runLogService.fail(runLog, errorMsg);
+
+            // Write audit log
+            long durationMs = System.currentTimeMillis() - startMs;
+            auditLogService.logScheduleExecution(
+                    task.getId(), task.getName(), triggeredBy,
+                    null, null,
+                    "FAILED", errorMsg, durationMs);
         }
     }
 
