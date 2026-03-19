@@ -257,12 +257,22 @@ onMounted(() => {
           <p class="section-subtitle">{{ t('sections.nodes.subtitle') }}</p>
         </div>
         <div class="header-actions">
-          <button class="secondary-btn" @click="downloadTemplate">{{ t('sections.nodes.templateBtn') }}</button>
-          <button class="secondary-btn" :disabled="importing" @click="triggerFileInput">
-            {{ importing ? t('sections.nodes.importingBtn') : t('sections.nodes.importBtn') }}
+          <button class="action-btn action-btn-secondary" @click="downloadTemplate">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M12 3v11m0 0 4-4m-4 4-4-4M5 17v1a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-1"
+                stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+            <span>{{ t('sections.nodes.templateBtn') }}</span>
+          </button>
+          <button class="action-btn action-btn-secondary" :disabled="importing" @click="triggerFileInput">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M12 21V10m0 0 4 4m-4-4-4 4M5 7V6a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v1"
+                stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+            <span>{{ importing ? t('sections.nodes.importingBtn') : t('sections.nodes.importBtn') }}</span>
           </button>
           <input ref="fileInputRef" type="file" accept=".csv" style="display:none" @change="handleImportFile" />
-          <button class="add-btn" @click="openForm">{{ t('sections.nodes.addBtn') }}</button>
+          <button class="action-btn action-btn-primary" @click="openForm">{{ t('sections.nodes.addBtn') }}</button>
         </div>
       </div>
 
@@ -489,12 +499,14 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
+  gap: 16px;
 }
 
 .header-actions {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
 .section-title {
@@ -509,40 +521,52 @@ onMounted(() => {
   color: var(--color-gray-dark);
 }
 
-.add-btn {
+.action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 38px;
   padding: 8px 16px;
-  border: none;
   border-radius: var(--radius-md);
-  background: var(--color-black);
-  color: var(--color-white);
   font-family: var(--font-mono);
   font-size: 13px;
+  font-weight: 500;
   cursor: pointer;
-  transition: opacity 0.15s ease;
+  transition:
+    opacity 0.15s ease,
+    background 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
 }
 
-.add-btn:hover {
+.action-btn svg {
+  flex: 0 0 auto;
+}
+
+.action-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.action-btn-primary {
+  border: none;
+  background: var(--color-black);
+  color: var(--color-white);
+}
+
+.action-btn-primary:hover:not(:disabled) {
   opacity: 0.9;
 }
 
-.secondary-btn {
-  padding: var(--space-2) var(--space-3);
-  border-radius: var(--radius-md);
-  border: 1px solid var(--color-gray-300);
-  background: var(--color-gray-50);
-  color: var(--color-gray-700);
-  font-size: 13px;
-  cursor: pointer;
-  transition: background var(--duration-fast) var(--ease-out);
+.action-btn-secondary {
+  border: var(--border);
+  background: var(--color-white);
+  color: var(--color-black);
 }
 
-.secondary-btn:hover:not(:disabled) {
-  background: var(--color-gray-100);
-}
-
-.secondary-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+.action-btn-secondary:hover:not(:disabled) {
+  background: var(--color-gray-bg);
 }
 
 .import-banner {

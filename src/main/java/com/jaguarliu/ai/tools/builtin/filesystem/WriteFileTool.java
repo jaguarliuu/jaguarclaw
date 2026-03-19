@@ -90,7 +90,11 @@ public class WriteFileTool implements Tool {
                 Files.writeString(filePath, content, StandardCharsets.UTF_8);
                 log.info("Wrote file: {} ({} bytes)", pathStr, content.length());
 
-                return ToolResult.success("Successfully wrote " + content.length() + " bytes to " + pathStr);
+                return ToolResult.success(
+                        "Successfully wrote " + content.length() + " bytes.\n"
+                                + "Relative path: " + pathStr + "\n"
+                                + "Resolved path: " + filePath
+                );
 
             } catch (IOException e) {
                 log.error("Failed to write file: {}", pathStr, e);

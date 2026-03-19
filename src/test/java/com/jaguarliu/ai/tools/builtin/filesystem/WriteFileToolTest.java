@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Path;
+import java.nio.file.Files;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -48,6 +49,40 @@ class WriteFileToolTest {
             assertEquals(RuntimeFailureCategories.HARD_ENVIRONMENT_BLOCK, result.getFailureCategory());
             assertTrue(result.getContent().contains("Allowed workspace:"), result.getContent());
             assertTrue(result.getContent().contains(agentWorkspace.toString()), result.getContent());
+        } finally {
+            ToolExecutionContext.clear();
+        }
+    }
+
+    @Test
+    @DisplayName("should include relative and resolved path in success result")
+    void shouldIncludeResolvedPathInSuccessResult() throws Exception {
+        Path globalWorkspace = tempDir.resolve("workspace-root");
+        Path agentWorkspace = globalWorkspace.resolve("workspace-agent-a").toAbsolutePath().normalize();
+        Files.createDirectories(agentWorkspace);
+
+        ToolsProperties properties = new ToolsProperties();
+        properties.setWorkspace(globalWorkspace.toString());
+        WriteFileTool tool = new WriteFileTool(properties);
+
+        ToolExecutionContext.set(ToolExecutionContext.builder()
+                .agentId("agent-a")
+                .sessionWorkspacePath(agentWorkspace)
+                .build());
+
+        try {
+            ToolResult result = tool.execute(Map.of(
+                    "path", "reports/output.txt",
+                    "content", "hello"
+            )).block();
+
+            Path expectedPath = agentWorkspace.resolve("reports/output.txt").normalize();
+
+            assertNotNull(result);
+            assertTrue(result.isSuccess());
+            assertTrue(result.getContent().contains("Relative path: reports/output.txt"), result.getContent());
+            assertTrue(result.getContent().contains("Resolved path: " + expectedPath), result.getContent());
+            assertEquals("hello", Files.readString(expectedPath));
         } finally {
             ToolExecutionContext.clear();
         }
