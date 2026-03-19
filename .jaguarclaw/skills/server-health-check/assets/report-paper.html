@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{{REPORT_TITLE}}</title>
+    <style>
+      :root {
+        --paper: #f7f0e2;
+        --paper-deep: #f0e5d2;
+        --ink: #2a2118;
+        --muted: #6c5f50;
+        --line: #c8baa6;
+        --accent: #6f4e37;
+        --good: #355e3b;
+        --warn: #8f6b1a;
+        --bad: #8a2e2b;
+        --info: #425a7d;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        color: var(--ink);
+        background:
+          radial-gradient(circle at top, rgba(255, 255, 255, 0.42), transparent 30%),
+          linear-gradient(180deg, #efe5d2 0%, #e8dbc5 100%);
+        font-family: Georgia, "Times New Roman", serif;
+      }
+
+      .sheet {
+        max-width: 1100px;
+        margin: 24px auto 40px;
+        background: linear-gradient(180deg, var(--paper) 0%, #fbf6ed 100%);
+        border: 1px solid rgba(111, 78, 55, 0.18);
+        box-shadow: 0 20px 48px rgba(58, 43, 29, 0.18);
+        padding: 40px 34px;
+      }
+
+      .header {
+        border-bottom: 2px solid var(--accent);
+        padding-bottom: 18px;
+        margin-bottom: 24px;
+      }
+
+      .eyebrow {
+        margin: 0 0 8px;
+        text-transform: uppercase;
+        letter-spacing: 0.14em;
+        font-size: 11px;
+        color: var(--accent);
+      }
+
+      h1 {
+        margin: 0;
+        font-size: 34px;
+        line-height: 1.12;
+      }
+
+      .subtitle {
+        margin: 10px 0 0;
+        color: var(--muted);
+        font-size: 15px;
+      }
+
+      .summary-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 14px;
+        margin-top: 18px;
+      }
+
+      .summary-cell {
+        border: 1px solid var(--line);
+        background: rgba(255, 255, 255, 0.28);
+        padding: 12px 14px;
+      }
+
+      .summary-cell .label {
+        display: block;
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--muted);
+        margin-bottom: 8px;
+      }
+
+      .summary-cell .value {
+        font-size: 20px;
+        font-weight: 700;
+      }
+
+      .two-col {
+        display: grid;
+        grid-template-columns: 1.7fr 1fr;
+        gap: 26px;
+      }
+
+      section + section {
+        margin-top: 26px;
+      }
+
+      h2 {
+        margin: 0 0 12px;
+        font-size: 20px;
+        border-left: 4px solid var(--accent);
+        padding-left: 10px;
+      }
+
+      p {
+        margin: 0;
+        line-height: 1.72;
+      }
+
+      .callout {
+        border: 1px solid var(--line);
+        background: rgba(255, 255, 255, 0.28);
+        padding: 16px 18px;
+      }
+
+      .metric-list,
+      .findings,
+      .steps {
+        display: grid;
+        gap: 10px;
+      }
+
+      .metric-card,
+      .finding,
+      .step {
+        border: 1px solid var(--line);
+        background: rgba(255, 255, 255, 0.24);
+        padding: 12px 14px;
+      }
+
+      .metric-card .label {
+        display: block;
+        color: var(--muted);
+        font-size: 12px;
+        margin-bottom: 6px;
+      }
+
+      .metric-card .value {
+        font-size: 18px;
+        font-weight: 700;
+      }
+
+      .tag {
+        display: inline-block;
+        padding: 4px 10px;
+        font-size: 12px;
+        border: 1px solid currentColor;
+        border-radius: 999px;
+        margin-bottom: 8px;
+      }
+
+      .tag.good {
+        color: var(--good);
+      }
+
+      .tag.warn {
+        color: var(--warn);
+      }
+
+      .tag.bad {
+        color: var(--bad);
+      }
+
+      .tag.info {
+        color: var(--info);
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 12px;
+      }
+
+      th,
+      td {
+        border: 1px solid var(--line);
+        padding: 10px 12px;
+        text-align: left;
+        vertical-align: top;
+      }
+
+      th {
+        background: rgba(111, 78, 55, 0.08);
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+      }
+
+      code {
+        font-family: "Courier New", Courier, monospace;
+        font-size: 12px;
+        background: rgba(111, 78, 55, 0.08);
+        padding: 2px 6px;
+      }
+
+      .footer {
+        margin-top: 26px;
+        padding-top: 16px;
+        border-top: 1px solid var(--line);
+        font-size: 12px;
+        color: var(--muted);
+        text-align: right;
+      }
+
+      @media print {
+        body {
+          background: #ffffff;
+        }
+
+        .sheet {
+          margin: 0;
+          box-shadow: none;
+          border: none;
+        }
+      }
+
+      @media (max-width: 900px) {
+        .summary-grid,
+        .two-col {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="sheet">
+      <header class="header">
+        <p class="eyebrow">Inspection Memorandum</p>
+        <h1>{{REPORT_TITLE}}</h1>
+        <p class="subtitle">{{REPORT_SUBTITLE}}</p>
+        <div class="summary-grid">
+          <div class="summary-cell">
+            <span class="label">Overall Status</span>
+            <div class="value">{{OVERALL_STATUS}}</div>
+          </div>
+          <div class="summary-cell">
+            <span class="label">Node Scope</span>
+            <div class="value">{{NODE_SCOPE}}</div>
+          </div>
+          <div class="summary-cell">
+            <span class="label">Critical / Warning</span>
+            <div class="value">{{CRITICAL_WARNING_COUNTS}}</div>
+          </div>
+          <div class="summary-cell">
+            <span class="label">Generated At</span>
+            <div class="value">{{GENERATED_AT}}</div>
+          </div>
+        </div>
+      </header>
+
+      <section>
+        <h2>Executive Summary</h2>
+        <div class="callout">
+          <p>{{EXECUTIVE_SUMMARY}}</p>
+        </div>
+      </section>
+
+      <section class="two-col">
+        <div>
+          <h2>Metrics Snapshot</h2>
+          <div class="metric-list">
+            {{METRIC_CARDS}}
+          </div>
+        </div>
+        <div>
+          <h2>Recommended Next Steps</h2>
+          <div class="steps">
+            {{NEXT_STEP_ITEMS}}
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h2>Node / Fleet Table</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Node</th>
+              <th>Status</th>
+              <th>Key Metrics</th>
+              <th>Findings</th>
+            </tr>
+          </thead>
+          <tbody>
+            {{NODE_TABLE_ROWS}}
+          </tbody>
+        </table>
+      </section>
+
+      <section class="two-col">
+        <div>
+          <h2>Critical and Warning Findings</h2>
+          <div class="findings">
+            {{CRITICAL_ITEMS}}
+            {{WARNING_ITEMS}}
+          </div>
+        </div>
+        <div>
+          <h2>Notable and Trends</h2>
+          <div class="findings">
+            {{INFO_ITEMS}}
+            {{TREND_ITEMS}}
+          </div>
+        </div>
+      </section>
+
+      <p class="footer">
+        Report file: <code>{{REPORT_PATH}}</code>
+      </p>
+    </main>
+  </body>
+</html>

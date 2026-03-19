@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{{REPORT_TITLE}}</title>
+    <style>
+      :root {
+        --bg: #08111f;
+        --panel: #0f1b2d;
+        --panel-alt: #122238;
+        --text: #edf3ff;
+        --muted: #8fa5c6;
+        --line: #223754;
+        --accent: #4cc9f0;
+        --accent-2: #8ef6d2;
+        --good: #44d09e;
+        --good-bg: rgba(68, 208, 158, 0.14);
+        --warn: #ffcc66;
+        --warn-bg: rgba(255, 204, 102, 0.14);
+        --bad: #ff8c82;
+        --bad-bg: rgba(255, 140, 130, 0.14);
+        --info: #7ab8ff;
+        --info-bg: rgba(122, 184, 255, 0.14);
+        --shadow: 0 30px 60px rgba(0, 0, 0, 0.35);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: "IBM Plex Sans", "Segoe UI", Arial, sans-serif;
+        background:
+          radial-gradient(circle at top left, rgba(76, 201, 240, 0.12), transparent 28%),
+          radial-gradient(circle at top right, rgba(142, 246, 210, 0.1), transparent 22%),
+          linear-gradient(180deg, #08111f 0%, #060c17 100%);
+        color: var(--text);
+      }
+
+      .page {
+        max-width: 1220px;
+        margin: 0 auto;
+        padding: 28px 22px 52px;
+      }
+
+      .masthead {
+        border: 1px solid var(--line);
+        border-radius: 24px;
+        background: linear-gradient(135deg, rgba(15, 27, 45, 0.95), rgba(18, 34, 56, 0.98));
+        box-shadow: var(--shadow);
+        padding: 28px;
+        margin-bottom: 18px;
+      }
+
+      .eyebrow {
+        margin: 0 0 12px;
+        color: var(--accent);
+        font-family: "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
+        font-size: 12px;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: 34px;
+        line-height: 1.08;
+      }
+
+      .subtitle {
+        margin: 12px 0 0;
+        color: var(--muted);
+      }
+
+      .status-bar {
+        display: grid;
+        grid-template-columns: 1.4fr 1fr 1fr 1fr;
+        gap: 14px;
+        margin-top: 24px;
+      }
+
+      .status-tile,
+      .panel {
+        border: 1px solid var(--line);
+        border-radius: 20px;
+        background: rgba(15, 27, 45, 0.92);
+      }
+
+      .status-tile {
+        padding: 16px;
+      }
+
+      .status-tile .label {
+        display: block;
+        font-size: 12px;
+        color: var(--muted);
+        margin-bottom: 10px;
+      }
+
+      .status-tile .value {
+        font-size: 22px;
+        font-weight: 700;
+      }
+
+      .layout {
+        display: grid;
+        grid-template-columns: 1.75fr 1fr;
+        gap: 18px;
+      }
+
+      .stack {
+        display: grid;
+        gap: 18px;
+      }
+
+      .panel {
+        padding: 20px;
+      }
+
+      .panel h2 {
+        margin: 0 0 14px;
+        font-size: 18px;
+      }
+
+      .summary-box {
+        background: linear-gradient(180deg, rgba(18, 34, 56, 0.75), rgba(15, 27, 45, 0.3));
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        padding: 16px;
+        color: var(--muted);
+        line-height: 1.7;
+      }
+
+      .kpi-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+      }
+
+      .kpi {
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        padding: 14px;
+        background: rgba(18, 34, 56, 0.78);
+      }
+
+      .kpi .label {
+        display: block;
+        font-size: 12px;
+        color: var(--muted);
+        margin-bottom: 8px;
+      }
+
+      .kpi .value {
+        font-size: 18px;
+        font-weight: 700;
+      }
+
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 10px;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .good {
+        color: var(--good);
+        background: var(--good-bg);
+      }
+
+      .warn {
+        color: var(--warn);
+        background: var(--warn-bg);
+      }
+
+      .bad {
+        color: var(--bad);
+        background: var(--bad-bg);
+      }
+
+      .info {
+        color: var(--info);
+        background: var(--info-bg);
+      }
+
+      .list {
+        display: grid;
+        gap: 12px;
+      }
+
+      .item {
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        padding: 14px 16px;
+        background: rgba(18, 34, 56, 0.7);
+      }
+
+      .item h3 {
+        margin: 0 0 8px;
+        font-size: 15px;
+      }
+
+      .item p {
+        margin: 0;
+        color: var(--muted);
+        line-height: 1.6;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 14px;
+      }
+
+      th,
+      td {
+        padding: 12px 10px;
+        border-bottom: 1px solid var(--line);
+        text-align: left;
+        vertical-align: top;
+      }
+
+      th {
+        color: var(--muted);
+        font-size: 12px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      code {
+        font-family: "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
+        font-size: 12px;
+        background: rgba(122, 184, 255, 0.12);
+        padding: 2px 6px;
+        border-radius: 6px;
+      }
+
+      .footer {
+        margin-top: 18px;
+        color: var(--muted);
+        text-align: right;
+        font-size: 12px;
+      }
+
+      @media (max-width: 960px) {
+        .layout,
+        .status-bar,
+        .kpi-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <section class="masthead">
+        <p class="eyebrow">Ops Diagnostic Report</p>
+        <h1>{{REPORT_TITLE}}</h1>
+        <p class="subtitle">{{REPORT_SUBTITLE}}</p>
+        <div class="status-bar">
+          <article class="status-tile">
+            <span class="label">Overall Status</span>
+            <div class="value">{{OVERALL_STATUS}}</div>
+          </article>
+          <article class="status-tile">
+            <span class="label">Node Scope</span>
+            <div class="value">{{NODE_SCOPE}}</div>
+          </article>
+          <article class="status-tile">
+            <span class="label">Critical / Warning</span>
+            <div class="value">{{CRITICAL_WARNING_COUNTS}}</div>
+          </article>
+          <article class="status-tile">
+            <span class="label">Generated At</span>
+            <div class="value">{{GENERATED_AT}}</div>
+          </article>
+        </div>
+      </section>
+
+      <section class="layout">
+        <div class="stack">
+          <article class="panel">
+            <h2>Executive Summary</h2>
+            <div class="summary-box">{{EXECUTIVE_SUMMARY}}</div>
+          </article>
+
+          <article class="panel">
+            <h2>Metrics Snapshot</h2>
+            <div class="kpi-grid">
+              {{METRIC_CARDS}}
+            </div>
+          </article>
+
+          <article class="panel">
+            <h2>Fleet / Node Matrix</h2>
+            <table>
+              <thead>
+                <tr>
+                  <th>Node</th>
+                  <th>Status</th>
+                  <th>Key Metrics</th>
+                  <th>Findings</th>
+                </tr>
+              </thead>
+              <tbody>
+                {{NODE_TABLE_ROWS}}
+              </tbody>
+            </table>
+          </article>
+
+          <article class="panel">
+            <h2>Trend Notes</h2>
+            <div class="list">
+              {{TREND_ITEMS}}
+            </div>
+          </article>
+        </div>
+
+        <div class="stack">
+          <article class="panel">
+            <h2>Critical</h2>
+            <div class="list">
+              {{CRITICAL_ITEMS}}
+            </div>
+          </article>
+
+          <article class="panel">
+            <h2>Warnings</h2>
+            <div class="list">
+              {{WARNING_ITEMS}}
+            </div>
+          </article>
+
+          <article class="panel">
+            <h2>Notable / Info</h2>
+            <div class="list">
+              {{INFO_ITEMS}}
+            </div>
+          </article>
+
+          <article class="panel">
+            <h2>Recommended Next Steps</h2>
+            <div class="list">
+              {{NEXT_STEP_ITEMS}}
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <p class="footer">
+        Report file: <code>{{REPORT_PATH}}</code>
+      </p>
+    </main>
+  </body>
+</html>

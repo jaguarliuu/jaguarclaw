@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{{REPORT_TITLE}}</title>
+    <style>
+      :root {
+        --bg: #f5f7fb;
+        --panel: #ffffff;
+        --panel-soft: #f8fafc;
+        --text: #142033;
+        --muted: #5b6780;
+        --line: #d8e0ec;
+        --accent: #1f6feb;
+        --accent-soft: #eaf2ff;
+        --good: #16794d;
+        --good-bg: #e9f8f1;
+        --warn: #9a6700;
+        --warn-bg: #fff4d6;
+        --bad: #b42318;
+        --bad-bg: #feeceb;
+        --info: #175cd3;
+        --info-bg: #eaf2ff;
+        --shadow: 0 24px 48px rgba(16, 24, 40, 0.08);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: "Inter", "Segoe UI", Arial, sans-serif;
+        background: linear-gradient(180deg, #f7f9fc 0%, #eef3fa 100%);
+        color: var(--text);
+      }
+
+      .page {
+        max-width: 1180px;
+        margin: 0 auto;
+        padding: 32px 24px 56px;
+      }
+
+      .hero {
+        background: linear-gradient(135deg, #ffffff 0%, #eef4ff 100%);
+        border: 1px solid var(--line);
+        border-radius: 24px;
+        box-shadow: var(--shadow);
+        padding: 28px;
+        margin-bottom: 20px;
+      }
+
+      .eyebrow {
+        margin: 0 0 10px;
+        font-size: 12px;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--accent);
+        font-weight: 700;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: 32px;
+        line-height: 1.1;
+      }
+
+      .subtitle {
+        margin: 10px 0 0;
+        color: var(--muted);
+        font-size: 15px;
+      }
+
+      .hero-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 14px;
+        margin-top: 22px;
+      }
+
+      .hero-card,
+      .panel {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 18px;
+      }
+
+      .hero-card {
+        padding: 16px;
+      }
+
+      .hero-card .label {
+        display: block;
+        font-size: 12px;
+        color: var(--muted);
+        margin-bottom: 8px;
+      }
+
+      .hero-card .value {
+        font-size: 22px;
+        font-weight: 700;
+      }
+
+      .layout {
+        display: grid;
+        grid-template-columns: 2.1fr 1fr;
+        gap: 20px;
+      }
+
+      .stack {
+        display: grid;
+        gap: 20px;
+      }
+
+      .panel {
+        padding: 20px;
+      }
+
+      .panel h2 {
+        margin: 0 0 14px;
+        font-size: 18px;
+      }
+
+      .kpi-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px;
+      }
+
+      .kpi {
+        background: var(--panel-soft);
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        padding: 14px;
+      }
+
+      .kpi .label {
+        display: block;
+        margin-bottom: 6px;
+        font-size: 12px;
+        color: var(--muted);
+      }
+
+      .kpi .value {
+        font-size: 18px;
+        font-weight: 700;
+      }
+
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 10px;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .pill.good {
+        color: var(--good);
+        background: var(--good-bg);
+      }
+
+      .pill.warn {
+        color: var(--warn);
+        background: var(--warn-bg);
+      }
+
+      .pill.bad {
+        color: var(--bad);
+        background: var(--bad-bg);
+      }
+
+      .pill.info {
+        color: var(--info);
+        background: var(--info-bg);
+      }
+
+      .issue-list,
+      .timeline,
+      .next-steps {
+        display: grid;
+        gap: 12px;
+      }
+
+      .issue,
+      .timeline-item,
+      .next-step {
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        padding: 14px 16px;
+        background: var(--panel-soft);
+      }
+
+      .issue h3,
+      .timeline-item h3,
+      .next-step h3 {
+        margin: 0 0 8px;
+        font-size: 15px;
+      }
+
+      .issue p,
+      .timeline-item p,
+      .next-step p {
+        margin: 0;
+        color: var(--muted);
+        line-height: 1.6;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 14px;
+      }
+
+      th,
+      td {
+        padding: 12px 10px;
+        border-bottom: 1px solid var(--line);
+        text-align: left;
+        vertical-align: top;
+      }
+
+      th {
+        color: var(--muted);
+        font-size: 12px;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+
+      code {
+        font-family: "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
+        font-size: 12px;
+        background: #edf2fb;
+        padding: 2px 6px;
+        border-radius: 6px;
+      }
+
+      .footer {
+        margin-top: 20px;
+        color: var(--muted);
+        font-size: 12px;
+        text-align: right;
+      }
+
+      @media (max-width: 960px) {
+        .layout,
+        .hero-grid,
+        .kpi-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <section class="hero">
+        <p class="eyebrow">Server Health Check</p>
+        <h1>{{REPORT_TITLE}}</h1>
+        <p class="subtitle">{{REPORT_SUBTITLE}}</p>
+        <div class="hero-grid">
+          <article class="hero-card">
+            <span class="label">Overall Status</span>
+            <div class="value">{{OVERALL_STATUS}}</div>
+          </article>
+          <article class="hero-card">
+            <span class="label">Node Scope</span>
+            <div class="value">{{NODE_SCOPE}}</div>
+          </article>
+          <article class="hero-card">
+            <span class="label">Critical / Warning</span>
+            <div class="value">{{CRITICAL_WARNING_COUNTS}}</div>
+          </article>
+          <article class="hero-card">
+            <span class="label">Generated At</span>
+            <div class="value">{{GENERATED_AT}}</div>
+          </article>
+        </div>
+      </section>
+
+      <section class="layout">
+        <div class="stack">
+          <article class="panel">
+            <h2>Executive Summary</h2>
+            <p>{{EXECUTIVE_SUMMARY}}</p>
+          </article>
+
+          <article class="panel">
+            <h2>Metrics Snapshot</h2>
+            <div class="kpi-grid">
+              {{METRIC_CARDS}}
+            </div>
+          </article>
+
+          <article class="panel">
+            <h2>Node / Fleet Table</h2>
+            <table>
+              <thead>
+                <tr>
+                  <th>Node</th>
+                  <th>Status</th>
+                  <th>Key Metrics</th>
+                  <th>Findings</th>
+                </tr>
+              </thead>
+              <tbody>
+                {{NODE_TABLE_ROWS}}
+              </tbody>
+            </table>
+          </article>
+
+          <article class="panel">
+            <h2>Trend Notes</h2>
+            <div class="timeline">
+              {{TREND_ITEMS}}
+            </div>
+          </article>
+        </div>
+
+        <div class="stack">
+          <article class="panel">
+            <h2>Critical Issues</h2>
+            <div class="issue-list">
+              {{CRITICAL_ITEMS}}
+            </div>
+          </article>
+
+          <article class="panel">
+            <h2>Warnings</h2>
+            <div class="issue-list">
+              {{WARNING_ITEMS}}
+            </div>
+          </article>
+
+          <article class="panel">
+            <h2>Notable / Info</h2>
+            <div class="issue-list">
+              {{INFO_ITEMS}}
+            </div>
+          </article>
+
+          <article class="panel">
+            <h2>Recommended Next Steps</h2>
+            <div class="next-steps">
+              {{NEXT_STEP_ITEMS}}
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <p class="footer">
+        Report file: <code>{{REPORT_PATH}}</code>
+      </p>
+    </main>
+  </body>
+</html>
