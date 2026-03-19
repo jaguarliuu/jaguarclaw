@@ -23,6 +23,7 @@ import DocumentSidebar from '@/components/documents/DocumentSidebar.vue'
 import DocumentEditor from '@/components/documents/DocumentEditor.vue'
 import DocumentAiIndicator from '@/components/documents/DocumentAiIndicator.vue'
 import DocumentAiSettingsPopover from '@/components/documents/DocumentAiSettingsPopover.vue'
+import ImView from '@/views/ImView.vue'
 import { useArtifact } from '@/composables/useArtifact'
 import { useHeartbeat } from '@/composables/useHeartbeat'
 
@@ -35,6 +36,7 @@ const { selectedNotification, selectNotification } = useHeartbeat()
 
 // ─── Document mode ───────────────────────────────────────────────────────────
 const isDocumentMode = computed(() => route.path.startsWith('/documents'))
+const isImMode = computed(() => route.path.startsWith('/im'))
 const docId = computed(() => route.params.id as string | undefined)
 
 const {
@@ -332,14 +334,21 @@ async function handleInstallAction() {
       :sessions="filteredSessions"
       :current-id="currentSessionId"
       :agents="agents"
-      :force-collapsed="isDocumentMode"
+      :force-collapsed="isDocumentMode || isImMode"
       @select="handleSelectSession"
       @create="handleCreateSession"
       @delete="handleDeleteSession"
     />
 
+    <!-- ─── IM mode layout ─── -->
+    <template v-if="isImMode">
+      <div class="im-host">
+        <ImView />
+      </div>
+    </template>
+
     <!-- ─── Document mode layout ─── -->
-    <template v-if="isDocumentMode">
+    <template v-else-if="isDocumentMode">
       <DocumentSidebar
         :tree="mutableDocTree"
         :active-id="docId ?? null"
@@ -463,6 +472,15 @@ async function handleInstallAction() {
   min-width: 0;
   background: var(--content-bg);
   transition: all var(--duration-normal) var(--ease-out);
+}
+
+/* IM mode: flex row host so contact list and chat sit side-by-side */
+.im-host {
+  flex: 1;
+  display: flex;
+  flex-direction: row;
+  min-width: 0;
+  overflow: hidden;
 }
 
 /* Document mode: editor area stacks vertically */

@@ -66,7 +66,8 @@ const indexEntries = computed(() => {
 const lastTextBlockLength = computed(() => {
   const blocks = props.streamBlocks
   for (let i = blocks.length - 1; i >= 0; i--) {
-    if (blocks[i].type === 'text') return blocks[i].content?.length ?? 0
+    const block = blocks[i]
+    if (block && block.type === 'text') return block.content?.length ?? 0
   }
   return 0
 })

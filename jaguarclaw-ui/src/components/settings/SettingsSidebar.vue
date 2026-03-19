@@ -115,6 +115,10 @@ function navigateTo(sectionId: string) {
                 <circle cx="5" cy="5" r="0.75" fill="currentColor"/>
                 <circle cx="5" cy="11" r="0.75" fill="currentColor"/>
               </svg>
+              <!-- IM -->
+              <svg v-else-if="item.id === 'im'" width="16" height="16" viewBox="0 0 16 16" fill="none" class="nav-icon">
+                <path d="M2 3a1 1 0 011-1h10a1 1 0 011 1v7a1 1 0 01-1 1H5.5L2 14V3z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
+              </svg>
               <!-- System -->
               <svg v-else-if="item.id === 'system'" width="16" height="16" viewBox="0 0 16 16" fill="none" class="nav-icon">
                 <circle cx="8" cy="8" r="2" stroke="currentColor" stroke-width="1.4"/>
