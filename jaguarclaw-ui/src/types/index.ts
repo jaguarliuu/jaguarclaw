@@ -322,7 +322,7 @@ export interface HeartbeatNotifyPayload {
 
 // ==================== Node Console Types ====================
 
-export type ConnectorType = 'ssh' | 'k8s' | 'db'
+export type ConnectorType = 'ssh' | 'k8s'
 export type AuthType = 'password' | 'key' | 'kubeconfig' | 'token'
 export type SafetyPolicy = 'strict' | 'standard' | 'relaxed'
 
@@ -354,6 +354,20 @@ export interface NodeRegisterPayload {
   credential: string
   tags?: string
   safetyPolicy?: SafetyPolicy
+}
+
+export interface NodeImportError {
+  row: number
+  field?: string
+  value?: string
+  reason: string
+}
+
+export interface NodeImportResult {
+  imported: number
+  skipped: number
+  skippedAliases: string[]
+  errors: NodeImportError[]
 }
 
 export interface NodeTestResult {

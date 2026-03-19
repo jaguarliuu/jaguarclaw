@@ -1,6 +1,7 @@
 import { ref, readonly } from 'vue'
 import { useWebSocket } from './useWebSocket'
-import type { NodeInfo, NodeRegisterPayload, NodeTestResult } from '@/types'
+import { useToast } from './useToast'
+import type { NodeInfo, NodeRegisterPayload, NodeTestResult, NodeImportResult } from '@/types'
 
 const nodes = ref<NodeInfo[]>([])
 const loading = ref(false)
@@ -8,6 +9,7 @@ const error = ref<string | null>(null)
 
 export function useNodeConsole() {
   const { request } = useWebSocket()
+  const { showToast } = useToast()
 
   async function loadNodes() {
     loading.value = true
@@ -78,6 +80,37 @@ export function useNodeConsole() {
     }
   }
 
+  async function importNodes(csvContent: string): Promise<NodeImportResult> {
+    error.value = null
+    try {
+      const result = await request<NodeImportResult>('nodes.import', { csv: csvContent })
+      if (result.imported > 0) {
+        await loadNodes()
+      }
+      return result
+    } catch (e) {
+      console.error('[NodeConsole] Failed to import nodes:', e)
+      error.value = e instanceof Error ? e.message : 'Failed to import nodes'
+      throw e
+    }
+  }
+
+  async function downloadTemplate(): Promise<void> {
+    try {
+      const result = await request<{ csv: string }>('nodes.import.template')
+      const blob = new Blob([result.csv], { type: 'text/csv;charset=utf-8;' })
+      const url = URL.createObjectURL(blob)
+      const anchor = document.createElement('a')
+      anchor.href = url
+      anchor.download = 'nodes-template.csv'
+      anchor.click()
+      URL.revokeObjectURL(url)
+    } catch (e) {
+      console.error('[NodeConsole] Failed to download template:', e)
+      showToast({ type: 'error', message: 'Failed to download template' })
+    }
+  }
+
   return {
     nodes: readonly(nodes),
     loading: readonly(loading),
@@ -86,6 +119,8 @@ export function useNodeConsole() {
     registerNode,
     updateNode,
     removeNode,
-    testNode
+    testNode,
+    importNodes,
+    downloadTemplate
   }
 }

@@ -529,7 +529,7 @@ export default {
       addBtn: '+ Add Node',
       loading: 'Loading nodes...',
       empty: 'No nodes registered yet.',
-      emptyHint: 'Add SSH, Kubernetes, or Database nodes to enable remote operations.',
+      emptyHint: 'Add SSH or Kubernetes nodes to enable remote operations.',
       formTitle: 'Register Node',
       editTitle: 'Edit Node',
       fields: {
@@ -541,7 +541,6 @@ export default {
         typeOptions: {
           ssh: 'SSH',
           k8s: 'Kubernetes',
-          db: 'Database',
         },
         hostLabel: 'Host',
         hostPlaceholder: 'e.g. 192.168.1.100',
@@ -590,6 +589,14 @@ export default {
         failedToUpdate: 'Failed to update node',
         failedToTest: 'Failed to test node connection',
       },
+      importBtn: 'Import CSV',
+      templateBtn: 'Download Template',
+      importingBtn: 'Importing...',
+      importSuccess: 'Successfully imported {n} node(s)',
+      importSkipped: 'Skipped {n} (duplicate IP or alias): {aliases}',
+      importError: 'Row {row} [{field}]: {reason}',
+      importErrorNoRow: '{reason}',
+      pendingConfig: 'Pending Config',
     },
     channels: {
       subtitle: 'Email & Webhook notification channels',

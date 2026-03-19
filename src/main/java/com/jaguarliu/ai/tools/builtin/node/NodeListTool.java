@@ -27,14 +27,14 @@ public class NodeListTool implements Tool {
     public ToolDefinition getDefinition() {
         return ToolDefinition.builder()
                 .name("node_list")
-                .description("列出所有已注册的远程节点。可按类型（ssh/k8s/db）或标签过滤。返回节点别名、类型、主机、标签、安全策略和连接状态，不包含凭据信息。")
+                .description("列出所有已注册的远程节点。可按类型（ssh/k8s）或标签过滤。返回节点别名、类型、主机、标签、安全策略和连接状态，不包含凭据信息。")
                 .parameters(Map.of(
                         "type", "object",
                         "properties", Map.of(
                                 "type", Map.of(
                                         "type", "string",
-                                        "description", "按连接器类型过滤: ssh, k8s, db",
-                                        "enum", List.of("ssh", "k8s", "db")
+                                        "description", "按连接器类型过滤: ssh, k8s",
+                                        "enum", List.of("ssh", "k8s")
                                 ),
                                 "tag", Map.of(
                                         "type", "string",

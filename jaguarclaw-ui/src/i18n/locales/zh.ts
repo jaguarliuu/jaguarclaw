@@ -527,7 +527,7 @@ export default {
       addBtn: '+ 添加节点',
       loading: '加载节点中...',
       empty: '暂无已注册节点。',
-      emptyHint: '添加 SSH、Kubernetes 或数据库节点以启用远程操作。',
+      emptyHint: '添加 SSH 或 Kubernetes 节点以启用远程操作。',
       formTitle: '注册节点',
       editTitle: '编辑节点',
       fields: {
@@ -539,7 +539,6 @@ export default {
         typeOptions: {
           ssh: 'SSH',
           k8s: 'Kubernetes',
-          db: '数据库',
         },
         hostLabel: '主机',
         hostPlaceholder: '如 192.168.1.100',
@@ -588,6 +587,14 @@ export default {
         failedToUpdate: '节点更新失败',
         failedToTest: '节点连接测试失败',
       },
+      importBtn: '导入 CSV',
+      templateBtn: '下载模板',
+      importingBtn: '导入中...',
+      importSuccess: '成功导入 {n} 个节点',
+      importSkipped: '跳过 {n} 个（IP 或别名重复）：{aliases}',
+      importError: '第 {row} 行 [{field}]：{reason}',
+      importErrorNoRow: '{reason}',
+      pendingConfig: '待配置',
     },
     channels: {
       subtitle: '邮件与 Webhook 通知渠道',

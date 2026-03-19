@@ -4,9 +4,27 @@ import { useNodeConsole } from '@/composables/useNodeConsole'
 import { useI18n } from '@/i18n'
 import Select from '@/components/common/Select.vue'
 import type { SelectOption } from '@/components/common/Select.vue'
-import type { ConnectorType, AuthType, SafetyPolicy, NodeInfo, NodeRegisterPayload } from '@/types'
+import type {
+  ConnectorType,
+  AuthType,
+  SafetyPolicy,
+  NodeInfo,
+  NodeRegisterPayload,
+  NodeImportResult
+} from '@/types'
 
-const { nodes, loading, error, loadNodes, registerNode, updateNode, removeNode, testNode } = useNodeConsole()
+const {
+  nodes,
+  loading,
+  error,
+  loadNodes,
+  registerNode,
+  updateNode,
+  removeNode,
+  testNode,
+  importNodes,
+  downloadTemplate
+} = useNodeConsole()
 const { t } = useI18n()
 
 // Form state
@@ -32,6 +50,11 @@ const testingNodes = ref<Set<string>>(new Set())
 
 // Delete confirmation
 const confirmDeleteId = ref<string | null>(null)
+
+// Import state
+const importResult = ref<NodeImportResult | null>(null)
+const importing = ref(false)
+const fileInputRef = ref<HTMLInputElement | null>(null)
 
 function resetForm() {
   formAlias.value = ''
@@ -151,11 +174,32 @@ async function handleDelete(nodeId: string) {
   }
 }
 
+async function handleImportFile(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file) return
+
+  input.value = ''
+  importing.value = true
+  importResult.value = null
+  try {
+    const text = await file.text()
+    importResult.value = await importNodes(text)
+  } catch {
+    // Error handled in composable
+  } finally {
+    importing.value = false
+  }
+}
+
+function triggerFileInput() {
+  fileInputRef.value?.click()
+}
+
 function getTypeBadgeClass(type: string): string {
   switch (type) {
     case 'ssh': return 'badge-ssh'
     case 'k8s': return 'badge-k8s'
-    case 'db': return 'badge-db'
     default: return ''
   }
 }
@@ -175,17 +219,13 @@ function getAuthTypeOptions(type: ConnectorType): { value: AuthType; label: stri
       { value: 'kubeconfig', label: t('sections.nodes.fields.authOptions.kubeconfig') },
       { value: 'token', label: t('sections.nodes.fields.authOptions.token') }
     ]
-    case 'db': return [
-      { value: 'password', label: t('sections.nodes.fields.authOptions.password') },
-      { value: 'token', label: t('sections.nodes.fields.authOptions.token') }
-    ]
+    default: return []
   }
 }
 
 const connectorTypeOptions = computed<SelectOption<ConnectorType>[]>(() => [
   { label: t('sections.nodes.fields.typeOptions.ssh'), value: 'ssh' },
   { label: t('sections.nodes.fields.typeOptions.k8s'), value: 'k8s' },
-  { label: t('sections.nodes.fields.typeOptions.db'), value: 'db' },
 ])
 const authTypeOptions = computed(() => getAuthTypeOptions(formConnectorType.value))
 const safetyPolicyOptions = computed<SelectOption<SafetyPolicy>[]>(() => [
@@ -216,7 +256,34 @@ onMounted(() => {
           <h2 class="section-title">{{ t('settings.nav.nodes') }}</h2>
           <p class="section-subtitle">{{ t('sections.nodes.subtitle') }}</p>
         </div>
-        <button class="add-btn" @click="openForm">{{ t('sections.nodes.addBtn') }}</button>
+        <div class="header-actions">
+          <button class="secondary-btn" @click="downloadTemplate">{{ t('sections.nodes.templateBtn') }}</button>
+          <button class="secondary-btn" :disabled="importing" @click="triggerFileInput">
+            {{ importing ? t('sections.nodes.importingBtn') : t('sections.nodes.importBtn') }}
+          </button>
+          <input ref="fileInputRef" type="file" accept=".csv" style="display:none" @change="handleImportFile" />
+          <button class="add-btn" @click="openForm">{{ t('sections.nodes.addBtn') }}</button>
+        </div>
+      </div>
+
+      <div v-if="importResult" class="import-banner">
+        <p v-if="importResult.imported > 0" class="import-ok">
+          {{ t('sections.nodes.importSuccess', { n: String(importResult.imported) }) }}
+        </p>
+        <p v-if="importResult.skipped > 0" class="import-warn">
+          {{ t('sections.nodes.importSkipped', {
+            n: String(importResult.skipped),
+            aliases: importResult.skippedAliases.join(', ')
+          }) }}
+        </p>
+        <p v-for="(err, i) in importResult.errors" :key="i" class="import-err">
+          <template v-if="err.row > 0">
+            {{ t('sections.nodes.importError', { row: String(err.row), field: err.field ?? '-', reason: err.reason }) }}
+          </template>
+          <template v-else>
+            {{ t('sections.nodes.importErrorNoRow', { reason: err.reason }) }}
+          </template>
+        </p>
       </div>
     </header>
 
@@ -345,6 +412,7 @@ onMounted(() => {
         <div class="node-header">
           <div class="node-info">
             <span class="node-alias">{{ node.alias }}</span>
+            <span v-if="node.authType === null" class="badge-pending">{{ t('sections.nodes.pendingConfig') }}</span>
             <span class="type-badge" :class="getTypeBadgeClass(node.connectorType)">
               {{ node.connectorType }}
             </span>
@@ -423,6 +491,12 @@ onMounted(() => {
   align-items: flex-start;
 }
 
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
 .section-title {
   font-family: var(--font-mono);
   font-size: 20px;
@@ -449,6 +523,50 @@ onMounted(() => {
 
 .add-btn:hover {
   opacity: 0.9;
+}
+
+.secondary-btn {
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-gray-300);
+  background: var(--color-gray-50);
+  color: var(--color-gray-700);
+  font-size: 13px;
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-out);
+}
+
+.secondary-btn:hover:not(:disabled) {
+  background: var(--color-gray-100);
+}
+
+.secondary-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.import-banner {
+  margin-top: var(--space-3);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-gray-50);
+  border: 1px solid var(--color-gray-200);
+  font-size: 13px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.import-ok {
+  color: #16a34a;
+}
+
+.import-warn {
+  color: #d97706;
+}
+
+.import-err {
+  color: #dc2626;
 }
 
 /* Form */
@@ -647,9 +765,16 @@ onMounted(() => {
   color: #15803d;
 }
 
-.badge-db {
-  background: #fef3c7;
-  color: #b45309;
+.badge-pending {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  border-radius: var(--radius-full);
+  background: #fed7aa;
+  color: #c2410c;
+  font-size: 10px;
+  font-weight: 600;
+  margin-left: var(--space-1);
 }
 
 .status-dot {

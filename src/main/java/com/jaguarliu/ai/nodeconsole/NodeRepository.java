@@ -16,4 +16,6 @@ public interface NodeRepository extends JpaRepository<NodeEntity, String> {
     List<NodeEntity> findAllByOrderByCreatedAtDesc();
 
     boolean existsByAlias(String alias);
+
+    boolean existsByHost(String host);
 }

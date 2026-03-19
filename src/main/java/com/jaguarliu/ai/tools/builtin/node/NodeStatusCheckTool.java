@@ -48,7 +48,7 @@ public class NodeStatusCheckTool implements Tool {
                                 "type", Map.of(
                                         "type", "string",
                                         "description", "按连接器类型过滤",
-                                        "enum", List.of("ssh", "k8s", "db")
+                                        "enum", List.of("ssh", "k8s")
                                 ),
                                 "command", Map.of(
                                         "type", "string",
@@ -164,4 +164,3 @@ public class NodeStatusCheckTool implements Tool {
         return fallback;
     }
 }
-
