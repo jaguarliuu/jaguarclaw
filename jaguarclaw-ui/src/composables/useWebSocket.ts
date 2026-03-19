@@ -2,9 +2,7 @@ import { ref, readonly } from 'vue'
 import type { ConnectionState, RpcRequest, RpcResponse, RpcEvent, AgentEventType } from '@/types'
 
 const WS_PROTOCOL = typeof window !== 'undefined' && window.location.protocol === 'https:' ? 'wss' : 'ws'
-const WS_URL = import.meta.env.DEV
-  ? 'ws://localhost:8080/ws'
-  : `${WS_PROTOCOL}://${window.location.host}/ws`
+const WS_URL = `${WS_PROTOCOL}://${window.location.host}/ws`
 const DEBUG_WS = import.meta.env.DEV
 
 const PUBLIC_METHODS = new Set([

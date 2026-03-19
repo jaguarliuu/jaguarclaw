@@ -380,6 +380,13 @@ async function handleInstallAction() {
       </div>
     </template>
 
+    <!-- ─── IM mode layout ─── -->
+    <template v-else-if="isImMode">
+      <div class="im-host">
+        <ImView />
+      </div>
+    </template>
+
     <!-- ─── Chat mode layout ─── -->
     <main
       v-else
