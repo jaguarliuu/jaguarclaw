@@ -3,23 +3,37 @@ import { onMounted, onUnmounted } from 'vue'
 import { RouterView } from 'vue-router'
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import AppToastStack from '@/components/common/AppToastStack.vue'
+import DevPerformancePanel from '@/components/dev/DevPerformancePanel.vue'
 import { useConfirm } from '@/composables/useConfirm'
 import { useWebSocket } from '@/composables/useWebSocket'
 import { useChat } from '@/composables/useChat'
 import { useNotification } from '@/composables/useNotification'
+import { useDevPerformance } from '@/composables/useDevPerformance'
 
 const { state, handleConfirm, handleCancel } = useConfirm()
 const { connect, disconnect } = useWebSocket()
 const { setupEventListeners } = useChat()
+const { start, stop, toggleVisible } = useDevPerformance()
+
+function handleKeydown(event: KeyboardEvent) {
+  if (!(event.metaKey || event.ctrlKey) || !event.shiftKey) return
+  if (event.key.toLowerCase() !== 'd') return
+  event.preventDefault()
+  toggleVisible()
+}
 
 onMounted(() => {
+  start()
   connect()
   setupEventListeners()
   useNotification()
+  window.addEventListener('keydown', handleKeydown)
 })
 
 onUnmounted(() => {
+  window.removeEventListener('keydown', handleKeydown)
   disconnect()
+  stop()
 })
 </script>
 
@@ -40,6 +54,9 @@ onUnmounted(() => {
 
   <!-- Global In-App Toasts -->
   <AppToastStack />
+
+  <!-- Dev Performance Overlay -->
+  <DevPerformancePanel />
 </template>
 
 <style>

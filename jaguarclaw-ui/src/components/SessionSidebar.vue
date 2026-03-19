@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import type { Session, AgentProfile } from '@/types'
-import { ref, watch, computed } from 'vue'
+import { ref, watch, computed, onMounted, onUnmounted, onUpdated } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useConfirm } from '@/composables/useConfirm'
 import { useI18n } from '@/i18n'
 import { useHeartbeat } from '@/composables/useHeartbeat'
 import { useWebSocket } from '@/composables/useWebSocket'
 import { useIm } from '@/composables/useIm'
+import { useDevPerformance } from '@/composables/useDevPerformance'
 
 const { confirm } = useConfirm()
 const { t } = useI18n()
@@ -14,6 +15,8 @@ const { notifications, unreadCount, markAsRead, markAllAsRead, clearAll, selectN
   useHeartbeat()
 const { state: connectionState } = useWebSocket()
 const { totalUnreadCount: imUnreadCount } = useIm()
+const { recordComponentMount, recordComponentUnmount, recordComponentUpdate } =
+  useDevPerformance()
 const route = useRoute()
 const router = useRouter()
 
@@ -102,6 +105,18 @@ function sessionAgentLabel(session: Session): string {
   const id = session.agentId || 'main'
   return agentLabelMap.value.get(id) ?? id
 }
+
+onMounted(() => {
+  recordComponentMount('SessionSidebar')
+})
+
+onUpdated(() => {
+  recordComponentUpdate('SessionSidebar')
+})
+
+onUnmounted(() => {
+  recordComponentUnmount('SessionSidebar')
+})
 </script>
 
 <template>

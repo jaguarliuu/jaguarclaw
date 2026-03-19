@@ -1,10 +1,11 @@
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useWebSocket } from './useWebSocket'
 import { useArtifact } from './useArtifact'
 import { useHeartbeat } from './useHeartbeat'
 import { useAgents } from './useAgents'
 import { useConfirm } from './useConfirm'
 import { useToast } from './useToast'
+import { useDevPerformance } from './useDevPerformance'
 import type {
   Session,
   Message,
@@ -88,6 +89,7 @@ function flushTokenBuffer() {
     tokenFlushRaf = null
   }
   if (tokenFlushBuffer.size === 0) return
+  incrementTokenFlush()
   const blocks = streamBlocks.value
   for (const block of blocks) {
     if (block.type === 'text' && tokenFlushBuffer.has(block.id)) {
@@ -114,6 +116,12 @@ const { artifact, openArtifact, closeArtifact, startStreaming, appendContent, fi
 const { addNotification } = useHeartbeat()
 const { agents, enabledAgents, defaultAgent, loadAgents, resolveAgentId, findAgent } = useAgents()
 const { t } = useI18n()
+const {
+  incrementTokenFlush,
+  setChatSnapshot,
+  recordMessageLoad,
+  recordSessionLoad,
+} = useDevPerformance()
 
 // Computed
 const currentSession = computed(
@@ -170,6 +178,41 @@ const subagentSessionIds = computed<Set<string>>(() => {
 // 过滤掉 subagent 子会话的会话列表
 const filteredSessions = computed(() =>
   sessions.value.filter((s) => !subagentSessionIds.value.has(s.id)),
+)
+
+watch(
+  [
+    () => currentSessionId.value,
+    () => currentRun.value?.id ?? null,
+    () => isStreaming.value,
+    () => sessions.value.length,
+    () => messages.value.length,
+    () => streamBlocks.value.length,
+    () => sessionFiles.value.length,
+    () => Object.keys(subagentIndex.value).length,
+  ],
+  ([
+    sessionId,
+    runId,
+    streaming,
+    sessionCount,
+    messageCount,
+    streamBlockCount,
+    sessionFileCount,
+    subagentCount,
+  ]) => {
+    setChatSnapshot({
+      currentSessionId: sessionId,
+      currentRunId: runId,
+      isStreaming: streaming,
+      sessionCount,
+      messageCount,
+      streamBlockCount,
+      sessionFileCount,
+      subagentCount,
+    })
+  },
+  { immediate: true },
 )
 
 function attachedContextsFromPayloadJson(payloadJson?: string): AttachedContext[] | undefined {
@@ -240,11 +283,13 @@ function toggleMcpServer(name: string) {
 
 // Session API
 async function loadSessions() {
+  const startedAt = performance.now()
   if (agents.value.length === 0) {
     await loadAgents()
   }
   const result = await request<{ sessions: Session[] }>('session.list')
   sessions.value = result.sessions.map((session) => normalizeSession(session))
+  recordSessionLoad(performance.now() - startedAt, result.sessions.length)
   syncSelectedAgentFromSession(currentSessionId.value)
 }
 
@@ -308,6 +353,7 @@ async function deleteSession(sessionId: string) {
 // Message API
 async function loadMessages(sessionId: string, version?: number) {
   const requestVersion = version ?? ++messageLoadVersion.value
+  const startedAt = performance.now()
   try {
     const result = await request<{ messages: Message[]; files?: SessionFile[] }>('message.list', {
       sessionId,
@@ -391,6 +437,7 @@ async function loadMessages(sessionId: string, version?: number) {
         msg.blocks = [...baseBlocks, ...fileBlocks]
       }
     })
+    recordMessageLoad(performance.now() - startedAt, messages.value.length)
   } catch (e) {
     if (currentSessionId.value !== sessionId || requestVersion !== messageLoadVersion.value) {
       return

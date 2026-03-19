@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted, onUnmounted, onUpdated } from 'vue'
 import type { Message } from '@/types'
 import { useMarkdown } from '@/composables/useMarkdown'
 import { useI18n } from '@/i18n'
+import { useDevPerformance } from '@/composables/useDevPerformance'
 import ToolCallCard from './ToolCallCard.vue'
 import SkillActivationCard from './SkillActivationCard.vue'
 import SubagentCard from './SubagentCard.vue'
@@ -26,6 +27,8 @@ const emit = defineEmits<{
 
 const { render } = useMarkdown()
 const { t } = useI18n()
+const { measureSync, recordComponentMount, recordComponentUnmount, recordComponentUpdate } =
+  useDevPerformance()
 
 // 是否有交错的 blocks（assistant 消息）
 const hasBlocks = computed(
@@ -34,7 +37,9 @@ const hasBlocks = computed(
 )
 
 // 简单内容渲染（用于 user 消息或没有 blocks 的 assistant 消息）
-const renderedContent = computed(() => render(props.message.content))
+const renderedContent = computed(() =>
+  measureSync('markdown.message.simple', () => render(props.message.content)),
+)
 
 const assistantAvatarInitial = computed(() => {
   const label = props.assistantName?.trim()
@@ -44,7 +49,7 @@ const assistantAvatarInitial = computed(() => {
 
 // 渲染文本块
 function renderTextBlock(content: string | undefined): string {
-  return render(content || '')
+  return measureSync('markdown.message.block', () => render(content || ''))
 }
 
 // 优先使用 attachedContexts，如果为空则向后兼容 attachedFiles
@@ -70,6 +75,18 @@ const chipContexts = computed(() =>
     (context) => !isFileAttachedContext(context) && !isFolderAttachedContext(context),
   ),
 )
+
+onMounted(() => {
+  recordComponentMount('MessageItem')
+})
+
+onUpdated(() => {
+  recordComponentUpdate('MessageItem')
+})
+
+onUnmounted(() => {
+  recordComponentUnmount('MessageItem')
+})
 </script>
 
 <template>

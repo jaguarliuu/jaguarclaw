@@ -1,5 +1,6 @@
 import { ref, readonly } from 'vue'
 import type { ConnectionState, RpcRequest, RpcResponse, RpcEvent, AgentEventType } from '@/types'
+import { useDevPerformance } from './useDevPerformance'
 
 const WS_PROTOCOL = typeof window !== 'undefined' && window.location.protocol === 'https:' ? 'wss' : 'ws'
 const WS_URL = `${WS_PROTOCOL}://${window.location.host}/ws`
@@ -35,6 +36,7 @@ type AnyRpcEvent = RpcEvent<AgentEventType>
 // Event handlers
 const eventHandlers = new Map<string, Set<(event: AnyRpcEvent) => void>>()
 const rpcErrorHandlers = new Set<(error: RpcErrorEvent) => void>()
+const { recordWebSocketEvent, recordWebSocketRequest, setPendingRequests } = useDevPerformance()
 
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null
 let intentionalDisconnect = false
@@ -198,6 +200,7 @@ function connect() {
       reject(new Error('WebSocket disconnected'))
     }
     pendingRequests.clear()
+    setPendingRequests(0)
 
     // Auto reconnect after 3s, unless disconnect was intentional
     if (!intentionalDisconnect && !reconnectTimer) {
@@ -225,17 +228,20 @@ function connect() {
         // It's a response to a pending request
         const { resolve } = pendingRequests.get(data.id)!
         pendingRequests.delete(data.id)
+        setPendingRequests(pendingRequests.size)
         resolve(data as RpcResponse)
         return
       }
 
       if (data.type === 'event' && data.event) {
         const rpcEvent = data as AnyRpcEvent
+        const eventStart = performance.now()
         const handlers = eventHandlers.get(rpcEvent.event)
         if (handlers) handlers.forEach((h) => h(rpcEvent))
 
         const wildcardHandlers = eventHandlers.get('*')
         if (wildcardHandlers) wildcardHandlers.forEach((h) => h(rpcEvent))
+        recordWebSocketEvent(rpcEvent.event, performance.now() - eventStart)
       }
     } catch (e) {
       console.error('[WS] Parse error:', e)
@@ -324,22 +330,30 @@ async function requestRaw<T = unknown>(method: string, payload?: unknown): Promi
   }
 
   return new Promise((resolve, reject) => {
+    const requestStartedAt = performance.now()
     pendingRequests.set(id, {
       resolve: (response) => {
+        recordWebSocketRequest(method, performance.now() - requestStartedAt)
         if (response.error) {
           reject(new RpcRequestError(response.error, method))
         } else {
           resolve(response.payload as T)
         }
       },
-      reject
+      reject: (reason) => {
+        recordWebSocketRequest(method, performance.now() - requestStartedAt)
+        reject(reason)
+      }
     })
+    setPendingRequests(pendingRequests.size)
 
     socket.value!.send(JSON.stringify(rpcRequest))
 
     setTimeout(() => {
       if (pendingRequests.has(id)) {
         pendingRequests.delete(id)
+        setPendingRequests(pendingRequests.size)
+        recordWebSocketRequest(method, performance.now() - requestStartedAt)
         reject(new Error('Request timeout'))
       }
     }, 30000)

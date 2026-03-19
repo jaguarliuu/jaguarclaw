@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, onUpdated, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useWebSocket } from '@/composables/useWebSocket'
 import { useChat } from '@/composables/useChat'
@@ -26,9 +26,11 @@ import DocumentAiSettingsPopover from '@/components/documents/DocumentAiSettings
 import ImView from '@/views/ImView.vue'
 import { useArtifact } from '@/composables/useArtifact'
 import { useHeartbeat } from '@/composables/useHeartbeat'
+import { useDevPerformance } from '@/composables/useDevPerformance'
 
 const { state: connectionState } = useWebSocket()
 const { checkStatus, getConfig: loadLlmConfig, multiConfig } = useLlmConfig()
+const { recordComponentMount, recordComponentUnmount, recordComponentUpdate } = useDevPerformance()
 const router = useRouter()
 const route = useRoute()
 const { artifact } = useArtifact()
@@ -326,6 +328,18 @@ async function handleInstallAction() {
     }, 500)
   }
 }
+
+onMounted(() => {
+  recordComponentMount('WorkspaceView')
+})
+
+onUpdated(() => {
+  recordComponentUpdate('WorkspaceView')
+})
+
+onUnmounted(() => {
+  recordComponentUnmount('WorkspaceView')
+})
 </script>
 
 <template>

@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { ref, watch, computed } from 'vue'
+import { ref, watch, computed, onMounted, onUnmounted, onUpdated } from 'vue'
 import type { Message, StreamBlock } from '@/types'
 import { useMarkdown } from '@/composables/useMarkdown'
 import { useI18n } from '@/i18n'
+import { useDevPerformance } from '@/composables/useDevPerformance'
 import MessageItem from './MessageItem.vue'
 import ToolCallCard from './ToolCallCard.vue'
 import SubagentCard from './SubagentCard.vue'
@@ -27,6 +28,8 @@ const containerRef = ref<HTMLElement | null>(null)
 
 const { render } = useMarkdown()
 const { t } = useI18n()
+const { measureSync, recordComponentMount, recordComponentUnmount, recordComponentUpdate } =
+  useDevPerformance()
 
 const assistantAvatarInitial = computed(() => {
   const label = props.assistantName?.trim()
@@ -36,7 +39,7 @@ const assistantAvatarInitial = computed(() => {
 
 // 渲染文本块的 Markdown — 仅用于非流式场景
 function renderTextBlock(content: string | undefined): string {
-  return render(content || '')
+  return measureSync('markdown.message.streaming-preview', () => render(content || ''))
 }
 
 // 检查是否有内容（用于显示 thinking 状态）
@@ -86,6 +89,18 @@ watch(
     })
   }
 )
+
+onMounted(() => {
+  recordComponentMount('MessageList')
+})
+
+onUpdated(() => {
+  recordComponentUpdate('MessageList')
+})
+
+onUnmounted(() => {
+  recordComponentUnmount('MessageList')
+})
 </script>
 
 <template>
