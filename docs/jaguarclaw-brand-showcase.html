@@ -1,0 +1,1140 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>JaguarClaw Brand Showcase</title>
+    <style>
+      @import url("https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Manrope:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap");
+
+      :root {
+        --bg: #f4efe6;
+        --paper: rgba(255, 251, 245, 0.84);
+        --paper-strong: #fffdf9;
+        --ink: #13233c;
+        --muted: #5d6c84;
+        --line: rgba(19, 35, 60, 0.1);
+        --teal: #0c7a78;
+        --teal-soft: #daf3ef;
+        --amber: #bc7a19;
+        --amber-soft: #fff0d8;
+        --blue: #2256d8;
+        --blue-soft: #e7efff;
+        --coral: #d85b5f;
+        --coral-soft: #fde9e8;
+        --plum: #865ad8;
+        --plum-soft: #efe7ff;
+        --shadow-xl: 0 40px 100px rgba(16, 28, 46, 0.12);
+        --shadow-lg: 0 22px 60px rgba(16, 28, 46, 0.10);
+        --shadow-md: 0 12px 28px rgba(16, 28, 46, 0.08);
+        --radius-2xl: 34px;
+        --radius-xl: 26px;
+        --radius-lg: 18px;
+        --radius-md: 14px;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html {
+        scroll-behavior: smooth;
+      }
+
+      body {
+        margin: 0;
+        color: var(--ink);
+        font-family: "Manrope", "Segoe UI", sans-serif;
+        background:
+          radial-gradient(circle at 0% 0%, rgba(12, 122, 120, 0.10), transparent 22%),
+          radial-gradient(circle at 100% 0%, rgba(134, 90, 216, 0.08), transparent 20%),
+          radial-gradient(circle at 50% 100%, rgba(216, 91, 95, 0.08), transparent 26%),
+          linear-gradient(180deg, #faf5ee 0%, #f2eadf 44%, #f8f3eb 100%);
+      }
+
+      img,
+      svg {
+        max-width: 100%;
+        display: block;
+      }
+
+      a {
+        color: inherit;
+        text-decoration: none;
+      }
+
+      .page {
+        width: min(1480px, calc(100vw - 44px));
+        margin: 22px auto 46px;
+      }
+
+      .hero {
+        position: relative;
+        overflow: hidden;
+        border: 1px solid rgba(19, 35, 60, 0.08);
+        border-radius: 40px;
+        background:
+          linear-gradient(135deg, rgba(255, 255, 255, 0.93), rgba(243, 248, 255, 0.85)),
+          #ffffff;
+        box-shadow: var(--shadow-xl);
+        padding: 42px 42px 34px;
+      }
+
+      .hero::before,
+      .hero::after {
+        content: "";
+        position: absolute;
+        border-radius: 999px;
+        filter: blur(6px);
+        pointer-events: none;
+      }
+
+      .hero::before {
+        width: 420px;
+        height: 420px;
+        right: -90px;
+        top: -180px;
+        background: radial-gradient(circle, rgba(34, 86, 216, 0.16), transparent 68%);
+      }
+
+      .hero::after {
+        width: 320px;
+        height: 320px;
+        left: -60px;
+        bottom: -140px;
+        background: radial-gradient(circle, rgba(12, 122, 120, 0.16), transparent 70%);
+      }
+
+      .eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        padding: 8px 14px;
+        border-radius: 999px;
+        background: var(--teal-soft);
+        color: var(--teal);
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 12px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .hero-grid {
+        position: relative;
+        z-index: 1;
+        display: grid;
+        grid-template-columns: 1.25fr 0.95fr;
+        gap: 26px;
+        margin-top: 20px;
+      }
+
+      .hero-copy h1 {
+        margin: 0;
+        max-width: 820px;
+        font-family: "Fraunces", Georgia, serif;
+        font-size: clamp(38px, 6vw, 78px);
+        line-height: 0.94;
+        letter-spacing: -0.05em;
+      }
+
+      .hero-copy p {
+        margin: 20px 0 0;
+        max-width: 700px;
+        font-size: 18px;
+        line-height: 1.8;
+        color: var(--muted);
+      }
+
+      .hero-badges {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-top: 26px;
+      }
+
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 14px;
+        border-radius: 999px;
+        font-size: 13px;
+        font-weight: 700;
+      }
+
+      .pill.blue {
+        color: var(--blue);
+        background: var(--blue-soft);
+      }
+
+      .pill.amber {
+        color: var(--amber);
+        background: var(--amber-soft);
+      }
+
+      .pill.teal {
+        color: var(--teal);
+        background: var(--teal-soft);
+      }
+
+      .hero-visual {
+        display: grid;
+        place-items: center;
+        min-height: 460px;
+      }
+
+      .constellation {
+        position: relative;
+        width: min(520px, 100%);
+        aspect-ratio: 1 / 1;
+      }
+
+      .orbit {
+        position: absolute;
+        inset: 50%;
+        border: 1px dashed rgba(34, 86, 216, 0.22);
+        border-radius: 999px;
+        transform: translate(-50%, -50%);
+      }
+
+      .orbit.orbit-1 {
+        width: 82%;
+        height: 82%;
+      }
+
+      .orbit.orbit-2 {
+        width: 58%;
+        height: 58%;
+        border-color: rgba(12, 122, 120, 0.24);
+      }
+
+      .orbit.orbit-3 {
+        width: 34%;
+        height: 34%;
+        border-color: rgba(216, 91, 95, 0.22);
+      }
+
+      .core {
+        position: absolute;
+        inset: 50%;
+        width: 180px;
+        height: 180px;
+        transform: translate(-50%, -50%);
+        border-radius: 50%;
+        background:
+          radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.96), rgba(231, 239, 255, 0.95)),
+          #ffffff;
+        border: 1px solid rgba(34, 86, 216, 0.16);
+        box-shadow: 0 20px 50px rgba(34, 86, 216, 0.16);
+        display: grid;
+        place-items: center;
+        text-align: center;
+        padding: 22px;
+      }
+
+      .core strong {
+        display: block;
+        font-family: "Fraunces", Georgia, serif;
+        font-size: 30px;
+        line-height: 0.98;
+      }
+
+      .core span {
+        display: block;
+        margin-top: 8px;
+        font-size: 13px;
+        line-height: 1.55;
+        color: var(--muted);
+      }
+
+      .node {
+        position: absolute;
+        min-width: 122px;
+        max-width: 170px;
+        padding: 12px 14px;
+        border-radius: 18px;
+        border: 1px solid var(--line);
+        background: rgba(255, 255, 255, 0.8);
+        box-shadow: var(--shadow-md);
+        backdrop-filter: blur(10px);
+      }
+
+      .node strong {
+        display: block;
+        font-size: 14px;
+      }
+
+      .node span {
+        display: block;
+        margin-top: 4px;
+        font-size: 12px;
+        line-height: 1.55;
+        color: var(--muted);
+      }
+
+      .node.n1 { top: 2%; left: 54%; }
+      .node.n2 { top: 18%; left: 6%; }
+      .node.n3 { top: 42%; right: -1%; }
+      .node.n4 { bottom: 8%; left: 12%; }
+      .node.n5 { bottom: 18%; right: 18%; }
+      .node.n6 { top: 54%; left: -2%; }
+
+      .section {
+        margin-top: 22px;
+        border: 1px solid var(--line);
+        border-radius: 34px;
+        background: var(--paper);
+        box-shadow: var(--shadow-lg);
+        backdrop-filter: blur(14px);
+      }
+
+      .section-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 18px;
+        padding: 28px 30px 16px;
+      }
+
+      .section-head h2 {
+        margin: 0;
+        font-family: "Fraunces", Georgia, serif;
+        font-size: clamp(28px, 4vw, 48px);
+        line-height: 0.98;
+        letter-spacing: -0.04em;
+      }
+
+      .section-head p {
+        margin: 10px 0 0;
+        max-width: 820px;
+        color: var(--muted);
+        line-height: 1.8;
+        font-size: 16px;
+      }
+
+      .section-tag {
+        flex-shrink: 0;
+        padding: 10px 14px;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .section-tag.product {
+        background: var(--teal-soft);
+        color: var(--teal);
+      }
+
+      .section-tag.tech {
+        background: var(--blue-soft);
+        color: var(--blue);
+      }
+
+      .section-tag.story {
+        background: var(--amber-soft);
+        color: var(--amber);
+      }
+
+      .section-body {
+        padding: 0 24px 28px;
+      }
+
+      .storyboard {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 16px;
+      }
+
+      .story-card {
+        position: relative;
+        overflow: hidden;
+        padding: 22px 20px 20px;
+        border: 1px solid var(--line);
+        border-radius: 26px;
+        background:
+          linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(255, 255, 255, 0.68)),
+          var(--paper-strong);
+      }
+
+      .story-card::before {
+        content: "";
+        position: absolute;
+        inset: auto -20px -24px auto;
+        width: 120px;
+        height: 120px;
+        border-radius: 999px;
+        opacity: 0.5;
+      }
+
+      .story-card.blue::before { background: radial-gradient(circle, rgba(34, 86, 216, 0.14), transparent 68%); }
+      .story-card.teal::before { background: radial-gradient(circle, rgba(12, 122, 120, 0.14), transparent 68%); }
+      .story-card.amber::before { background: radial-gradient(circle, rgba(188, 122, 25, 0.14), transparent 68%); }
+      .story-card.coral::before { background: radial-gradient(circle, rgba(216, 91, 95, 0.14), transparent 68%); }
+
+      .story-index {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 34px;
+        height: 34px;
+        border-radius: 999px;
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 13px;
+        font-weight: 700;
+        margin-bottom: 14px;
+      }
+
+      .story-card.blue .story-index { background: var(--blue-soft); color: var(--blue); }
+      .story-card.teal .story-index { background: var(--teal-soft); color: var(--teal); }
+      .story-card.amber .story-index { background: var(--amber-soft); color: var(--amber); }
+      .story-card.coral .story-index { background: var(--coral-soft); color: var(--coral); }
+
+      .story-card h3 {
+        margin: 0 0 10px;
+        font-size: 20px;
+      }
+
+      .story-card p {
+        margin: 0;
+        color: var(--muted);
+        line-height: 1.72;
+        font-size: 14px;
+      }
+
+      .diagram-grid {
+        display: grid;
+        gap: 18px;
+      }
+
+      .diagram-panel {
+        overflow: hidden;
+        border: 1px solid var(--line);
+        border-radius: 28px;
+        background: rgba(255, 255, 255, 0.72);
+      }
+
+      .diagram-panel-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 16px;
+        padding: 22px 24px 14px;
+        border-bottom: 1px solid rgba(19, 35, 60, 0.06);
+      }
+
+      .diagram-panel-head h3 {
+        margin: 0;
+        font-size: 26px;
+        letter-spacing: -0.03em;
+      }
+
+      .diagram-panel-head p {
+        margin: 8px 0 0;
+        max-width: 760px;
+        color: var(--muted);
+        line-height: 1.72;
+      }
+
+      .mini-chip {
+        flex-shrink: 0;
+        padding: 8px 12px;
+        border-radius: 999px;
+        font-size: 11px;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .mini-chip.blue {
+        background: var(--blue-soft);
+        color: var(--blue);
+      }
+
+      .mini-chip.plum {
+        background: var(--plum-soft);
+        color: var(--plum);
+      }
+
+      .mini-chip.teal {
+        background: var(--teal-soft);
+        color: var(--teal);
+      }
+
+      .diagram-canvas {
+        overflow: auto;
+        padding: 18px;
+        background:
+          radial-gradient(circle at top right, rgba(34, 86, 216, 0.05), transparent 24%),
+          radial-gradient(circle at bottom left, rgba(12, 122, 120, 0.05), transparent 24%),
+          linear-gradient(180deg, rgba(255, 255, 255, 0.78), rgba(251, 248, 243, 0.82));
+      }
+
+      .diagram-canvas .mermaid {
+        min-width: 980px;
+      }
+
+      .diagram-caption {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px;
+        padding: 0 18px 18px;
+      }
+
+      .caption {
+        padding: 14px 15px;
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        background: rgba(255, 255, 255, 0.68);
+      }
+
+      .caption strong {
+        display: block;
+        margin-bottom: 6px;
+        font-size: 13px;
+      }
+
+      .caption span {
+        font-size: 14px;
+        line-height: 1.62;
+        color: var(--muted);
+      }
+
+      .poster-grid {
+        display: grid;
+        grid-template-columns: 1.05fr 0.95fr;
+        gap: 18px;
+      }
+
+      .poster-panel {
+        overflow: hidden;
+        border: 1px solid var(--line);
+        border-radius: 30px;
+        background:
+          linear-gradient(180deg, rgba(255, 255, 255, 0.86), rgba(255, 255, 255, 0.68)),
+          var(--paper-strong);
+      }
+
+      .poster-copy {
+        padding: 30px;
+      }
+
+      .poster-copy h3 {
+        margin: 0;
+        font-family: "Fraunces", Georgia, serif;
+        font-size: clamp(30px, 4vw, 48px);
+        line-height: 0.98;
+        letter-spacing: -0.04em;
+      }
+
+      .poster-copy p {
+        margin: 18px 0 0;
+        color: var(--muted);
+        line-height: 1.84;
+        font-size: 16px;
+      }
+
+      .feature-list {
+        display: grid;
+        gap: 12px;
+        margin-top: 22px;
+      }
+
+      .feature-item {
+        padding: 14px 16px;
+        border-radius: 18px;
+        background: rgba(19, 35, 60, 0.04);
+      }
+
+      .feature-item strong {
+        display: block;
+        margin-bottom: 4px;
+      }
+
+      .feature-item span {
+        color: var(--muted);
+        font-size: 14px;
+        line-height: 1.65;
+      }
+
+      .deployment-ribbon {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 12px;
+      }
+
+      .ribbon-card {
+        padding: 18px 16px;
+        border: 1px solid var(--line);
+        border-radius: 20px;
+        background: rgba(255, 255, 255, 0.72);
+        text-align: center;
+      }
+
+      .ribbon-card strong {
+        display: block;
+        font-size: 15px;
+      }
+
+      .ribbon-card span {
+        display: block;
+        margin-top: 6px;
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.55;
+      }
+
+      .footer {
+        margin-top: 20px;
+        padding: 26px 28px;
+        border: 1px solid var(--line);
+        border-radius: 28px;
+        background: rgba(255, 255, 255, 0.66);
+        color: var(--muted);
+        line-height: 1.76;
+      }
+
+      code {
+        padding: 2px 7px;
+        border-radius: 8px;
+        background: rgba(19, 35, 60, 0.06);
+        color: var(--ink);
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 12px;
+      }
+
+      .mermaid svg {
+        width: 100%;
+        height: auto;
+        display: block;
+      }
+
+      @media (max-width: 1200px) {
+        .hero-grid,
+        .poster-grid,
+        .storyboard,
+        .deployment-ribbon,
+        .diagram-caption {
+          grid-template-columns: 1fr;
+        }
+
+        .hero-visual {
+          min-height: 520px;
+        }
+      }
+
+      @media (max-width: 760px) {
+        .page {
+          width: min(100vw - 20px, 1480px);
+          margin: 10px auto 24px;
+        }
+
+        .hero,
+        .section {
+          border-radius: 24px;
+        }
+
+        .hero,
+        .section-head,
+        .section-body,
+        .poster-copy,
+        .footer {
+          padding-left: 18px;
+          padding-right: 18px;
+        }
+
+        .diagram-panel-head {
+          flex-direction: column;
+        }
+
+        .node {
+          max-width: 150px;
+        }
+
+        .core {
+          width: 150px;
+          height: 150px;
+          padding: 18px;
+        }
+
+        .core strong {
+          font-size: 24px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <section class="hero">
+        <div class="eyebrow">JaguarClaw Brand Narrative Page</div>
+        <div class="hero-grid">
+          <div class="hero-copy">
+            <h1>让 AI 从“能聊天”变成“能执行、能协同、能交付”的工作平台。</h1>
+            <p>
+              JaguarClaw 把对话、文档、企业集成、记忆系统、自动化任务和多 Agent 协作收拢到同一个工作空间。
+              它不只是一个模型入口，而是一套面向真实业务流程的 AI 执行层。
+            </p>
+            <div class="hero-badges">
+              <div class="pill teal">Multi-Agent Workspace</div>
+              <div class="pill blue">OpenAI-Compatible Models</div>
+              <div class="pill amber">Tools · Skills · MCP</div>
+            </div>
+          </div>
+
+          <div class="hero-visual">
+            <div class="constellation">
+              <div class="orbit orbit-1"></div>
+              <div class="orbit orbit-2"></div>
+              <div class="orbit orbit-3"></div>
+              <div class="core">
+                <div>
+                  <strong>JaguarClaw</strong>
+                  <span>AI Workspace for execution, orchestration and delivery</span>
+                </div>
+              </div>
+              <div class="node n1">
+                <strong>Chat & Documents</strong>
+                <span>从对话到文档写作的一体化体验</span>
+              </div>
+              <div class="node n2">
+                <strong>Multi-Agent</strong>
+                <span>主 Agent、Worker、定时 Agent 协同</span>
+              </div>
+              <div class="node n3">
+                <strong>Model Freedom</strong>
+                <span>兼容 OpenAI 协议的任意模型服务</span>
+              </div>
+              <div class="node n4">
+                <strong>Memory & Automation</strong>
+                <span>长期记忆、计划任务、交付通道</span>
+              </div>
+              <div class="node n5">
+                <strong>Enterprise Integration</strong>
+                <span>MCP、Webhook、Email、企业系统联动</span>
+              </div>
+              <div class="node n6">
+                <strong>Tool Execution</strong>
+                <span>文件、Shell、HTTP、Node、业务工具链</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-head">
+          <div>
+            <h2>一个更像“AI 操作系统”的产品故事</h2>
+            <p>
+              对外展示时，不需要先解释代码分层。先讲清楚 JaguarClaw 解决的是什么问题：
+              它把模型能力、工具执行、团队工作流和企业接口组合成一个连续的执行面。
+            </p>
+          </div>
+          <div class="section-tag product">Brand Story</div>
+        </div>
+        <div class="section-body">
+          <div class="storyboard">
+            <article class="story-card blue">
+              <div class="story-index">01</div>
+              <h3>统一工作界面</h3>
+              <p>会话、文档、IM 和任务执行放在同一个 AI Workspace，不再在多个系统之间来回跳转。</p>
+            </article>
+            <article class="story-card teal">
+              <div class="story-index">02</div>
+              <h3>从回答到执行</h3>
+              <p>模型不只生成文字，还可以驱动工具、读取环境、执行步骤、回灌观察结果并继续推理。</p>
+            </article>
+            <article class="story-card amber">
+              <div class="story-index">03</div>
+              <h3>从单 Agent 到协作</h3>
+              <p>主 Agent 可以分派 Subagent 和 Worker 并行工作，把复杂任务拆成多条可控的执行链路。</p>
+            </article>
+            <article class="story-card coral">
+              <div class="story-index">04</div>
+              <h3>从试验到交付</h3>
+              <p>长期记忆、计划调度、Webhook/Email 交付和 MCP 集成，让系统真正进入业务流程。</p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-head">
+          <div>
+            <h2>品牌版可视化架构图集</h2>
+            <p>
+              下面几张图仍然基于 Mermaid 渲染，但已经放进了更适合官网、路演或客户介绍场景的视觉容器中。
+              你可以直接拿这个页面做演示，也可以后续按同一风格继续扩展。
+            </p>
+          </div>
+          <div class="section-tag tech">Visual System</div>
+        </div>
+        <div class="section-body">
+          <div class="diagram-grid">
+            <article class="diagram-panel">
+              <div class="diagram-panel-head">
+                <div>
+                  <h3>总体架构图</h3>
+                  <p>适合研发评审与技术白皮书，展示 JaguarClaw 的控制层、执行层、扩展层和状态层如何协同工作。</p>
+                </div>
+                <div class="mini-chip blue">Architecture</div>
+              </div>
+              <div class="diagram-canvas">
+                <div class="mermaid">
+flowchart TB
+    User["User / Operator"]
+    UI["Vue 3 UI"]
+    Electron["Electron Desktop Shell"]
+    Gateway["Gateway Layer\nWebSocket + RPC Router + Event Bus"]
+    Runtime["Execution Plane\nAgent Runtime + ReAct Loop + Session Lane"]
+    Agents["Agent Profiles\nMain / Worker / Scheduler"]
+    LLM["LLM Layer\nOpenAI-Compatible Client"]
+    Tools["Extension Plane\nTools + HITL + Tool Registry"]
+    Skills["Skill System\nParser + Registry + Hot Reload"]
+    MCP["MCP Integration\nSTDIO / SSE / HTTP"]
+    Memory["Memory System\nRecall + Flush + Search"]
+    Schedule["Automation Plane\nScheduler + Delivery"]
+    State["State Plane\nSQLite / PostgreSQL + Workspace FS"]
+    Providers["Model Providers\nOpenAI / DeepSeek / Qwen / Custom"]
+
+    User --> UI
+    User --> Electron
+    Electron --> UI
+    UI --> Gateway
+    Gateway --> Runtime
+    Runtime --> Agents
+    Runtime --> LLM
+    Runtime --> Tools
+    Runtime --> Skills
+    Runtime --> Memory
+    Runtime --> Schedule
+    Tools --> MCP
+    LLM --> Providers
+    Runtime --> State
+    Gateway --> State
+    Memory --> State
+    Schedule --> State
+    Tools --> State
+                </div>
+              </div>
+              <div class="diagram-caption">
+                <div class="caption"><strong>技术重点</strong><span>控制面、执行面、扩展面、状态面分层清晰。</span></div>
+                <div class="caption"><strong>讲解重点</strong><span>这是一个“AI 执行平台”，不是一个简单聊天应用。</span></div>
+                <div class="caption"><strong>适合场景</strong><span>架构评审、研发大会、技术方案说明。</span></div>
+              </div>
+            </article>
+
+            <article class="diagram-panel">
+              <div class="diagram-panel-head">
+                <div>
+                  <h3><code>agent.run</code> 主链路时序图</h3>
+                  <p>强调一次真实任务如何从输入、排队、上下文构建、模型推理、工具执行，到最终完成的完整路径。</p>
+                </div>
+                <div class="mini-chip plum">Sequence</div>
+              </div>
+              <div class="diagram-canvas">
+                <div class="mermaid">
+sequenceDiagram
+    autonumber
+    participant U as User
+    participant FE as UI / Desktop
+    participant GW as Gateway RPC
+    participant AR as Agent Runtime
+    participant CB as Context Builder
+    participant LLM as LLM Client
+    participant TR as Tool Registry / Dispatcher
+    participant DB as State Store
+
+    U->>FE: 输入任务并发送
+    FE->>GW: agent.run(sessionId, prompt, modelSelection)
+    GW->>DB: 创建 run + 更新状态 queued
+    GW->>AR: 投递到 session lane
+    AR->>DB: 状态 running
+    AR->>CB: 组装 system prompt + history + memory + skills
+    CB-->>AR: messages
+    AR->>LLM: stream(messages, tools, tool_choice)
+    LLM-->>AR: assistant.delta
+    AR-->>GW: assistant.delta 事件流
+    GW-->>FE: 推送流式内容
+
+    alt 模型发起工具调用
+        LLM-->>AR: tool_calls
+        AR->>TR: 执行工具
+        TR->>DB: 记录 tool.call / tool.result
+        TR-->>AR: observation
+        AR->>LLM: 下一轮推理
+    end
+
+    LLM-->>AR: final answer / finish_reason
+    AR->>DB: 保存 assistant message + run done
+    AR-->>GW: lifecycle.end
+    GW-->>FE: 最终完成事件
+                </div>
+              </div>
+              <div class="diagram-caption">
+                <div class="caption"><strong>流程重点</strong><span>状态落库、会话串行、工具回灌、事件回推。</span></div>
+                <div class="caption"><strong>业务重点</strong><span>用户看到的是连续体验，系统内部是多阶段执行链路。</span></div>
+                <div class="caption"><strong>适合场景</strong><span>联调说明、客户答疑、流程培训。</span></div>
+              </div>
+            </article>
+
+            <article class="diagram-panel">
+              <div class="diagram-panel-head">
+                <div>
+                  <h3>工具调用闭环时序图</h3>
+                  <p>强调模型如何发起调用、工具如何执行、人在何处介入，以及 JaguarClaw 如何形成 ReAct 闭环。</p>
+                </div>
+                <div class="mini-chip teal">Tool Loop</div>
+              </div>
+              <div class="diagram-canvas">
+                <div class="mermaid">
+sequenceDiagram
+    autonumber
+    participant RT as ReAct Loop
+    participant LLM as OpenAI-Compatible Model
+    participant TD as Tool Dispatcher
+    participant Tool as Built-in Tool / MCP Tool
+    participant HITL as Confirm Layer
+
+    RT->>LLM: 提交当前上下文 + 工具定义
+    LLM-->>RT: 返回 tool_calls
+    RT->>TD: dispatch(toolName, arguments)
+
+    alt 需要人工确认
+        TD->>HITL: 发起 confirm_request
+        HITL-->>TD: approve / reject
+    end
+
+    TD->>Tool: execute(arguments)
+    Tool-->>TD: result / error
+    TD-->>RT: observation
+    RT->>LLM: 回灌 tool result，继续推理
+    LLM-->>RT: 最终回答
+                </div>
+              </div>
+              <div class="diagram-caption">
+                <div class="caption"><strong>核心价值</strong><span>把“模型能力”转换成“可执行行动”。</span></div>
+                <div class="caption"><strong>安全价值</strong><span>HITL 和策略控制让工具调用可审计、可约束。</span></div>
+                <div class="caption"><strong>适合场景</strong><span>售前方案、平台能力介绍、AI 执行闭环说明。</span></div>
+              </div>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-head">
+          <div>
+            <h2>更适合官网与路演的产品表达</h2>
+            <p>
+              如果目标是对外表达，而不是纯技术评审，那么更重要的是能力地图、价值主张与落地方式。
+              这一部分把产品图和部署拓扑做成更像海报的展示方式。
+            </p>
+          </div>
+          <div class="section-tag story">Marketing View</div>
+        </div>
+        <div class="section-body">
+          <div class="poster-grid">
+            <article class="poster-panel">
+              <div class="poster-copy">
+                <h3>One AI Workspace.</h3>
+                <p>
+                  一个界面，承载会话、文档、协作、自动化、记忆系统和企业集成。
+                  适合构建真正进入业务流程的 AI 工作台，而不是停留在孤立的模型问答。
+                </p>
+                <div class="feature-list">
+                  <div class="feature-item">
+                    <strong>Chat + Documents + IM</strong>
+                    <span>从交流、写作到协作，都在同一个 AI 工作空间里完成。</span>
+                  </div>
+                  <div class="feature-item">
+                    <strong>Tools + Skills + MCP</strong>
+                    <span>把文件系统、Shell、HTTP、企业系统接口和自定义技能连接起来。</span>
+                  </div>
+                  <div class="feature-item">
+                    <strong>Memory + Automation</strong>
+                    <span>让 Agent 具备长期记忆、计划调度和结果交付能力。</span>
+                  </div>
+                </div>
+              </div>
+            </article>
+
+            <article class="poster-panel">
+              <div class="diagram-canvas" style="padding: 24px;">
+                <div class="mermaid">
+flowchart LR
+    A["One AI Workspace"]
+    B["Chat + Documents + IM"]
+    C["Multi-Agent Collaboration"]
+    D["Tools + Skills + MCP"]
+    E["Memory + Automation"]
+    F["Any OpenAI-Compatible Model"]
+    G["Desktop + Web-Friendly Architecture"]
+
+    A --> B
+    A --> C
+    A --> D
+    A --> E
+    A --> F
+    A --> G
+
+    B --> B1["Conversations"]
+    B --> B2["Document AI"]
+    B --> B3["Intranet IM"]
+
+    C --> C1["Main Agent"]
+    C --> C2["Worker / Subagent"]
+    C --> C3["Scheduled Agent"]
+
+    D --> D1["Filesystem / Shell / HTTP"]
+    D --> D2["Custom Skills"]
+    D --> D3["MCP Servers"]
+
+    E --> E1["Long-Term Memory"]
+    E --> E2["Scheduled Jobs"]
+    E --> E3["Delivery via Email / Webhook"]
+                </div>
+              </div>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-head">
+          <div>
+            <h2>部署与集成，一张图说清楚</h2>
+            <p>
+              在客户场景里，最常被问到的问题不是“模型能不能回答”，而是“系统怎么接、怎么部署、怎么进企业流程”。
+              这张部署拓扑图适合直接进入交付材料或售前文档。
+            </p>
+          </div>
+          <div class="section-tag tech">Deployment</div>
+        </div>
+        <div class="section-body">
+          <div class="deployment-ribbon">
+            <div class="ribbon-card">
+              <strong>Desktop</strong>
+              <span>Electron 本地体验，适合个人与桌面侧部署。</span>
+            </div>
+            <div class="ribbon-card">
+              <strong>Browser</strong>
+              <span>通过 Web UI 使用 JaguarClaw 的会话与工作流。</span>
+            </div>
+            <div class="ribbon-card">
+              <strong>Server</strong>
+              <span>Spring Boot + WebSocket 承载控制平面与执行平面。</span>
+            </div>
+            <div class="ribbon-card">
+              <strong>Models</strong>
+              <span>兼容 OpenAI 协议的私有或公有模型服务。</span>
+            </div>
+            <div class="ribbon-card">
+              <strong>Enterprise Connectors</strong>
+              <span>MCP、Webhook、Email 与企业系统集成。</span>
+            </div>
+          </div>
+
+          <div class="diagram-grid" style="margin-top: 18px;">
+            <article class="diagram-panel">
+              <div class="diagram-panel-head">
+                <div>
+                  <h3>部署与集成拓扑图</h3>
+                  <p>适合实施说明、客户交流和交付文档，用于快速描述系统边界与依赖对象。</p>
+                </div>
+                <div class="mini-chip blue">Topology</div>
+              </div>
+              <div class="diagram-canvas">
+                <div class="mermaid">
+flowchart TB
+    Client["User Device"]
+    Desktop["Electron App"]
+    Browser["Browser UI"]
+    Server["JaguarClaw Server\nSpring Boot + WebSocket"]
+    DB["SQLite / PostgreSQL"]
+    FS["Workspace / Files / Skills"]
+    Model["OpenAI-Compatible Models"]
+    MCP["Enterprise MCP Servers"]
+    Mail["Email / Webhook / Delivery"]
+
+    Client --> Desktop
+    Client --> Browser
+    Desktop --> Server
+    Browser --> Server
+
+    Server --> DB
+    Server --> FS
+    Server --> Model
+    Server --> MCP
+    Server --> Mail
+                </div>
+              </div>
+              <div class="diagram-caption">
+                <div class="caption"><strong>部署重点</strong><span>客户端入口、服务端中枢、模型接口与企业集成边界清晰可见。</span></div>
+                <div class="caption"><strong>讲解重点</strong><span>JaguarClaw 可以作为企业内部 AI 执行中枢，而不是孤立组件。</span></div>
+                <div class="caption"><strong>适合场景</strong><span>实施汇报、客户 IT 评估、采购交流。</span></div>
+              </div>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <div class="footer">
+        当前品牌版页面：<code>docs/jaguarclaw-brand-showcase.html</code><br />
+        之前的图集页：<code>docs/jaguarclaw-architecture-gallery.html</code><br />
+        原始 Mermaid 文档：<code>docs/jaguarclaw-mermaid-architecture.md</code><br />
+        如果下一步继续打磨，我建议做两个方向：一是补“官网 Hero 海报版”截图素材，二是再拆出 <code>Memory</code>、<code>MCP</code>、<code>Subagent</code> 三张专题插画页。
+      </div>
+    </div>
+
+    <script src="../jaguarclaw-ui/node_modules/mermaid/dist/mermaid.min.js"></script>
+    <script>
+      mermaid.initialize({
+        startOnLoad: true,
+        securityLevel: "loose",
+        theme: "base",
+        fontFamily: "Manrope, Avenir Next, Segoe UI, sans-serif",
+        themeVariables: {
+          background: "#ffffff",
+          primaryColor: "#ecf2ff",
+          primaryTextColor: "#13233c",
+          primaryBorderColor: "#86a7ef",
+          secondaryColor: "#e2f7f2",
+          tertiaryColor: "#fff2de",
+          lineColor: "#4d688f",
+          textColor: "#13233c",
+          clusterBkg: "#f7faff",
+          clusterBorder: "#c7d6f4",
+          actorBkg: "#edf4ff",
+          actorBorder: "#aac0ea",
+          actorTextColor: "#13233c",
+          actorLineColor: "#4d688f",
+          signalColor: "#4d688f",
+          signalTextColor: "#13233c",
+          labelBoxBkgColor: "#ffffff",
+          labelBoxBorderColor: "#d2dcf2",
+          noteBkgColor: "#fff6e8",
+          noteBorderColor: "#c99a4d",
+          activationBorderColor: "#0c7a78",
+          activationBkgColor: "#daf3ef",
+          sequenceNumberColor: "#13233c"
+        },
+        flowchart: {
+          curve: "basis",
+          padding: 18,
+          nodeSpacing: 34,
+          rankSpacing: 48
+        },
+        sequence: {
+          useMaxWidth: false,
+          wrap: true,
+          actorMargin: 42,
+          boxMargin: 16,
+          messageMargin: 28,
+          noteMargin: 14
+        }
+      });
+    </script>
+  </body>
+</html>
