@@ -14,6 +14,13 @@ jobs:
       matrix:
         os: [windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
+    env:
+      ELECTRON_CACHE: ${{ github.workspace }}/.cache/electron
+      ELECTRON_BUILDER_CACHE: ${{ github.workspace }}/.cache/electron-builder
+      npm_config_fetch_retries: '5'
+      npm_config_fetch_retry_factor: '2'
+      npm_config_fetch_retry_mintimeout: '20000'
+      npm_config_fetch_retry_maxtimeout: '120000'
 
     steps:
       - name: Checkout code
@@ -29,6 +36,18 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '22'
+          cache: npm
+          cache-dependency-path: |
+            jaguarclaw-ui/package-lock.json
+            electron/package-lock.json
+
+      - name: Restore Electron caches
+        uses: actions/cache@v4
+        with:
+          path: |
+            .cache/electron
+            .cache/electron-builder
+          key: ${{ runner.os }}-electron-cache-${{ hashFiles('electron/package-lock.json') }}
 
       - name: Build Spring Boot JAR
         run: mvn clean package -DskipTests
@@ -74,7 +93,22 @@ jobs:
 
       - name: Install Electron dependencies
         working-directory: electron
-        run: npm ci
+        shell: bash
+        run: |
+          for attempt in 1 2 3; do
+            if npm ci; then
+              exit 0
+            fi
+
+            if [ "$attempt" -eq 3 ]; then
+              echo "npm ci failed after $attempt attempts"
+              exit 1
+            fi
+
+            echo "npm ci failed on attempt $attempt, retrying after cleanup..."
+            rm -rf node_modules
+            sleep 15
+          done
 
       - name: Build and publish Electron installer
         working-directory: electron
