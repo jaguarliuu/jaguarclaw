@@ -82,6 +82,7 @@ let isSetup = false
 // key = block.id, value = 本帧待写入的完整内容
 const tokenFlushBuffer = new Map<string, string>()
 let tokenFlushRaf: ReturnType<typeof requestAnimationFrame> | null = null
+let runCompletionFallbackTimer: ReturnType<typeof setTimeout> | null = null
 
 function flushTokenBuffer() {
   if (tokenFlushRaf !== null) {
@@ -240,6 +241,60 @@ function attachedContextsFromPayloadJson(payloadJson?: string): AttachedContext[
   }
 }
 
+function clearRunCompletionFallback() {
+  if (runCompletionFallbackTimer) {
+    clearTimeout(runCompletionFallbackTimer)
+    runCompletionFallbackTimer = null
+  }
+}
+
+function resetStreamingState() {
+  clearRunCompletionFallback()
+  isStreaming.value = false
+  streamBlocks.value = []
+  toolCallIndex.value = {}
+  subagentIndex.value = {}
+  currentRunUsage.value = null
+  currentRun.value = null
+}
+
+function scheduleRunCompletionFallback(runId: string, sessionId: string, delayMs = 1200) {
+  clearRunCompletionFallback()
+  runCompletionFallbackTimer = setTimeout(() => {
+    void reconcileRunCompletion(runId, sessionId)
+  }, delayMs)
+}
+
+async function reconcileRunCompletion(runId: string, sessionId: string) {
+  if (!currentRun.value || currentRun.value.id !== runId) {
+    return
+  }
+
+  try {
+    const run = await request<Run>('run.get', { runId })
+    if (!currentRun.value || currentRun.value.id !== runId) {
+      return
+    }
+
+    const status = (run.status || '').toLowerCase()
+    if (status === 'done' || status === 'error' || status === 'canceled') {
+      await loadMessages(sessionId)
+      if (!currentRun.value || currentRun.value.id !== runId) {
+        return
+      }
+      resetStreamingState()
+      return
+    }
+
+    scheduleRunCompletionFallback(runId, sessionId, 1200)
+  } catch (e) {
+    console.warn('[Chat] Failed to reconcile run completion:', e)
+    if (currentRun.value && currentRun.value.id === runId) {
+      scheduleRunCompletionFallback(runId, sessionId, 2000)
+    }
+  }
+}
+
 function normalizeSession(session: Session, fallbackAgentId?: string): Session {
   return {
     ...session,
@@ -309,12 +364,7 @@ async function selectSession(sessionId: string) {
   currentSessionId.value = sessionId
   const loadVersion = ++messageLoadVersion.value
   syncSelectedAgentFromSession(sessionId)
-  isStreaming.value = false
-  currentRun.value = null
-  currentRunUsage.value = null
-  streamBlocks.value = []
-  toolCallIndex.value = {}
-  subagentIndex.value = {}
+  resetStreamingState()
   excludedMcpServers.value = new Set()
   sessionFiles.value = []
   closeArtifact()
@@ -335,12 +385,8 @@ async function deleteSession(sessionId: string) {
       currentSessionId.value = null
       syncSelectedAgentFromSession(null)
       messages.value = []
-      streamBlocks.value = []
-      toolCallIndex.value = {}
-      subagentIndex.value = {}
       sessionFiles.value = []
-      currentRun.value = null
-      currentRunUsage.value = null
+      resetStreamingState()
       closeArtifact()
       dismissRunOutcome(sessionId)
     }
@@ -560,6 +606,7 @@ async function sendMessage(
   streamBlocks.value = []
   toolCallIndex.value = {}
   subagentIndex.value = {}
+  clearRunCompletionFallback()
 
   try {
     const payload: Record<string, unknown> = {
@@ -601,7 +648,12 @@ async function sendMessage(
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     }
+
+    // 兜底处理后端极快完成的场景：如果 lifecycle.end 在 RPC 响应前就已发出，
+    // 前端会错过事件，这里主动对账一次 run 状态并在需要时继续轮询收口。
+    void reconcileRunCompletion(result.runId, result.sessionId)
   } catch (e) {
+    clearRunCompletionFallback()
     isStreaming.value = false
     console.error('Failed to start run:', e)
   }
@@ -661,6 +713,7 @@ async function cancelRun() {
   try {
     await request('agent.cancel', { runId: runIdToCancel })
     console.log('[Chat] Cancellation requested for run:', runIdToCancel)
+    clearRunCompletionFallback()
 
     // 先将 currentRun 设为 null，这样后续到达的 lifecycle.error 事件会被忽略
     currentRun.value = null
@@ -1218,6 +1271,7 @@ function setupEventListeners() {
   eventCleanups.push(
     onEvent('lifecycle.end', (event: RpcEvent) => {
       if (currentRun.value && event.runId === currentRun.value.id) {
+        clearRunCompletionFallback()
         // 确保缓冲中尚未写入的 token 先同步提交
         flushTokenBuffer()
 
@@ -1243,11 +1297,7 @@ function setupEventListeners() {
         messages.value.push(assistantMessage)
 
         // Reset streaming state
-        isStreaming.value = false
-        streamBlocks.value = []
-        toolCallIndex.value = {}
-        subagentIndex.value = {}
-        currentRun.value = null
+        resetStreamingState()
       }
     }),
   )
@@ -1256,6 +1306,7 @@ function setupEventListeners() {
   eventCleanups.push(
     onEvent('lifecycle.error', (event: RpcEvent) => {
       if (currentRun.value && event.runId === currentRun.value.id) {
+        clearRunCompletionFallback()
         flushTokenBuffer()
         const errorMsg =
           event.payload && typeof event.payload === 'object' && 'message' in event.payload
@@ -1273,11 +1324,7 @@ function setupEventListeners() {
         }
         messages.value.push(errorMessage)
 
-        isStreaming.value = false
-        streamBlocks.value = []
-        toolCallIndex.value = {}
-        subagentIndex.value = {}
-        currentRun.value = null
+        resetStreamingState()
       }
     }),
   )

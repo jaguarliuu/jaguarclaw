@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.Optional;
 
 @Slf4j
 @Service
@@ -34,22 +35,34 @@ public class ScheduleRunLogService {
     }
 
     public void complete(ScheduleRunLogEntity entry, String sessionId, String runId) {
+        complete(entry, sessionId, runId, null);
+    }
+
+    public void complete(ScheduleRunLogEntity entry, String sessionId, String runId, String traceJson) {
         LocalDateTime now = LocalDateTime.now();
         entry.setStatus("success");
         entry.setFinishedAt(now);
         entry.setDurationMs((int) ChronoUnit.MILLIS.between(entry.getStartedAt(), now));
         if (sessionId != null) entry.setSessionId(sessionId);
         if (runId != null) entry.setRunId(runId);
+        if (traceJson != null) entry.setTraceJson(traceJson);
         repository.save(entry);
         log.debug("Schedule run log completed: id={}, durationMs={}", entry.getId(), entry.getDurationMs());
     }
 
     public void fail(ScheduleRunLogEntity entry, String errorMessage) {
+        fail(entry, errorMessage, null, null, null);
+    }
+
+    public void fail(ScheduleRunLogEntity entry, String errorMessage, String sessionId, String runId, String traceJson) {
         LocalDateTime now = LocalDateTime.now();
         entry.setStatus("failed");
         entry.setFinishedAt(now);
         entry.setDurationMs((int) ChronoUnit.MILLIS.between(entry.getStartedAt(), now));
         entry.setErrorMessage(errorMessage);
+        if (sessionId != null) entry.setSessionId(sessionId);
+        if (runId != null) entry.setRunId(runId);
+        if (traceJson != null) entry.setTraceJson(traceJson);
         repository.save(entry);
         log.debug("Schedule run log failed: id={}, error={}", entry.getId(), errorMessage);
     }
@@ -60,5 +73,9 @@ public class ScheduleRunLogService {
 
     public List<ScheduleRunLogEntity> listRecent(int limit) {
         return repository.findAllByOrderByStartedAtDesc(PageRequest.of(0, limit));
+    }
+
+    public Optional<ScheduleRunLogEntity> get(String id) {
+        return repository.findById(id);
     }
 }

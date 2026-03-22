@@ -32,6 +32,8 @@ public class RpcAuthorizationService {
             "memory.status",
             "subagent.list",
             "schedule.list",
+            "schedule.runs.list",
+            "schedule.runs.get",
             "nodes.list"
     );
 

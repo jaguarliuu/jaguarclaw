@@ -49,6 +49,9 @@ public class ScheduleRunLogEntity {
     @Column(name = "run_id", length = 36)
     private String runId;
 
+    @Column(name = "trace_json", columnDefinition = "TEXT")
+    private String traceJson;
+
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 

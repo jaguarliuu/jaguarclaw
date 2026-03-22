@@ -3,14 +3,15 @@ import { ref, computed, onMounted } from 'vue'
 import { useSchedules } from '@/composables/useSchedules'
 import { useI18n } from '@/i18n'
 import Select from '@/components/common/Select.vue'
+import ScheduleRunDetailModal from './ScheduleRunDetailModal.vue'
 import type { SelectOption } from '@/components/common/Select.vue'
-import type { DeliveryTargetType, ScheduleInfo } from '@/types'
+import type { DeliveryTargetType, ScheduleInfo, ScheduleRunDetail, ScheduleRunLog } from '@/types'
 
 const {
   schedules, loading, error,
-  runHistory, runHistoryLoading,
+  runHistory, runHistoryLoading, runDetails, runDetailLoading,
   loadSchedules, createSchedule, updateSchedule, removeSchedule,
-  toggleSchedule, runSchedule, loadRunHistory
+  toggleSchedule, runSchedule, loadRunHistory, loadRunDetail
 } = useSchedules()
 const { t } = useI18n()
 
@@ -34,6 +35,8 @@ const confirmDeleteId = ref<string | null>(null)
 const isEditing = computed(() => editingTaskId.value !== null)
 
 const expandedHistory = ref<Set<string>>(new Set())
+const selectedRun = ref<ScheduleRunLog | null>(null)
+const detailError = ref<string | null>(null)
 
 function toggleHistory(taskId: string) {
   const next = new Set(expandedHistory.value)
@@ -44,6 +47,32 @@ function toggleHistory(taskId: string) {
     loadRunHistory(taskId)
   }
   expandedHistory.value = next
+}
+
+const selectedRunDetail = computed(() => {
+  if (!selectedRun.value) return null
+  const detail = runDetails.value.get(selectedRun.value.id)
+  if (!detail) return null
+  return JSON.parse(JSON.stringify(detail)) as ScheduleRunDetail
+})
+
+const selectedRunLoading = computed(() => (
+  selectedRun.value ? runDetailLoading.value.has(selectedRun.value.id) : false
+))
+
+async function openRunDetail(run: ScheduleRunLog) {
+  selectedRun.value = run
+  detailError.value = null
+  try {
+    await loadRunDetail(run.id)
+  } catch (e) {
+    detailError.value = e instanceof Error ? e.message : t('sections.schedules.detailModal.loadFailed')
+  }
+}
+
+function closeRunDetail() {
+  selectedRun.value = null
+  detailError.value = null
 }
 
 // Cron presets
@@ -471,6 +500,9 @@ onMounted(() => {
               <span class="run-trigger">{{ run.triggeredBy }}</span>
               <span class="run-time">{{ formatTime(run.startedAt) }}</span>
               <span class="run-duration">{{ formatDuration(run.durationMs) }}</span>
+              <button class="run-detail-btn" @click="openRunDetail(run)">
+                {{ t('sections.schedules.viewDetailBtn') }}
+              </button>
               <span v-if="run.errorMessage" class="run-error-msg" :title="run.errorMessage">
                 {{ run.errorMessage.length > 60 ? run.errorMessage.substring(0, 60) + '...' : run.errorMessage }}
               </span>
@@ -488,6 +520,15 @@ onMounted(() => {
 
     <!-- Global Error -->
     <div v-if="error && schedules.length > 0" class="error-banner">{{ error }}</div>
+
+    <ScheduleRunDetailModal
+      :show="selectedRun !== null"
+      :run="selectedRun"
+      :detail="selectedRunDetail"
+      :loading="selectedRunLoading"
+      :error-message="detailError"
+      @close="closeRunDetail"
+    />
   </div>
 </template>
 
@@ -974,6 +1015,20 @@ onMounted(() => {
   color: var(--color-gray-dark);
   min-width: 50px;
   text-align: right;
+}
+
+.run-detail-btn {
+  padding: 2px 8px;
+  border: var(--border);
+  border-radius: var(--radius-md);
+  background: var(--color-white);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.run-detail-btn:hover {
+  background: var(--color-gray-bg);
 }
 
 .run-error-msg {

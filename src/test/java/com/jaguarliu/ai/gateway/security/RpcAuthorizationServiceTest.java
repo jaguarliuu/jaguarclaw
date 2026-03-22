@@ -57,4 +57,10 @@ class RpcAuthorizationServiceTest {
     void scheduleUpdateRequiresWritePermission() {
         assertEquals(RpcPermission.WRITE, service.resolveRequiredPermission("schedule.update"));
     }
+
+    @Test
+    @DisplayName("schedule.runs.get 需要 READ 权限")
+    void scheduleRunsGetRequiresReadPermission() {
+        assertEquals(RpcPermission.READ, service.resolveRequiredPermission("schedule.runs.get"));
+    }
 }

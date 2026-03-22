@@ -489,6 +489,20 @@ export interface ScheduleRunLog {
   runId: string | null
 }
 
+export interface ScheduleRunTraceItem {
+  eventType: string
+  timestamp: string
+  data: Record<string, unknown>
+}
+
+export interface ScheduleRunDetail {
+  run: ScheduleRunLog
+  session: Session | null
+  messages: Message[]
+  files: SessionFile[]
+  trace: ScheduleRunTraceItem[]
+}
+
 // ==================== LLM Config Types ====================
 
 export interface LlmConfig {

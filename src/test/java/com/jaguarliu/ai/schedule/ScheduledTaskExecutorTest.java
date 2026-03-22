@@ -1,7 +1,11 @@
 package com.jaguarliu.ai.schedule;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.jaguarliu.ai.gateway.events.AgentEvent;
+import com.jaguarliu.ai.gateway.events.EventBus;
+import com.jaguarliu.ai.gateway.ws.ConnectionManager;
 import com.jaguarliu.ai.llm.model.LlmRequest;
+import com.jaguarliu.ai.nodeconsole.AuditLogService;
 import com.jaguarliu.ai.runtime.AgentRuntime;
 import com.jaguarliu.ai.runtime.CancellationManager;
 import com.jaguarliu.ai.runtime.ContextBuilder;
@@ -14,7 +18,6 @@ import com.jaguarliu.ai.session.SessionService;
 import com.jaguarliu.ai.storage.entity.RunEntity;
 import com.jaguarliu.ai.storage.entity.SessionEntity;
 import com.jaguarliu.ai.tools.integration.DeliveryToolService;
-import com.jaguarliu.ai.nodeconsole.AuditLogService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -35,6 +38,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -76,10 +80,15 @@ class ScheduledTaskExecutorTest {
     @Mock
     private AuditLogService auditLogService;
 
+    @Mock
+    private ConnectionManager connectionManager;
+
     private ScheduledTaskExecutor executor;
+    private EventBus eventBus;
 
     @BeforeEach
     void setUp() {
+        eventBus = new EventBus(connectionManager, new ObjectMapper());
         executor = new ScheduledTaskExecutor(
                 sessionService,
                 runService,
@@ -92,7 +101,8 @@ class ScheduledTaskExecutorTest {
                 repository,
                 new ObjectMapper(),
                 runLogService,
-                auditLogService
+                auditLogService,
+                eventBus
         );
     }
 
@@ -127,8 +137,12 @@ class ScheduledTaskExecutorTest {
         when(sessionService.createScheduledSession(any())).thenReturn(session);
         when(runService.create("session-1", "巡检机器并发送邮件")).thenReturn(run);
         when(contextBuilder.buildMessages(eq(List.of()), any())).thenReturn(List.of(LlmRequest.Message.user("stub")));
-        when(agentRuntime.executeLoopWithContext(any(RunContext.class), any(), any()))
-                .thenReturn("<h1>巡检报告</h1><p>全部正常</p>");
+        doAnswer(invocation -> {
+            eventBus.publish(AgentEvent.stepCompleted("__scheduled__", "run-1", 1, 8, 1));
+            eventBus.publish(AgentEvent.toolCall("__scheduled__", "run-1", "call-1", "web_get", java.util.Map.of("url", "https://example.com")));
+            eventBus.publish(AgentEvent.toolResult("__scheduled__", "run-1", "call-1", true, "ok"));
+            return "<h1>巡检报告</h1><p>全部正常</p>";
+        }).when(agentRuntime).executeLoopWithContext(any(RunContext.class), any(), any());
         when(runLogService.start(any(), any(), any(), any(), any()))
                 .thenReturn(ScheduleRunLogEntity.builder().taskId("task-1").taskName("机器巡检日报").status("running").build());
 
@@ -152,6 +166,10 @@ class ScheduledTaskExecutorTest {
 
         // Verify triggeredBy is "scheduled"
         verify(runLogService).start(any(), any(), eq("scheduled"), isNull(), isNull());
+        ArgumentCaptor<String> traceCaptor = ArgumentCaptor.forClass(String.class);
+        verify(runLogService).complete(any(ScheduleRunLogEntity.class), eq("session-1"), eq("run-1"), traceCaptor.capture());
+        assertThat(traceCaptor.getValue()).contains("tool.call");
+        assertThat(traceCaptor.getValue()).contains("run.completed");
         // Verify audit log recorded success
         verify(auditLogService).logScheduleExecution(any(), any(), eq("scheduled"), any(), any(), eq("SUCCESS"), any(), anyLong());
     }
@@ -188,16 +206,21 @@ class ScheduledTaskExecutorTest {
         when(runService.create(any(), any())).thenReturn(run);
         when(contextBuilder.buildMessages(any(), any())).thenReturn(List.of(LlmRequest.Message.user("stub")));
         when(runLogService.start(any(), any(), any(), any(), any()))
-                .thenReturn(ScheduleRunLogEntity.builder().taskId("task-fail-1").taskName("失败任务").status("running").build());
+                .thenReturn(ScheduleRunLogEntity.builder()
+                        .taskId("task-fail-1")
+                        .taskName("失败任务")
+                        .status("running")
+                        .startedAt(LocalDateTime.now())
+                        .build());
 
         // Act
         executor.execute(task);
 
         // Assert: run log marked failed
-        verify(runLogService).fail(any(ScheduleRunLogEntity.class), eq("simulated failure"));
+        verify(runLogService).fail(any(ScheduleRunLogEntity.class), eq("simulated failure"), eq("session-fail-1"), eq("run-fail-1"), any());
         // Assert: audit log records FAILED
         verify(auditLogService).logScheduleExecution(
-                any(), any(), eq("scheduled"), isNull(), isNull(),
+                any(), any(), eq("scheduled"), eq("session-fail-1"), eq("run-fail-1"),
                 eq("FAILED"), eq("simulated failure"), anyLong());
         // Assert: task status updated
         assertThat(task.getLastRunSuccess()).isFalse();

@@ -53,7 +53,7 @@ public class ScheduleRunsListHandler implements RpcHandler {
         });
     }
 
-    private static Map<String, Object> toDto(ScheduleRunLogEntity e) {
+    static Map<String, Object> toDto(ScheduleRunLogEntity e) {
         Map<String, Object> dto = new LinkedHashMap<>();
         dto.put("id", e.getId());
         dto.put("taskId", e.getTaskId());
